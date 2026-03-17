@@ -1,0 +1,13 @@
+[
+  {
+    "id": "1324a887-45db-1bf4-1e99-ef0ff456d421",
+    "url": "https://your-domain.atlassian.net",
+    "name": "your-domain",
+    "scopes": [
+      "read:confluence-content.all",
+      "write:confluence-content",
+      "search:confluence"
+    ],
+    "avatarUrl": "https://site-admin-avatar-cdn.prod.public.atl-paas.net/avatars/240/site.png"
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "results": [
+    {
+      "id": "98310",
+      "status": "current",
+      "title": "Architecture Overview",
+      "type": "page",
+      "spaceId": "65541",
+      "childPosition": 0
+    },
+    {
+      "id": "98311",
+      "status": "current",
+      "title": "Development Guidelines",
+      "type": "page",
+      "spaceId": "65541",
+      "childPosition": 1
+    },
+    {
+      "id": "98312",
+      "status": "current",
+      "title": "API Reference",
+      "type": "page",
+      "spaceId": "65541",
+      "childPosition": 2
+    }
+  ],
+  "_links": {
+    "next": "",
+    "base": "https://your-domain.atlassian.net"
+  }
+}
