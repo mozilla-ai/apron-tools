@@ -1,0 +1,81 @@
+{
+    "ok": true,
+    "members": [
+        {
+            "id": "W012A3CDE",
+            "team_id": "T012AB3C4",
+            "name": "spengler",
+            "deleted": false,
+            "color": "9f69e7",
+            "real_name": "Egon Spengler",
+            "tz": "America/Los_Angeles",
+            "tz_label": "Pacific Daylight Time",
+            "tz_offset": -25200,
+            "profile": {
+                "avatar_hash": "ge3b51ca72de",
+                "status_text": "Print is dead",
+                "status_emoji": ":books:",
+                "real_name": "Egon Spengler",
+                "display_name": "spengler",
+                "real_name_normalized": "Egon Spengler",
+                "display_name_normalized": "spengler",
+                "email": "spengler@ghostbusters.example.com",
+                "image_24": "https://.../avatar/e3b51ca72dee4ef87916ae2b9240df50.jpg",
+                "image_32": "https://.../avatar/e3b51ca72dee4ef87916ae2b9240df50.jpg",
+                "image_48": "https://.../avatar/e3b51ca72dee4ef87916ae2b9240df50.jpg",
+                "image_72": "https://.../avatar/e3b51ca72dee4ef87916ae2b9240df50.jpg",
+                "image_192": "https://.../avatar/e3b51ca72dee4ef87916ae2b9240df50.jpg",
+                "image_512": "https://.../avatar/e3b51ca72dee4ef87916ae2b9240df50.jpg",
+                "team": "T012AB3C4"
+            },
+            "is_admin": true,
+            "is_owner": false,
+            "is_primary_owner": false,
+            "is_restricted": false,
+            "is_ultra_restricted": false,
+            "is_bot": false,
+            "updated": 1502138686,
+            "is_app_user": false,
+            "has_2fa": false
+        },
+        {
+            "id": "W07QCRPA4",
+            "team_id": "T0G9PQBBK",
+            "name": "glinda",
+            "deleted": false,
+            "color": "9f69e7",
+            "real_name": "Glinda Southgood",
+            "tz": "America/Los_Angeles",
+            "tz_label": "Pacific Daylight Time",
+            "tz_offset": -25200,
+            "profile": {
+                "avatar_hash": "test12345678",
+                "real_name": "Glinda Southgood",
+                "display_name": "Glinda",
+                "real_name_normalized": "Glinda Southgood",
+                "display_name_normalized": "Glinda",
+                "email": "glinda@southgood.example.com",
+                "image_24": "https://.../avatar/8fbdd10b41c6.jpg",
+                "image_32": "https://.../avatar/8fbdd10b41c6.jpg",
+                "image_48": "https://.../avatar/8fbdd10b41c6.jpg",
+                "image_72": "https://.../avatar/8fbdd10b41c6.jpg",
+                "image_192": "https://.../avatar/8fbdd10b41c6.jpg",
+                "image_512": "https://.../avatar/8fbdd10b41c6.jpg",
+                "team": "T0G9PQBBK"
+            },
+            "is_admin": false,
+            "is_owner": false,
+            "is_primary_owner": false,
+            "is_restricted": false,
+            "is_ultra_restricted": false,
+            "is_bot": false,
+            "updated": 1502138686,
+            "is_app_user": false,
+            "has_2fa": false
+        }
+    ],
+    "cache_ts": 1498777272,
+    "response_metadata": {
+        "next_cursor": ""
+    }
+}

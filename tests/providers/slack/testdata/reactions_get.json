@@ -1,0 +1,23 @@
+{
+    "ok": true,
+    "type": "message",
+    "channel": "C012AB3CD",
+    "message": {
+        "type": "message",
+        "text": "I find you punny and would like to smell your daisy.",
+        "user": "W012A3CDE",
+        "ts": "1512085950.000216",
+        "reactions": [
+            {
+                "name": "laughing",
+                "count": 2,
+                "users": ["W012A3CDE", "W07QCRPA4"]
+            },
+            {
+                "name": "+1",
+                "count": 1,
+                "users": ["W07QCRPA4"]
+            }
+        ]
+    }
+}

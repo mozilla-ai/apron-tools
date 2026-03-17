@@ -12,11 +12,13 @@ dependencies = [
 
 [project.optional-dependencies]
 all = [
-    "any-tool[typeform]",
     "any-tool[atlassian]",
+    "any-tool[typeform]",
+    "any-tool[slack]",
 ]
-typeform = []
 atlassian = ["atlassian-python-api>=3.0"]
+slack = ["slack_sdk[optional]>=3.0"]
+typeform = []
 
 [dependency-groups]
 dev = [

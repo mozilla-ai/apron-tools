@@ -1,0 +1,33 @@
+# Slack testdata
+
+- **Web API docs:** https://docs.slack.dev/apis/web-api/
+- **Endpoint references:**
+  - team.info: https://docs.slack.dev/reference/web-api/team/info
+  - conversations.list: https://docs.slack.dev/reference/web-api/conversations/list
+  - users.list: https://docs.slack.dev/reference/web-api/users/list
+  - chat.postMessage: https://docs.slack.dev/reference/web-api/chat/post-message
+  - conversations.open: https://docs.slack.dev/reference/web-api/conversations/open
+  - conversations.history: https://docs.slack.dev/reference/web-api/conversations/history
+  - conversations.info: https://docs.slack.dev/reference/web-api/conversations/info
+  - conversations.replies: https://docs.slack.dev/reference/web-api/conversations/replies
+  - conversations.join: https://docs.slack.dev/reference/web-api/conversations/join
+  - chat.update: https://docs.slack.dev/reference/web-api/chat/update
+  - chat.getPermalink: https://docs.slack.dev/reference/web-api/chat/get-permalink
+  - files.info: https://docs.slack.dev/reference/web-api/files/info
+  - reactions.get: https://docs.slack.dev/reference/web-api/reactions/get
+  - reactions.add: https://docs.slack.dev/reference/web-api/reactions/add
+- **Auth:** Bearer token (OAuth)
+- **team_info.json:** Based on example response from team.info docs.
+- **conversations_list.json:** Based on example response from conversations.list docs.
+- **users_list.json:** Based on example response from users.list docs.
+- **chat_post_message.json:** Based on example response from chat.postMessage docs.
+- **conversations_open.json:** Based on example response from conversations.open docs.
+- **conversations_history.json:** Based on example response from conversations.history docs.
+- **conversations_info.json:** Based on example response from conversations.info docs.
+- **conversations_replies.json:** Based on example response from conversations.replies docs.
+- **conversations_join.json:** Based on example response from conversations.join docs.
+- **chat_update.json:** Based on example response from chat.update docs.
+- **chat_get_permalink.json:** Based on example response from chat.getPermalink docs.
+- **files_info.json:** Based on example response from files.info docs.
+- **reactions_get.json:** Based on example response from reactions.get docs.
+- **reactions_add.json:** Based on example response from reactions.add docs.

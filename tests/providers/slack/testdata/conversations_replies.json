@@ -1,0 +1,38 @@
+{
+    "ok": true,
+    "messages": [
+        {
+            "type": "message",
+            "user": "W012A3CDE",
+            "text": "I find you punny and would like to smell your daisy.",
+            "ts": "1512085950.000216",
+            "thread_ts": "1512085950.000216",
+            "reply_count": 2,
+            "replies": [
+                {
+                    "user": "W07QCRPA4",
+                    "ts": "1512085950.000300"
+                },
+                {
+                    "user": "W012A3CDE",
+                    "ts": "1512085950.000400"
+                }
+            ]
+        },
+        {
+            "type": "message",
+            "user": "W07QCRPA4",
+            "text": "Haha that's a good one!",
+            "ts": "1512085950.000300",
+            "thread_ts": "1512085950.000216"
+        },
+        {
+            "type": "message",
+            "user": "W012A3CDE",
+            "text": "Thanks!",
+            "ts": "1512085950.000400",
+            "thread_ts": "1512085950.000216"
+        }
+    ],
+    "has_more": false
+}

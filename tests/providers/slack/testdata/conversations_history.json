@@ -1,0 +1,23 @@
+{
+    "ok": true,
+    "messages": [
+        {
+            "type": "message",
+            "user": "W012A3CDE",
+            "text": "I find you punny and would like to smell your daisy.",
+            "ts": "1512085950.000216",
+            "reply_count": 2
+        },
+        {
+            "type": "message",
+            "user": "W07QCRPA4",
+            "text": "Howdy!",
+            "ts": "1512085950.000100"
+        }
+    ],
+    "has_more": true,
+    "pin_count": 0,
+    "response_metadata": {
+        "next_cursor": "dXNlcjpVMDYxRjdBVVI="
+    }
+}
