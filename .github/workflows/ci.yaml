@@ -1,13 +1,23 @@
-name: Tests
+name: CI
 
 on:
   push:
     branches: [main]
-    paths: [src/**, tests/**, pyproject.toml]
   pull_request:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+      - run: uv sync --group lint --extra all
+      - run: uv run pre-commit run --all-files --verbose
+
   test:
+    needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
