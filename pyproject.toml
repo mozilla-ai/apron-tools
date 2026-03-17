@@ -10,6 +10,12 @@ dependencies = [
     "httpx>=0.27",
 ]
 
+[project.optional-dependencies]
+all = [
+    "any-tool[typeform]",
+]
+typeform = []
+
 [dependency-groups]
 dev = [
     { include-group = "lint" },
