@@ -45,9 +45,11 @@ tests = [
 
 [package.metadata]
 requires-dist = [
+    { name = "any-tool", extras = ["typeform"], marker = "extra == 'all'" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.0" },
 ]
+provides-extras = ["all", "typeform"]
 
 [package.metadata.requires-dev]
 dev = [

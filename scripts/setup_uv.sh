@@ -29,7 +29,7 @@ fi
 
 echo "Bootstrapping root .venv in folder $VENV_DIR"
 uv venv "$VENV_DIR"
-uv sync --group all --active
+uv sync --group dev --extra all --active
 
 echo "Done! Root environment is ready in: $VENV_DIR"
 
