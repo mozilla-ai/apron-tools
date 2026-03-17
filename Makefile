@@ -10,6 +10,10 @@ setup: ensure-scripts-exec
 test:
 	@uv run -m pytest tests
 
+.PHONY: test-integration
+test-integration:
+	@ANY_TOOL_INTEGRATION_TESTS=1 uv run -m pytest tests -m integration -v
+
 .PHONY: lint
 lint:
 	@uv run pre-commit run --all-files
