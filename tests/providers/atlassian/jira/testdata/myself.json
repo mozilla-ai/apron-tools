@@ -1,0 +1,10 @@
+{
+  "self": "https://your-domain.atlassian.net/rest/api/3/user?accountId=user-account-id-1",
+  "accountId": "user-account-id-1",
+  "accountType": "atlassian",
+  "emailAddress": "mia@example.com",
+  "displayName": "Mia Krystof",
+  "active": true,
+  "timeZone": "Australia/Sydney",
+  "locale": "en_AU"
+}

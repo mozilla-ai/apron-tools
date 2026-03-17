@@ -1,0 +1,25 @@
+# Atlassian Jira testdata
+
+- **API docs:** https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/
+- **Agile API docs:** https://developer.atlassian.com/cloud/jira/software/rest/intro/
+- **Endpoint references:**
+  - Search projects: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-search/#api-rest-api-3-project-search-get
+  - Search issues (JQL): https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-post
+  - Create issue: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post
+  - Edit issue: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-put
+  - Assign issue: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-assignee-put
+  - Add comment: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-post
+  - List versions: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-versions/#api-rest-api-3-project-projectidorkey-version-get
+  - List boards: https://developer.atlassian.com/cloud/jira/software/rest/api-group-board/#api-rest-agile-1-0-board-get
+  - List sprints: https://developer.atlassian.com/cloud/jira/software/rest/api-group-sprint/#api-rest-agile-1-0-board-boardid-sprint-get
+- **Auth:** OAuth 2.0 Bearer token
+- **Cloud ID:** Resolved via https://api.atlassian.com/oauth/token/accessible-resources
+- **accessible_resources.json:** Based on example from Atlassian OAuth docs.
+- **project_search.json:** Based on example response from project search endpoint docs.
+- **search_issues.json:** Based on example response from JQL search endpoint docs.
+- **create_issue.json:** Based on example response from create issue endpoint docs.
+- **add_comment.json:** Based on example response from add comment endpoint docs.
+- **list_versions.json:** Based on example response from project versions endpoint docs.
+- **list_boards.json:** Based on example response from board endpoint docs.
+- **list_sprints.json:** Based on example response from sprint endpoint docs.
+- **myself.json:** Based on example response from myself endpoint docs.

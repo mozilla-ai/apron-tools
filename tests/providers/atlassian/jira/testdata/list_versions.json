@@ -1,0 +1,38 @@
+{
+  "self": "https://your-domain.atlassian.net/rest/api/3/project/EX/version?maxResults=50&startAt=0",
+  "nextPage": "https://your-domain.atlassian.net/rest/api/3/project/EX/version?maxResults=50&startAt=50",
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 2,
+  "isLast": true,
+  "values": [
+    {
+      "self": "https://your-domain.atlassian.net/rest/api/3/version/10000",
+      "id": "10000",
+      "description": "An excellent version",
+      "name": "Version 1.0",
+      "archived": false,
+      "released": true,
+      "overdue": false,
+      "startDate": "2024-01-01",
+      "releaseDate": "2024-03-01",
+      "userStartDate": "1/Jan/24",
+      "userReleaseDate": "1/Mar/24",
+      "projectId": 10001
+    },
+    {
+      "self": "https://your-domain.atlassian.net/rest/api/3/version/10001",
+      "id": "10001",
+      "description": "Next release",
+      "name": "Version 2.0",
+      "archived": false,
+      "released": false,
+      "overdue": true,
+      "startDate": "2024-03-15",
+      "releaseDate": "2024-06-01",
+      "userStartDate": "15/Mar/24",
+      "userReleaseDate": "1/Jun/24",
+      "projectId": 10001
+    }
+  ]
+}
