@@ -1,0 +1,95 @@
+{
+  "id": "98400",
+  "status": "current",
+  "title": "New Design Doc",
+  "spaceId": "65541",
+  "parentId": "98304",
+  "parentType": "page",
+  "position": 3,
+  "authorId": "user-account-id-1",
+  "ownerId": "user-account-id-1",
+  "lastOwnerId": "user-account-id-1",
+  "createdAt": "2024-04-01T09:00:00.000Z",
+  "version": {
+    "createdAt": "2024-04-01T09:00:00.000Z",
+    "message": "",
+    "number": 1,
+    "minorEdit": false,
+    "authorId": "user-account-id-1"
+  },
+  "body": {
+    "storage": {
+      "representation": "storage",
+      "value": "<p>Initial design document content.</p>"
+    },
+    "atlas_doc_format": {},
+    "view": {}
+  },
+  "labels": {
+    "results": [],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98400/labels"
+    }
+  },
+  "properties": {
+    "results": [],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98400/properties"
+    }
+  },
+  "operations": {
+    "results": [
+      {
+        "operation": "read",
+        "targetType": "page"
+      }
+    ],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98400/operations"
+    }
+  },
+  "likes": {
+    "results": [],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98400/likes"
+    }
+  },
+  "versions": {
+    "results": [
+      {
+        "createdAt": "2024-04-01T09:00:00.000Z",
+        "message": "",
+        "number": 1,
+        "minorEdit": false,
+        "authorId": "user-account-id-1"
+      }
+    ],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98400/versions"
+    }
+  },
+  "isFavoritedByCurrentUser": false,
+  "_links": {
+    "base": "https://your-domain.atlassian.net"
+  }
+}

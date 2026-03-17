@@ -1,0 +1,50 @@
+{
+  "results": [
+    {
+      "id": "65541",
+      "key": "ENG",
+      "name": "Engineering",
+      "type": "global",
+      "status": "current",
+      "authorId": "user-account-id-1",
+      "createdAt": "2024-01-15T10:30:00.000Z",
+      "homepageId": "98304",
+      "description": {
+        "plain": {},
+        "view": {}
+      },
+      "icon": {
+        "path": "/images/logo/default-space-logo-256.png",
+        "apiDownloadLink": "/wiki/download/attachments/65541/logo.png"
+      },
+      "_links": {
+        "webui": "/spaces/ENG"
+      }
+    },
+    {
+      "id": "65542",
+      "key": "HR",
+      "name": "Human Resources",
+      "type": "global",
+      "status": "current",
+      "authorId": "user-account-id-2",
+      "createdAt": "2024-02-01T08:00:00.000Z",
+      "homepageId": "98305",
+      "description": {
+        "plain": {},
+        "view": {}
+      },
+      "icon": {
+        "path": "/images/logo/default-space-logo-256.png",
+        "apiDownloadLink": "/wiki/download/attachments/65542/logo.png"
+      },
+      "_links": {
+        "webui": "/spaces/HR"
+      }
+    }
+  ],
+  "_links": {
+    "next": "/wiki/api/v2/spaces?cursor=abc123",
+    "base": "https://your-domain.atlassian.net"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "id": "98304",
+  "status": "current",
+  "title": "Engineering Home (Updated)",
+  "spaceId": "65541",
+  "parentId": null,
+  "parentType": "page",
+  "position": 0,
+  "authorId": "user-account-id-1",
+  "ownerId": "user-account-id-1",
+  "lastOwnerId": "user-account-id-1",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "version": {
+    "createdAt": "2024-04-02T11:00:00.000Z",
+    "message": "",
+    "number": 6,
+    "minorEdit": false,
+    "authorId": "user-account-id-1"
+  },
+  "body": {
+    "storage": {
+      "representation": "storage",
+      "value": "<h1>Welcome to Engineering</h1><p>Updated content here.</p>"
+    },
+    "atlas_doc_format": {},
+    "view": {}
+  },
+  "labels": {
+    "results": [],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98304/labels"
+    }
+  },
+  "properties": {
+    "results": [],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98304/properties"
+    }
+  },
+  "operations": {
+    "results": [],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98304/operations"
+    }
+  },
+  "likes": {
+    "results": [],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98304/likes"
+    }
+  },
+  "versions": {
+    "results": [
+      {
+        "createdAt": "2024-04-02T11:00:00.000Z",
+        "message": "",
+        "number": 6,
+        "minorEdit": false,
+        "authorId": "user-account-id-1"
+      }
+    ],
+    "meta": {
+      "hasMore": false,
+      "cursor": ""
+    },
+    "_links": {
+      "self": "/wiki/api/v2/pages/98304/versions"
+    }
+  },
+  "isFavoritedByCurrentUser": true,
+  "_links": {
+    "base": "https://your-domain.atlassian.net"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "results": [
+    {
+      "content": {
+        "id": "98304",
+        "type": "page",
+        "status": "current",
+        "title": "Engineering Home",
+        "space": {
+          "key": "ENG",
+          "name": "Engineering",
+          "type": "global",
+          "status": "current"
+        }
+      },
+      "title": "Engineering Home",
+      "excerpt": "Welcome to the engineering team home page with project links and documentation.",
+      "url": "/spaces/ENG/pages/98304/Engineering+Home",
+      "lastModified": "2024-03-10T14:22:00.000Z",
+      "friendlyLastModified": "Mar 10, 2024",
+      "entityType": "content"
+    },
+    {
+      "content": {
+        "id": "98305",
+        "type": "page",
+        "status": "current",
+        "title": "Engineering Onboarding",
+        "space": {
+          "key": "ENG",
+          "name": "Engineering",
+          "type": "global",
+          "status": "current"
+        }
+      },
+      "title": "Engineering Onboarding",
+      "excerpt": "New engineer onboarding guide with setup instructions and team introductions.",
+      "url": "/spaces/ENG/pages/98305/Engineering+Onboarding",
+      "lastModified": "2024-02-20T09:15:00.000Z",
+      "friendlyLastModified": "Feb 20, 2024",
+      "entityType": "content"
+    },
+    {
+      "content": {
+        "id": "98306",
+        "type": "blogpost",
+        "status": "current",
+        "title": "Q1 Engineering Update",
+        "space": {
+          "key": "ENG",
+          "name": "Engineering",
+          "type": "global",
+          "status": "current"
+        }
+      },
+      "title": "Q1 Engineering Update",
+      "excerpt": "Summary of engineering achievements and milestones for Q1 2024.",
+      "url": "/spaces/ENG/blog/2024/03/15/Q1+Engineering+Update",
+      "lastModified": "2024-03-15T16:00:00.000Z",
+      "friendlyLastModified": "Mar 15, 2024",
+      "entityType": "content"
+    }
+  ],
+  "start": 0,
+  "limit": 25,
+  "size": 3,
+  "totalSize": 3,
+  "cqlQuery": "type=page AND space=ENG",
+  "searchDuration": 42
+}
