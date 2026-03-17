@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing
+from collections.abc import Sequence
 from typing import Any
 
 from any_tool.types import ToolDefinition
@@ -10,7 +11,7 @@ from any_tool.types import ToolDefinition
 
 def tool(
     *,
-    scopes: list[str],
+    scopes: Sequence[str],
     api_docs: str,
     provider: str = "",
 ) -> Any:

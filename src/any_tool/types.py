@@ -52,3 +52,21 @@ class ToolDefinition:
 
     api_docs_url: str
     """URL to the provider's API documentation for this endpoint."""
+
+
+@dataclass(frozen=True)
+class CapabilityGroup:
+    """Provider-level metadata for the tool registry.
+
+    Represents an integration that can be connected via OAuth,
+    with the aggregate scopes required across all its tools.
+    """
+
+    provider: str
+    """Provider identifier, e.g. ``typeform``."""
+
+    display_name: str
+    """Human-readable name, e.g. ``Typeform``."""
+
+    scopes: list[str]
+    """Union of all OAuth scopes required by this provider's tools."""

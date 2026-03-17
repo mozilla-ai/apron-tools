@@ -1,4 +1,4 @@
-from any_tool.types import ToolDefinition, ToolResult
+from any_tool.types import CapabilityGroup, ToolDefinition, ToolResult
 
 
 class TestToolResult:
@@ -69,6 +69,30 @@ class TestToolDefinition:
 
         try:
             td.name = "changed"  # type: ignore[misc]
+            raise AssertionError("Expected FrozenInstanceError")
+        except AttributeError:
+            pass
+
+
+class TestCapabilityGroup:
+    def test_fields(self):
+        cg = CapabilityGroup(
+            provider="typeform",
+            display_name="Typeform",
+            scopes=["forms:read", "responses:read"],
+        )
+        assert cg.provider == "typeform"
+        assert cg.display_name == "Typeform"
+        assert cg.scopes == ["forms:read", "responses:read"]
+
+    def test_frozen(self):
+        cg = CapabilityGroup(
+            provider="test",
+            display_name="Test",
+            scopes=["read"],
+        )
+        try:
+            cg.provider = "changed"  # type: ignore[misc]
             raise AssertionError("Expected FrozenInstanceError")
         except AttributeError:
             pass
