@@ -1,0 +1,68 @@
+{
+    "ok": true,
+    "channels": [
+        {
+            "id": "C012AB3CD",
+            "name": "general",
+            "is_channel": true,
+            "is_group": false,
+            "is_im": false,
+            "created": 1449252889,
+            "creator": "U012A3CDE",
+            "is_archived": false,
+            "is_general": true,
+            "unlinked": 0,
+            "name_normalized": "general",
+            "is_shared": false,
+            "is_ext_shared": false,
+            "is_org_shared": false,
+            "is_pending_ext_shared": false,
+            "is_private": false,
+            "is_mpim": false,
+            "topic": {
+                "value": "Company-wide announcements and work-based matters",
+                "creator": "",
+                "last_set": 0
+            },
+            "purpose": {
+                "value": "This channel is for team-wide communication and announcements.",
+                "creator": "",
+                "last_set": 0
+            },
+            "num_members": 4
+        },
+        {
+            "id": "C061EG9T2",
+            "name": "random",
+            "is_channel": true,
+            "is_group": false,
+            "is_im": false,
+            "created": 1449252889,
+            "creator": "U061F7AUR",
+            "is_archived": false,
+            "is_general": false,
+            "unlinked": 0,
+            "name_normalized": "random",
+            "is_shared": false,
+            "is_ext_shared": false,
+            "is_org_shared": false,
+            "is_pending_ext_shared": false,
+            "is_private": false,
+            "is_mpim": false,
+            "topic": {
+                "value": "",
+                "creator": "",
+                "last_set": 0
+            },
+            "purpose": {
+                "value": "A place for non-work-related flimflam.",
+                "creator": "",
+                "last_set": 0
+            },
+            "num_members": 4
+        }
+    ],
+    "response_metadata": {
+        "next_cursor": ""
+    }
+}

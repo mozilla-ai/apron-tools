@@ -1,0 +1,35 @@
+{
+    "ok": true,
+    "file": {
+        "id": "F0S43PZDF",
+        "created": 1531763342,
+        "timestamp": 1531763342,
+        "name": "tedair.gif",
+        "title": "tedair.gif",
+        "mimetype": "image/gif",
+        "filetype": "gif",
+        "pretty_type": "GIF",
+        "user": "U061F7AUR",
+        "editable": false,
+        "size": 137531,
+        "mode": "hosted",
+        "is_external": false,
+        "external_type": "",
+        "is_public": true,
+        "public_url_shared": false,
+        "display_as_bot": false,
+        "username": "",
+        "url_private": "https://files.slack.com/files-pri/T0G9PQBBK-F0S43PZDF/tedair.gif",
+        "url_private_download": "https://files.slack.com/files-pri/T0G9PQBBK-F0S43PZDF/download/tedair.gif",
+        "permalink": "https://ghostbusters.slack.com/files/U061F7AUR/F0S43PZDF/tedair.gif",
+        "permalink_public": "https://slack-files.com/T0G9PQBBK-F0S43PZDF-eb0ea8",
+        "channels": ["C012AB3CD"],
+        "groups": [],
+        "ims": [],
+        "comments_count": 0
+    },
+    "comments": [],
+    "response_metadata": {
+        "next_cursor": ""
+    }
+}
