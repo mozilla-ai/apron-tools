@@ -1,0 +1,34 @@
+{
+  "self": "https://your-domain.atlassian.net/rest/api/3/issue/10010/comment/10000",
+  "id": "10000",
+  "author": {
+    "self": "https://your-domain.atlassian.net/rest/api/3/user?accountId=user-account-id-1",
+    "accountId": "user-account-id-1",
+    "displayName": "Mia Krystof",
+    "active": true
+  },
+  "body": {
+    "type": "doc",
+    "version": 1,
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "This is a comment."
+          }
+        ]
+      }
+    ]
+  },
+  "updateAuthor": {
+    "self": "https://your-domain.atlassian.net/rest/api/3/user?accountId=user-account-id-1",
+    "accountId": "user-account-id-1",
+    "displayName": "Mia Krystof",
+    "active": true
+  },
+  "created": "2021-01-17T12:34:00.000+0000",
+  "updated": "2021-01-17T12:34:00.000+0000",
+  "jsdPublic": true
+}

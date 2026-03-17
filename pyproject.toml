@@ -13,8 +13,10 @@ dependencies = [
 [project.optional-dependencies]
 all = [
     "any-tool[typeform]",
+    "any-tool[atlassian]",
 ]
 typeform = []
+atlassian = ["atlassian-python-api>=3.0"]
 
 [dependency-groups]
 dev = [

@@ -1,0 +1,29 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "isLast": true,
+  "values": [
+    {
+      "id": 37,
+      "self": "https://your-domain.atlassian.net/rest/agile/1.0/sprint/37",
+      "state": "closed",
+      "name": "Sprint 1",
+      "startDate": "2024-01-01T08:00:00.000Z",
+      "endDate": "2024-01-15T08:00:00.000Z",
+      "completeDate": "2024-01-14T12:00:00.000Z",
+      "originBoardId": 84,
+      "goal": "Complete onboarding features"
+    },
+    {
+      "id": 38,
+      "self": "https://your-domain.atlassian.net/rest/agile/1.0/sprint/38",
+      "state": "active",
+      "name": "Sprint 2",
+      "startDate": "2024-01-15T08:00:00.000Z",
+      "endDate": "2024-01-29T08:00:00.000Z",
+      "completeDate": null,
+      "originBoardId": 84,
+      "goal": "Fix critical bugs"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 2,
+  "isLast": true,
+  "values": [
+    {
+      "id": 84,
+      "self": "https://your-domain.atlassian.net/rest/agile/1.0/board/84",
+      "name": "EX board",
+      "type": "scrum",
+      "location": {
+        "projectId": 10001,
+        "displayName": "Example (EX)",
+        "projectName": "Example",
+        "projectKey": "EX",
+        "projectTypeKey": "software",
+        "name": "Example (EX)"
+      }
+    },
+    {
+      "id": 92,
+      "self": "https://your-domain.atlassian.net/rest/agile/1.0/board/92",
+      "name": "ABC Kanban",
+      "type": "kanban",
+      "location": {
+        "projectId": 10002,
+        "displayName": "Alphabetical (ABC)",
+        "projectName": "Alphabetical",
+        "projectKey": "ABC",
+        "projectTypeKey": "business",
+        "name": "Alphabetical (ABC)"
+      }
+    }
+  ]
+}

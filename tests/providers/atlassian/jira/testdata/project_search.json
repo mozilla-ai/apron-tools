@@ -1,0 +1,60 @@
+{
+  "self": "https://your-domain.atlassian.net/rest/api/3/project/search?maxResults=50&startAt=0",
+  "nextPage": "https://your-domain.atlassian.net/rest/api/3/project/search?maxResults=50&startAt=50",
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 2,
+  "isLast": true,
+  "values": [
+    {
+      "self": "https://your-domain.atlassian.net/rest/api/3/project/10001",
+      "id": "10001",
+      "key": "EX",
+      "name": "Example",
+      "avatarUrls": {
+        "48x48": "https://your-domain.atlassian.net/secure/projectavatar?size=large&pid=10001",
+        "24x24": "https://your-domain.atlassian.net/secure/projectavatar?size=small&pid=10001",
+        "16x16": "https://your-domain.atlassian.net/secure/projectavatar?size=xsmall&pid=10001",
+        "32x32": "https://your-domain.atlassian.net/secure/projectavatar?size=medium&pid=10001"
+      },
+      "projectTypeKey": "software",
+      "simplified": false,
+      "style": "classic",
+      "isPrivate": false,
+      "properties": {},
+      "lead": {
+        "self": "https://your-domain.atlassian.net/rest/api/3/user?accountId=user-account-id-1",
+        "key": "",
+        "accountId": "user-account-id-1",
+        "accountType": "atlassian",
+        "displayName": "Mia Krystof",
+        "active": true
+      }
+    },
+    {
+      "self": "https://your-domain.atlassian.net/rest/api/3/project/10002",
+      "id": "10002",
+      "key": "ABC",
+      "name": "Alphabetical",
+      "avatarUrls": {
+        "48x48": "https://your-domain.atlassian.net/secure/projectavatar?size=large&pid=10002",
+        "24x24": "https://your-domain.atlassian.net/secure/projectavatar?size=small&pid=10002",
+        "16x16": "https://your-domain.atlassian.net/secure/projectavatar?size=xsmall&pid=10002",
+        "32x32": "https://your-domain.atlassian.net/secure/projectavatar?size=medium&pid=10002"
+      },
+      "projectTypeKey": "business",
+      "simplified": false,
+      "style": "classic",
+      "isPrivate": false,
+      "properties": {},
+      "lead": {
+        "self": "https://your-domain.atlassian.net/rest/api/3/user?accountId=user-account-id-1",
+        "key": "",
+        "accountId": "user-account-id-1",
+        "accountType": "atlassian",
+        "displayName": "Mia Krystof",
+        "active": true
+      }
+    }
+  ]
+}
