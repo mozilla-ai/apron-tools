@@ -1,0 +1,13 @@
+{
+  "files": [
+    {
+      "id": "file-001",
+      "name": "Project Plan",
+      "mimeType": "application/vnd.google-apps.document",
+      "createdTime": "2024-01-15T10:00:00Z",
+      "modifiedTime": "2024-03-10T14:22:00Z",
+      "parents": ["folder-001"],
+      "webViewLink": "https://docs.google.com/document/d/file-001/edit"
+    }
+  ]
+}
