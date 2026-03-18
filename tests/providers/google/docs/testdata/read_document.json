@@ -1,0 +1,61 @@
+{
+  "documentId": "doc-001",
+  "title": "Meeting Notes",
+  "body": {
+    "content": [
+      {
+        "endIndex": 1,
+        "sectionBreak": {
+          "sectionStyle": {
+            "columnSeparatorStyle": "NONE",
+            "contentDirection": "LEFT_TO_RIGHT"
+          }
+        }
+      },
+      {
+        "startIndex": 1,
+        "endIndex": 15,
+        "paragraph": {
+          "elements": [
+            {
+              "startIndex": 1,
+              "endIndex": 15,
+              "textRun": {
+                "content": "Meeting Notes\n",
+                "textStyle": {}
+              }
+            }
+          ],
+          "paragraphStyle": {
+            "namedStyleType": "HEADING_1",
+            "direction": "LEFT_TO_RIGHT"
+          }
+        }
+      },
+      {
+        "startIndex": 15,
+        "endIndex": 45,
+        "paragraph": {
+          "elements": [
+            {
+              "startIndex": 15,
+              "endIndex": 45,
+              "textRun": {
+                "content": "Discussion points for today.\n",
+                "textStyle": {}
+              }
+            }
+          ],
+          "paragraphStyle": {
+            "namedStyleType": "NORMAL_TEXT",
+            "direction": "LEFT_TO_RIGHT"
+          }
+        }
+      }
+    ]
+  },
+  "revisionId": "revision-001",
+  "documentStyle": {},
+  "namedStyles": {},
+  "suggestionsViewMode": "SUGGESTIONS_INLINE"
+}
