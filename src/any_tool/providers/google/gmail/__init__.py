@@ -1,11 +1,10 @@
-"""Google provider.
+"""Gmail provider.
 
 API docs:
   - Gmail: https://developers.google.com/workspace/gmail/api/reference/rest
-  - Sheets: https://developers.google.com/workspace/sheets/api/reference/rest
 """
 
-from .gmail import (
+from .tools import (
     add_label_to_email,
     create_draft,
     edit_draft,
@@ -17,34 +16,16 @@ from .gmail import (
     reply_to_email,
     send_email,
 )
-from .sheets import (
-    add_sheet,
-    append_row,
-    copy_spreadsheet,
-    create_spreadsheet,
-    find_row,
-    list_spreadsheets,
-    read_spreadsheet,
-    update_spreadsheet,
-)
 
 __all__ = [
     "add_label_to_email",
-    "add_sheet",
-    "append_row",
-    "copy_spreadsheet",
     "create_draft",
-    "create_spreadsheet",
     "edit_draft",
-    "find_row",
     "get_thread_replies",
     "list_emails",
     "list_labels",
-    "list_spreadsheets",
     "read_email",
-    "read_spreadsheet",
     "remove_label_from_email",
     "reply_to_email",
     "send_email",
-    "update_spreadsheet",
 ]

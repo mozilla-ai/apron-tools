@@ -1,0 +1,18 @@
+{
+  "id": "draft-001",
+  "message": {
+    "id": "msg-004",
+    "threadId": "thread-003",
+    "labelIds": ["DRAFT"],
+    "payload": {
+      "mimeType": "text/plain",
+      "headers": [
+        {"name": "To", "value": "bob@example.com"},
+        {"name": "Subject", "value": "Draft Subject"},
+        {"name": "Cc", "value": ""},
+        {"name": "Bcc", "value": ""}
+      ],
+      "body": {"size": 13, "data": "T3JpZ2luYWwgYm9keQ=="}
+    }
+  }
+}

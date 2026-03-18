@@ -1,0 +1,23 @@
+{
+  "id": "msg-001",
+  "threadId": "thread-001",
+  "labelIds": ["INBOX", "UNREAD"],
+  "snippet": "Hi, just checking in about the project status...",
+  "payload": {
+    "mimeType": "multipart/alternative",
+    "headers": [
+      {"name": "From", "value": "alice@example.com"},
+      {"name": "To", "value": "bob@example.com"},
+      {"name": "Cc", "value": "carol@example.com"},
+      {"name": "Subject", "value": "Project Status Update"},
+      {"name": "Date", "value": "Mon, 10 Mar 2024 14:00:00 +0000"}
+    ],
+    "body": {"size": 0},
+    "parts": [
+      {
+        "mimeType": "text/plain",
+        "body": {"size": 11, "data": "SGVsbG8gd29ybGQ="}
+      }
+    ]
+  }
+}
