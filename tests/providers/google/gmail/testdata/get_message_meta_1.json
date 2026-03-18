@@ -1,0 +1,13 @@
+{
+  "id": "msg-001",
+  "threadId": "thread-001",
+  "snippet": "Hi, just checking in about the project status...",
+  "payload": {
+    "headers": [
+      {"name": "From", "value": "alice@example.com"},
+      {"name": "To", "value": "bob@example.com"},
+      {"name": "Subject", "value": "Project Status Update"},
+      {"name": "Date", "value": "Mon, 10 Mar 2024 14:00:00 +0000"}
+    ]
+  }
+}
