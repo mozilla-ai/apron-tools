@@ -1,0 +1,20 @@
+{
+  "id": "file-001",
+  "name": "Project Plan",
+  "mimeType": "application/vnd.google-apps.document",
+  "description": "Q1 project planning document",
+  "starred": false,
+  "trashed": false,
+  "parents": ["folder-001"],
+  "webViewLink": "https://docs.google.com/document/d/file-001/edit",
+  "createdTime": "2024-01-15T10:00:00Z",
+  "modifiedTime": "2024-03-10T14:22:00Z",
+  "size": "2048",
+  "owners": [
+    {
+      "displayName": "Alice Smith",
+      "emailAddress": "alice@example.com"
+    }
+  ],
+  "shared": true
+}
