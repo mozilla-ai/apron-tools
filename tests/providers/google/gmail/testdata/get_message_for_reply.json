@@ -1,0 +1,13 @@
+{
+  "id": "msg-001",
+  "threadId": "thread-001",
+  "payload": {
+    "headers": [
+      {"name": "From", "value": "alice@example.com"},
+      {"name": "To", "value": "bob@example.com"},
+      {"name": "Subject", "value": "Project Status Update"},
+      {"name": "Message-ID", "value": "<msg-id-001@example.com>"},
+      {"name": "References", "value": ""}
+    ]
+  }
+}

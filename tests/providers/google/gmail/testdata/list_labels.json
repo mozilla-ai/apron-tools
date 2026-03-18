@@ -1,0 +1,7 @@
+{
+  "labels": [
+    {"id": "INBOX", "name": "INBOX", "type": "system"},
+    {"id": "SENT", "name": "SENT", "type": "system"},
+    {"id": "label-001", "name": "Work", "type": "user"}
+  ]
+}
