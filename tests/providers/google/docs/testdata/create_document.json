@@ -1,0 +1,21 @@
+{
+  "documentId": "doc-001",
+  "title": "Meeting Notes",
+  "body": {
+    "content": [
+      {
+        "endIndex": 1,
+        "sectionBreak": {
+          "sectionStyle": {
+            "columnSeparatorStyle": "NONE",
+            "contentDirection": "LEFT_TO_RIGHT"
+          }
+        }
+      }
+    ]
+  },
+  "revisionId": "revision-001",
+  "documentStyle": {},
+  "namedStyles": {},
+  "suggestionsViewMode": "SUGGESTIONS_INLINE"
+}
