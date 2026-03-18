@@ -1,0 +1,27 @@
+{
+  "kind": "calendar#calendarList",
+  "nextPageToken": null,
+  "items": [
+    {
+      "kind": "calendar#calendarListEntry",
+      "id": "cal-001",
+      "summary": "Work Calendar",
+      "description": "Team meetings and deadlines",
+      "timeZone": "America/New_York",
+      "colorId": "1",
+      "backgroundColor": "#ac725e",
+      "foregroundColor": "#1d1d1d",
+      "selected": true,
+      "accessRole": "owner",
+      "primary": true
+    },
+    {
+      "kind": "calendar#calendarListEntry",
+      "id": "cal-002",
+      "summary": "Personal",
+      "timeZone": "America/New_York",
+      "accessRole": "owner",
+      "primary": false
+    }
+  ]
+}
