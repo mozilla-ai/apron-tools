@@ -1,0 +1,17 @@
+{
+  "kind": "calendar#event",
+  "id": "event-003",
+  "status": "confirmed",
+  "htmlLink": "https://www.google.com/calendar/event?eid=event-003",
+  "summary": "Project Review",
+  "description": "Quarterly project review",
+  "location": "Conference Room B",
+  "creator": {"email": "alice@example.com", "displayName": "Alice Smith"},
+  "organizer": {"email": "cal-001", "displayName": "Work Calendar", "self": true},
+  "start": {"dateTime": "2024-03-20T14:00:00-04:00", "timeZone": "America/New_York"},
+  "end": {"dateTime": "2024-03-20T15:00:00-04:00", "timeZone": "America/New_York"},
+  "attendees": [
+    {"email": "alice@example.com", "displayName": "Alice Smith", "responseStatus": "accepted"},
+    {"email": "bob@example.com", "displayName": "Bob Jones", "responseStatus": "needsAction"}
+  ]
+}
