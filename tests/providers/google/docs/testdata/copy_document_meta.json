@@ -1,0 +1,6 @@
+{
+  "kind": "drive#file",
+  "id": "doc-001",
+  "name": "Meeting Notes",
+  "mimeType": "application/vnd.google-apps.document"
+}

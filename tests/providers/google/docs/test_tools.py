@@ -1,0 +1,271 @@
+"""Tests for Google Docs tool functions."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from pytest_httpx import HTTPXMock
+
+from any_tool.providers.google.docs.tools import (
+    copy_document,
+    create_document,
+    list_documents,
+    read_document,
+    update_document,
+)
+from any_tool.providers.google.docs.types import (
+    CopyDocumentParams,
+    CopyDocumentResult,
+    CreateDocumentParams,
+    CreateDocumentResult,
+    ListDocumentsParams,
+    ListDocumentsResult,
+    ReadDocumentParams,
+    ReadDocumentResult,
+    UpdateDocumentParams,
+    UpdateDocumentResult,
+)
+
+TESTDATA_DIR = Path(__file__).parent / "testdata"
+_TOKEN = "test_oauth_token_abc123"
+_DOCS_BASE = "https://docs.googleapis.com/v1/documents"
+_DRIVE_BASE = "https://www.googleapis.com/drive/v3/files"
+_DOCUMENT_ID = "doc-001"
+
+
+def _load_json(filename: str) -> dict | list:
+    return json.loads((TESTDATA_DIR / filename).read_text())
+
+
+# ---------------------------------------------------------------------------
+# list_documents
+# ---------------------------------------------------------------------------
+
+
+class TestListDocuments:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_DRIVE_BASE}?q=mimeType%3D%27application%2Fvnd.google-apps.document%27&pageSize=20&fields=files%28id%2Cname%2CcreatedTime%2CmodifiedTime%29&orderBy=modifiedTime+desc&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives",
+            json=_load_json("list_documents.json"),
+        )
+
+        result = await list_documents(ListDocumentsParams(), token=_TOKEN)
+
+        assert isinstance(result, ListDocumentsResult)
+        assert result.success is True
+        assert len(result.files) == 2
+        assert result.files[0].name == "Meeting Notes"
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=403, text="Forbidden")
+
+        result = await list_documents(ListDocumentsParams(), token=_TOKEN)
+
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = list_documents._tool_definition
+        assert defn.name == "list_documents"
+        assert defn.provider == "google_docs"
+        assert "https://www.googleapis.com/auth/drive" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# create_document
+# ---------------------------------------------------------------------------
+
+
+class TestCreateDocument:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_DOCS_BASE,
+            json=_load_json("create_document.json"),
+        )
+
+        result = await create_document(
+            CreateDocumentParams(title="Meeting Notes"),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CreateDocumentResult)
+        assert result.success is True
+        assert result.document_id == _DOCUMENT_ID
+        assert result.title == "Meeting Notes"
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=400, text="Bad Request")
+
+        result = await create_document(
+            CreateDocumentParams(title="Test"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "400" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = create_document._tool_definition
+        assert defn.name == "create_document"
+        assert defn.provider == "google_docs"
+        assert "https://www.googleapis.com/auth/documents" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# read_document
+# ---------------------------------------------------------------------------
+
+
+class TestReadDocument:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_DOCS_BASE}/{_DOCUMENT_ID}",
+            json=_load_json("read_document.json"),
+        )
+
+        result = await read_document(
+            ReadDocumentParams(document_id=_DOCUMENT_ID),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, ReadDocumentResult)
+        assert result.success is True
+        assert result.document_id == _DOCUMENT_ID
+        assert result.title == "Meeting Notes"
+        assert "Discussion points" in result.text_content
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
+
+        result = await read_document(
+            ReadDocumentParams(document_id="bad_id"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = read_document._tool_definition
+        assert defn.name == "read_document"
+        assert defn.provider == "google_docs"
+        assert "https://www.googleapis.com/auth/documents" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# update_document
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateDocument:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_DOCS_BASE}/{_DOCUMENT_ID}:batchUpdate",
+            json=_load_json("update_document.json"),
+        )
+
+        result = await update_document(
+            UpdateDocumentParams(
+                document_id=_DOCUMENT_ID,
+                requests=[
+                    {"insertText": {"location": {"index": 1}, "text": "Hello\n"}},
+                ],
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, UpdateDocumentResult)
+        assert result.success is True
+        assert result.document_id == _DOCUMENT_ID
+        assert result.write_control.required_revision_id == "revision-002"
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=400, text="Bad Request")
+
+        result = await update_document(
+            UpdateDocumentParams(
+                document_id="bad_id",
+                requests=[{"insertText": {"location": {"index": 1}, "text": "x"}}],
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "400" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = update_document._tool_definition
+        assert defn.name == "update_document"
+        assert defn.provider == "google_docs"
+        assert "https://www.googleapis.com/auth/documents" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# copy_document
+# ---------------------------------------------------------------------------
+
+
+class TestCopyDocument:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}?fields=name&supportsAllDrives=true",
+            json=_load_json("copy_document_meta.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}/copy?supportsAllDrives=true",
+            json=_load_json("copy_document.json"),
+        )
+
+        result = await copy_document(
+            CopyDocumentParams(
+                document_id=_DOCUMENT_ID,
+                new_title="Copy of Meeting Notes",
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CopyDocumentResult)
+        assert result.success is True
+        assert result.id == "doc-003"
+        assert result.name == "Copy of Meeting Notes"
+        assert result.original_name == "Meeting Notes"
+
+    async def test_meta_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
+
+        result = await copy_document(
+            CopyDocumentParams(document_id="bad_id", new_title="Copy"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_copy_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}?fields=name&supportsAllDrives=true",
+            json=_load_json("copy_document_meta.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}/copy?supportsAllDrives=true",
+            status_code=403,
+            text="Forbidden",
+        )
+
+        result = await copy_document(
+            CopyDocumentParams(
+                document_id=_DOCUMENT_ID,
+                new_title="Copy",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = copy_document._tool_definition
+        assert defn.name == "copy_document"
+        assert defn.provider == "google_docs"
+        assert "https://www.googleapis.com/auth/drive" in defn.scopes
