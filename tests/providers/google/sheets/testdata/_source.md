@@ -1,0 +1,24 @@
+# Google Sheets testdata
+
+- **Sheets API docs:** https://developers.google.com/workspace/sheets/api/reference/rest
+- **Drive API docs:** https://developers.google.com/drive/api/reference/rest/v3
+- **Endpoint references:**
+  - List spreadsheets (Drive): https://developers.google.com/drive/api/reference/rest/v3/files/list
+  - Create spreadsheet: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/create
+  - Copy (Drive): https://developers.google.com/drive/api/reference/rest/v3/files/copy
+  - Get spreadsheet: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/get
+  - Get values: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/get
+  - Update values: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/update
+  - Append values: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/append
+  - Batch update: https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
+- **Auth:** OAuth 2.0 Bearer token
+- **list_spreadsheets.json:** Based on Drive files.list response with spreadsheet mimeType filter.
+- **create_spreadsheet.json:** Based on Sheets spreadsheets.create response.
+- **copy_spreadsheet_meta.json:** Drive file metadata response for the original spreadsheet.
+- **copy_spreadsheet.json:** Drive files.copy response.
+- **read_spreadsheet_meta.json:** Sheets spreadsheets.get response (metadata only).
+- **read_spreadsheet_values.json:** Sheets spreadsheets.values.get response.
+- **update_spreadsheet.json:** Sheets spreadsheets.values.update response.
+- **append_row.json:** Sheets spreadsheets.values.append response.
+- **add_sheet.json:** Sheets spreadsheets.batchUpdate response for addSheet.
+- **find_row_values.json:** Sheets spreadsheets.values.get response for column search.

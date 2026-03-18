@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "id": "spreadsheet-id-001",
+      "name": "Budget 2024",
+      "createdTime": "2024-01-15T10:30:00Z",
+      "modifiedTime": "2024-03-10T14:22:00Z"
+    },
+    {
+      "id": "spreadsheet-id-002",
+      "name": "Project Tracker",
+      "createdTime": "2024-02-01T09:00:00Z",
+      "modifiedTime": "2024-03-12T16:45:00Z"
+    }
+  ]
+}
