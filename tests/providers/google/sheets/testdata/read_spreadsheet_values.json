@@ -1,0 +1,10 @@
+{
+  "range": "Sheet1!A1:D5",
+  "majorDimension": "ROWS",
+  "values": [
+    ["Name", "Age", "City", "Score"],
+    ["Alice", "30", "New York", "95"],
+    ["Bob", "25", "London", "87"],
+    ["Charlie", "35", "Tokyo", "92"]
+  ]
+}

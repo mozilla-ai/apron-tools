@@ -1,0 +1,25 @@
+{
+  "spreadsheetId": "spreadsheet-id-001",
+  "properties": {
+    "title": "Budget 2024",
+    "locale": "en_US",
+    "autoRecalc": "ON_CHANGE",
+    "timeZone": "America/New_York",
+    "defaultFormat": {}
+  },
+  "sheets": [
+    {
+      "properties": {
+        "sheetId": 0,
+        "title": "Sheet1",
+        "index": 0,
+        "sheetType": "GRID",
+        "gridProperties": {
+          "rowCount": 1000,
+          "columnCount": 26
+        }
+      }
+    }
+  ],
+  "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/spreadsheet-id-001/edit"
+}

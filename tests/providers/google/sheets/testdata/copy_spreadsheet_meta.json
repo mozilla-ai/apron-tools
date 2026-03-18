@@ -1,0 +1,6 @@
+{
+  "kind": "drive#file",
+  "id": "spreadsheet-id-001",
+  "name": "Budget 2024",
+  "mimeType": "application/vnd.google-apps.spreadsheet"
+}

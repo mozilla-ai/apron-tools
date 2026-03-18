@@ -1,0 +1,11 @@
+{
+  "range": "Sheet1!A1:A5",
+  "majorDimension": "ROWS",
+  "values": [
+    ["Name"],
+    ["Alice"],
+    ["Bob"],
+    ["Charlie"],
+    ["Diana"]
+  ]
+}
