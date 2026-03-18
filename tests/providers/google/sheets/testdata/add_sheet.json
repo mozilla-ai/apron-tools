@@ -1,0 +1,14 @@
+{
+  "spreadsheetId": "spreadsheet-id-001",
+  "replies": [
+    {
+      "addSheet": {
+        "properties": {
+          "sheetId": 123456,
+          "title": "New Sheet",
+          "index": 1
+        }
+      }
+    }
+  ]
+}
