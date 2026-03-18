@@ -162,6 +162,7 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "atlassian-python-api" },
+    { name = "notion-client" },
     { name = "pygithub" },
     { name = "slack-sdk", extra = ["optional"] },
 ]
@@ -170,6 +171,9 @@ atlassian = [
 ]
 github = [
     { name = "pygithub" },
+]
+notion = [
+    { name = "notion-client" },
 ]
 slack = [
     { name = "slack-sdk", extra = ["optional"] },
@@ -203,15 +207,17 @@ tests = [
 requires-dist = [
     { name = "any-tool", extras = ["atlassian"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["github"], marker = "extra == 'all'" },
+    { name = "any-tool", extras = ["notion"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["slack"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["typeform"], marker = "extra == 'all'" },
     { name = "atlassian-python-api", marker = "extra == 'atlassian'", specifier = ">=3.0" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "notion-client", marker = "extra == 'notion'", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pygithub", marker = "extra == 'github'", specifier = ">=2.0" },
     { name = "slack-sdk", extras = ["optional"], marker = "extra == 'slack'", specifier = ">=3.0" },
 ]
-provides-extras = ["all", "atlassian", "github", "slack", "typeform"]
+provides-extras = ["all", "atlassian", "github", "notion", "slack", "typeform"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -942,6 +948,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/24/bf/d1bda4f6168e0b2e9e5958945e01910052158313224ada5ce1fb2e1113b8/nodeenv-1.10.0.tar.gz", hash = "sha256:996c191ad80897d076bdfba80a41994c2b47c68e224c542b48feba42ba00f8bb", size = 55611, upload-time = "2025-12-20T14:08:54.006Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/b2/d0896bdcdc8d28a7fc5717c305f1a861c26e18c05047949fb371034d98bd/nodeenv-1.10.0-py2.py3-none-any.whl", hash = "sha256:5bb13e3eed2923615535339b3c620e76779af4cb4c6a90deccc9e36b274d3827", size = 23438, upload-time = "2025-12-20T14:08:52.782Z" },
+]
+
+[[package]]
+name = "notion-client"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/39/60afcbc0148c3dafaaefe851ae3f058077db49d66288dfb218a11a57b997/notion_client-3.0.0.tar.gz", hash = "sha256:05c4d2b4fa3491dc0de21c9c826277202ea8b8714077ee7f51a6e1a09ab23d0f", size = 31357, upload-time = "2026-02-16T11:15:48.024Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/ce/6b03f9aedd2edfcc28e23ced5c2582d543f6ddbb2be5c570533f02890b27/notion_client-3.0.0-py2.py3-none-any.whl", hash = "sha256:177fc3d2ace7e8ef69cf96f46269e8a66071c2c7c526194bf06ce7925853e759", size = 18746, upload-time = "2026-02-16T11:15:46.602Z" },
 ]
 
 [[package]]

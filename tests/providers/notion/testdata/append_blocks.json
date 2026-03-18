@@ -1,0 +1,23 @@
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "block",
+      "id": "a9b0c1d2-e3f4-5678-abcd-ef0123456789",
+      "type": "paragraph",
+      "paragraph": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {"content": "Appended paragraph text.", "link": null},
+            "plain_text": "Appended paragraph text.",
+            "annotations": {"bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default"}
+          }
+        ]
+      },
+      "has_children": false
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}
