@@ -1,0 +1,47 @@
+{
+  "object": "database",
+  "id": "c8d9e0f1-a2b3-4567-cdef-a12345678901",
+  "title": [
+    {
+      "type": "text",
+      "text": {"content": "Bug Tracker", "link": null},
+      "plain_text": "Bug Tracker",
+      "annotations": {"bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default"}
+    }
+  ],
+  "description": [
+    {
+      "type": "text",
+      "text": {"content": "Track and manage bugs.", "link": null},
+      "plain_text": "Track and manage bugs."
+    }
+  ],
+  "parent": {
+    "type": "page_id",
+    "page_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  "is_inline": false,
+  "in_trash": false,
+  "is_locked": false,
+  "created_time": "2025-12-01T10:00:00Z",
+  "last_edited_time": "2025-12-01T10:00:00Z",
+  "url": "https://www.notion.so/c8d9e0f1a2b34567cdefa12345678901",
+  "public_url": null,
+  "properties": {
+    "Name": {"id": "title", "type": "title", "title": {}},
+    "Severity": {
+      "id": "sev001",
+      "type": "select",
+      "select": {
+        "options": [
+          {"id": "s1", "name": "Critical", "color": "red"},
+          {"id": "s2", "name": "Major", "color": "orange"},
+          {"id": "s3", "name": "Minor", "color": "yellow"}
+        ]
+      }
+    }
+  },
+  "icon": null,
+  "cover": null,
+  "data_sources": [{"id": "ds-bugs-001", "type": "default"}]
+}

@@ -1,0 +1,38 @@
+{
+  "object": "page",
+  "id": "e7f8a9b0-c1d2-3456-efab-cd7890123456",
+  "created_time": "2025-12-01T09:15:00Z",
+  "last_edited_time": "2025-12-01T09:15:00Z",
+  "in_trash": false,
+  "is_locked": false,
+  "url": "https://www.notion.so/Sprint-Planning-e7f8a9b0c1d23456efabcd7890123456",
+  "public_url": null,
+  "parent": {
+    "type": "page_id",
+    "page_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  "properties": {
+    "title": {
+      "id": "title",
+      "type": "title",
+      "title": [
+        {
+          "type": "text",
+          "text": {"content": "Sprint Planning", "link": null},
+          "plain_text": "Sprint Planning",
+          "annotations": {"bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default"}
+        }
+      ]
+    }
+  },
+  "icon": null,
+  "cover": null,
+  "created_by": {
+    "id": "f7a8b9c0-d1e2-3456-abcd-ef7890123456",
+    "object": "user"
+  },
+  "last_edited_by": {
+    "id": "f7a8b9c0-d1e2-3456-abcd-ef7890123456",
+    "object": "user"
+  }
+}

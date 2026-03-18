@@ -1,0 +1,50 @@
+{
+  "object": "list",
+  "type": "page_or_data_source",
+  "page_or_data_source": {},
+  "next_cursor": null,
+  "has_more": false,
+  "results": [
+    {
+      "object": "database",
+      "id": "d4e5f6a7-b8c9-0123-defa-b45678901234",
+      "title": [
+        {
+          "type": "text",
+          "text": {"content": "Tasks", "link": null},
+          "plain_text": "Tasks",
+          "annotations": {"bold": false, "italic": false, "strikethrough": false, "underline": false, "code": false, "color": "default"}
+        }
+      ],
+      "description": [],
+      "parent": {
+        "type": "page_id",
+        "page_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      },
+      "is_inline": false,
+      "in_trash": false,
+      "is_locked": false,
+      "created_time": "2025-05-10T09:00:00Z",
+      "last_edited_time": "2025-11-01T12:00:00Z",
+      "url": "https://www.notion.so/d4e5f6a7b8c90123defab45678901234",
+      "public_url": null,
+      "properties": {
+        "Name": {"id": "title", "type": "title", "title": {}},
+        "Status": {
+          "id": "abc123",
+          "type": "select",
+          "select": {
+            "options": [
+              {"id": "opt1", "name": "To Do", "color": "red"},
+              {"id": "opt2", "name": "In Progress", "color": "yellow"},
+              {"id": "opt3", "name": "Done", "color": "green"}
+            ]
+          }
+        }
+      },
+      "icon": null,
+      "cover": null,
+      "data_sources": [{"id": "ds-tasks-001", "type": "default"}]
+    }
+  ]
+}
