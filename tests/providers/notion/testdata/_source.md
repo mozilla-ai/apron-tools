@@ -1,0 +1,27 @@
+# Notion testdata
+
+- **API docs:** https://developers.notion.com/reference/
+- **Endpoint references:**
+  - Search: https://developers.notion.com/reference/post-search
+  - Retrieve page: https://developers.notion.com/reference/retrieve-a-page
+  - Create page: https://developers.notion.com/reference/post-page
+  - Block children: https://developers.notion.com/reference/get-block-children
+  - Append block children: https://developers.notion.com/reference/patch-block-children
+  - Retrieve database: https://developers.notion.com/reference/retrieve-database
+  - Query data source: https://developers.notion.com/reference/query-a-data-source
+  - Create database: https://developers.notion.com/reference/create-a-database
+  - Update database: https://developers.notion.com/reference/update-a-database
+  - Update page properties: https://developers.notion.com/reference/patch-page
+- **Auth:** Bearer token + Notion-Version header
+- **search_pages.json:** Based on POST /v1/search response schema.
+- **search_databases.json:** Based on POST /v1/search response schema (database filter).
+- **retrieve_page.json:** Based on GET /v1/pages/{id} response schema.
+- **block_children.json:** Based on GET /v1/blocks/{id}/children response schema.
+- **create_page.json:** Based on POST /v1/pages response schema.
+- **append_blocks.json:** Based on PATCH /v1/blocks/{id}/children response schema.
+- **retrieve_database.json:** Based on GET /v1/databases/{id} response schema.
+- **query_data_source.json:** Based on POST /v1/data_sources/{id}/query response schema.
+- **create_database.json:** Based on POST /v1/databases response schema.
+- **update_database.json:** Based on PATCH /v1/databases/{id} response schema.
+- **create_page_entry.json:** Based on POST /v1/pages response (database entry).
+- **update_page_entry.json:** Based on PATCH /v1/pages/{id} response (database entry).
