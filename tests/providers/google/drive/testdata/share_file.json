@@ -1,0 +1,7 @@
+{
+  "id": "perm-001",
+  "type": "user",
+  "role": "writer",
+  "emailAddress": "bob@example.com",
+  "displayName": "Bob Jones"
+}

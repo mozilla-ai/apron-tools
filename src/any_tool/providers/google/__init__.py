@@ -2,6 +2,7 @@
 
 API docs:
   - Calendar: https://developers.google.com/workspace/calendar/api/v3/reference
+  - Drive: https://developers.google.com/drive/api/reference/rest/v3
   - Gmail: https://developers.google.com/workspace/gmail/api/reference/rest
   - Sheets: https://developers.google.com/workspace/sheets/api/reference/rest
 """
@@ -12,6 +13,14 @@ from .calendar import (
     list_calendars,
     list_events,
     update_event,
+)
+from .drive import (
+    create_folder,
+    get_file_info,
+    list_files,
+    move_file,
+    search,
+    share_file,
 )
 from .gmail import (
     add_label_to_email,
@@ -43,21 +52,27 @@ __all__ = [
     "copy_spreadsheet",
     "create_draft",
     "create_event",
+    "create_folder",
     "create_spreadsheet",
     "edit_draft",
     "find_row",
     "get_event",
+    "get_file_info",
     "get_thread_replies",
     "list_calendars",
     "list_emails",
     "list_events",
+    "list_files",
     "list_labels",
     "list_spreadsheets",
+    "move_file",
     "read_email",
     "read_spreadsheet",
     "remove_label_from_email",
     "reply_to_email",
+    "search",
     "send_email",
+    "share_file",
     "update_event",
     "update_spreadsheet",
 ]
