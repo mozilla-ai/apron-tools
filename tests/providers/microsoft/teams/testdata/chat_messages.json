@@ -1,0 +1,38 @@
+{
+  "value": [
+    {
+      "id": "msg-001",
+      "createdDateTime": "2024-03-15T10:00:00Z",
+      "lastModifiedDateTime": "2024-03-15T10:00:00Z",
+      "messageType": "message",
+      "body": {
+        "contentType": "text",
+        "content": "Hello team, any updates on the sprint?"
+      },
+      "from": {
+        "user": {
+          "id": "user-001",
+          "displayName": "Alice Smith"
+        }
+      },
+      "importance": "normal"
+    },
+    {
+      "id": "msg-002",
+      "createdDateTime": "2024-03-15T10:30:00Z",
+      "lastModifiedDateTime": "2024-03-15T10:30:00Z",
+      "messageType": "message",
+      "body": {
+        "contentType": "text",
+        "content": "Everything is on track!"
+      },
+      "from": {
+        "user": {
+          "id": "user-002",
+          "displayName": "Bob Jones"
+        }
+      },
+      "importance": "normal"
+    }
+  ]
+}

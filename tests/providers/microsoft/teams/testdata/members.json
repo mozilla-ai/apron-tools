@@ -1,0 +1,18 @@
+{
+  "value": [
+    {
+      "id": "member-001",
+      "displayName": "Alice Smith",
+      "userId": "user-001",
+      "email": "alice@example.com",
+      "roles": ["owner"]
+    },
+    {
+      "id": "member-002",
+      "displayName": "Bob Jones",
+      "userId": "user-002",
+      "email": "bob@example.com",
+      "roles": []
+    }
+  ]
+}

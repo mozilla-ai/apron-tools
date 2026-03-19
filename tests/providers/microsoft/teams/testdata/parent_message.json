@@ -1,0 +1,16 @@
+{
+  "id": "msg-001",
+  "createdDateTime": "2024-03-15T10:00:00Z",
+  "messageType": "message",
+  "body": {
+    "contentType": "text",
+    "content": "Hello team, any updates on the sprint?"
+  },
+  "from": {
+    "user": {
+      "id": "user-001",
+      "displayName": "Alice Smith"
+    }
+  },
+  "importance": "normal"
+}

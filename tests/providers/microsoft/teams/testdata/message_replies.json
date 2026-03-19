@@ -1,0 +1,36 @@
+{
+  "value": [
+    {
+      "id": "reply-001",
+      "createdDateTime": "2024-03-15T10:05:00Z",
+      "messageType": "message",
+      "body": {
+        "contentType": "text",
+        "content": "Everything is on track!"
+      },
+      "from": {
+        "user": {
+          "id": "user-002",
+          "displayName": "Bob Jones"
+        }
+      },
+      "importance": "normal"
+    },
+    {
+      "id": "reply-002",
+      "createdDateTime": "2024-03-15T10:10:00Z",
+      "messageType": "message",
+      "body": {
+        "contentType": "text",
+        "content": "I will prepare the docs."
+      },
+      "from": {
+        "user": {
+          "id": "user-003",
+          "displayName": "Charlie Davis"
+        }
+      },
+      "importance": "normal"
+    }
+  ]
+}
