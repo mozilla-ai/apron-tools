@@ -1,0 +1,24 @@
+{
+  "value": [
+    {
+      "id": "docx-001",
+      "name": "Project Proposal.docx",
+      "webUrl": "https://onedrive.live.com/view/docx-001",
+      "lastModifiedDateTime": "2025-01-15T10:30:00Z",
+      "size": 524288,
+      "file": {
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      }
+    },
+    {
+      "id": "docx-002",
+      "name": "Meeting Notes.docx",
+      "webUrl": "https://onedrive.live.com/view/docx-002",
+      "lastModifiedDateTime": "2025-01-10T08:15:00Z",
+      "size": 262144,
+      "file": {
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      }
+    }
+  ]
+}

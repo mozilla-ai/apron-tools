@@ -96,3 +96,24 @@ except ImportError:
     _logging.getLogger(__name__).debug(
         "PowerPoint tools unavailable — install apron-tools[powerpoint] for python-pptx support."
     )
+
+try:
+    from .word import (
+        microsoft_word_create_document,
+        microsoft_word_explore_documents,
+        microsoft_word_read_document,
+        microsoft_word_update_document,
+        microsoft_word_upload_to_onedrive,
+    )
+
+    __all__ += [
+        "microsoft_word_create_document",
+        "microsoft_word_explore_documents",
+        "microsoft_word_read_document",
+        "microsoft_word_update_document",
+        "microsoft_word_upload_to_onedrive",
+    ]
+except ImportError:
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug("Word tools unavailable — install apron-tools[word] for python-docx support.")
