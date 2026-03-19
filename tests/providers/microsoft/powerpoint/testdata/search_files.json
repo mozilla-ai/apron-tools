@@ -1,0 +1,24 @@
+{
+  "value": [
+    {
+      "id": "pptx-001",
+      "name": "Q4 Review.pptx",
+      "webUrl": "https://onedrive.live.com/view/pptx-001",
+      "lastModifiedDateTime": "2025-01-15T10:30:00Z",
+      "size": 1048576,
+      "file": {
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      }
+    },
+    {
+      "id": "pptx-002",
+      "name": "Product Roadmap.pptx",
+      "webUrl": "https://onedrive.live.com/view/pptx-002",
+      "lastModifiedDateTime": "2025-01-10T08:15:00Z",
+      "size": 524288,
+      "file": {
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      }
+    }
+  ]
+}

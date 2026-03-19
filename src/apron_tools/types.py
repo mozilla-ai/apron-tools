@@ -107,6 +107,20 @@ class FileFromUrl(BaseModel):
 
     The tool function downloads the file before uploading to the provider.
     Filename and MIME type are inferred from the HTTP response when not provided.
+
+    .. warning:: Security consideration
+
+        URLs are fetched as-is with no network filtering. The library does
+        not block private, loopback, or link-local addresses, and does not
+        enforce a maximum download size. This is by design — the library
+        has no knowledge of the caller's network topology or resource
+        constraints.
+
+        If you expose tool functions to untrusted input (e.g. an LLM
+        generating URLs), apply your own URL validation and size limits
+        before passing the URL to a tool. Hosted services consuming this
+        library should enforce their own SSRF and resource-exhaustion
+        policies at the service boundary.
     """
 
     type: Literal["url"] = "url"
