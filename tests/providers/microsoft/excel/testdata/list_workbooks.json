@@ -1,0 +1,28 @@
+{
+  "value": [
+    {
+      "id": "item-001",
+      "name": "Budget.xlsx",
+      "size": 12345,
+      "webUrl": "https://contoso.sharepoint.com/Budget.xlsx",
+      "lastModifiedDateTime": "2024-03-10T14:22:00Z",
+      "createdDateTime": "2024-01-15T10:00:00Z"
+    },
+    {
+      "id": "item-002",
+      "name": "Expenses.xlsx",
+      "size": 8765,
+      "webUrl": "https://contoso.sharepoint.com/Expenses.xlsx",
+      "lastModifiedDateTime": "2024-03-12T16:45:00Z",
+      "createdDateTime": "2024-02-01T09:00:00Z"
+    },
+    {
+      "id": "item-003",
+      "name": "README.txt",
+      "size": 500,
+      "webUrl": "https://contoso.sharepoint.com/README.txt",
+      "lastModifiedDateTime": "2024-03-01T08:00:00Z",
+      "createdDateTime": "2024-01-01T08:00:00Z"
+    }
+  ]
+}
