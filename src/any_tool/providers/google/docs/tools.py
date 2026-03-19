@@ -40,11 +40,11 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
 
 
 @tool(
-    scopes=SCOPES["list_documents"],
+    scopes=SCOPES["google_docs_list_documents"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
     provider="google_docs",
 )
-async def list_documents(
+async def google_docs_list_documents(
     params: ListDocumentsParams,
     *,
     token: str,
@@ -83,11 +83,11 @@ async def list_documents(
 
 
 @tool(
-    scopes=SCOPES["create_document"],
+    scopes=SCOPES["google_docs_create_document"],
     api_docs="https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/create",
     provider="google_docs",
 )
-async def create_document(
+async def google_docs_create_document(
     params: CreateDocumentParams,
     *,
     token: str,
@@ -116,11 +116,11 @@ async def create_document(
 
 
 @tool(
-    scopes=SCOPES["read_document"],
+    scopes=SCOPES["google_docs_read_document"],
     api_docs="https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/get",
     provider="google_docs",
 )
-async def read_document(
+async def google_docs_read_document(
     params: ReadDocumentParams,
     *,
     token: str,
@@ -146,11 +146,11 @@ async def read_document(
 
 
 @tool(
-    scopes=SCOPES["update_document"],
+    scopes=SCOPES["google_docs_update_document"],
     api_docs="https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/batchUpdate",
     provider="google_docs",
 )
-async def update_document(
+async def google_docs_update_document(
     params: UpdateDocumentParams,
     *,
     token: str,
@@ -177,11 +177,11 @@ async def update_document(
 
 
 @tool(
-    scopes=SCOPES["copy_document"],
+    scopes=SCOPES["google_docs_copy_document"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/copy",
     provider="google_docs",
 )
-async def copy_document(
+async def google_docs_copy_document(
     params: CopyDocumentParams,
     *,
     token: str,

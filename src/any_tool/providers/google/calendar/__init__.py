@@ -5,17 +5,17 @@ API docs:
 """
 
 from .tools import (
-    create_event,
-    get_event,
-    list_calendars,
-    list_events,
-    update_event,
+    google_calendar_create_event,
+    google_calendar_get_event,
+    google_calendar_list_calendars,
+    google_calendar_list_events,
+    google_calendar_update_event,
 )
 
 __all__ = [
-    "create_event",
-    "get_event",
-    "list_calendars",
-    "list_events",
-    "update_event",
+    "google_calendar_create_event",
+    "google_calendar_get_event",
+    "google_calendar_list_calendars",
+    "google_calendar_list_events",
+    "google_calendar_update_event",
 ]

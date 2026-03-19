@@ -17,9 +17,9 @@ class TestDiscoverToolsWithTypeform:
     def test_discovers_typeform_tools(self):
         tools = discover_tools()
         names = [td.name for td in tools]
-        assert "list_forms" in names
-        assert "get_form" in names
-        assert "get_responses" in names
+        assert "typeform_list_forms" in names
+        assert "typeform_get_form" in names
+        assert "typeform_get_responses" in names
 
     def test_typeform_tools_have_correct_provider(self):
         tools = discover_tools()

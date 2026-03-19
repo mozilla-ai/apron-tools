@@ -98,8 +98,8 @@ query {
 """
 
 
-@tool(scopes=SCOPES["whoami"], api_docs=_API_DOCS, provider="linear")
-async def whoami(
+@tool(scopes=SCOPES["linear_whoami"], api_docs=_API_DOCS, provider="linear")
+async def linear_whoami(
     params: WhoamiParams,
     *,
     token: str,
@@ -140,8 +140,8 @@ query {
 """
 
 
-@tool(scopes=SCOPES["list_teams"], api_docs=_API_DOCS, provider="linear")
-async def list_teams(
+@tool(scopes=SCOPES["linear_list_teams"], api_docs=_API_DOCS, provider="linear")
+async def linear_list_teams(
     params: ListTeamsParams,
     *,
     token: str,
@@ -180,8 +180,8 @@ query {
 """
 
 
-@tool(scopes=SCOPES["list_users"], api_docs=_API_DOCS, provider="linear")
-async def list_users(
+@tool(scopes=SCOPES["linear_list_users"], api_docs=_API_DOCS, provider="linear")
+async def linear_list_users(
     params: ListUsersParams,
     *,
     token: str,
@@ -255,8 +255,8 @@ def _build_list_issues_query(params: ListIssuesParams) -> str:
     """
 
 
-@tool(scopes=SCOPES["list_issues"], api_docs=_API_DOCS, provider="linear")
-async def list_issues(
+@tool(scopes=SCOPES["linear_list_issues"], api_docs=_API_DOCS, provider="linear")
+async def linear_list_issues(
     params: ListIssuesParams,
     *,
     token: str,
@@ -338,8 +338,8 @@ query($id: String!) {
 """
 
 
-@tool(scopes=SCOPES["read_issue"], api_docs=_API_DOCS, provider="linear")
-async def read_issue(
+@tool(scopes=SCOPES["linear_read_issue"], api_docs=_API_DOCS, provider="linear")
+async def linear_read_issue(
     params: ReadIssueParams,
     *,
     token: str,
@@ -388,8 +388,8 @@ mutation($input: IssueCreateInput!) {
 """
 
 
-@tool(scopes=SCOPES["create_issue"], api_docs=_API_DOCS, provider="linear")
-async def create_issue(
+@tool(scopes=SCOPES["linear_create_issue"], api_docs=_API_DOCS, provider="linear")
+async def linear_create_issue(
     params: CreateIssueParams,
     *,
     token: str,
@@ -447,8 +447,8 @@ mutation($id: String!, $input: IssueUpdateInput!) {
 """
 
 
-@tool(scopes=SCOPES["update_issue"], api_docs=_API_DOCS, provider="linear")
-async def update_issue(
+@tool(scopes=SCOPES["linear_update_issue"], api_docs=_API_DOCS, provider="linear")
+async def linear_update_issue(
     params: UpdateIssueParams,
     *,
     token: str,
@@ -531,8 +531,8 @@ def _build_list_projects_query(params: ListProjectsParams) -> str:
     """
 
 
-@tool(scopes=SCOPES["list_projects"], api_docs=_API_DOCS, provider="linear")
-async def list_projects(
+@tool(scopes=SCOPES["linear_list_projects"], api_docs=_API_DOCS, provider="linear")
+async def linear_list_projects(
     params: ListProjectsParams,
     *,
     token: str,
@@ -578,8 +578,8 @@ mutation($input: ProjectCreateInput!) {
 """
 
 
-@tool(scopes=SCOPES["create_project"], api_docs=_API_DOCS, provider="linear")
-async def create_project(
+@tool(scopes=SCOPES["linear_create_project"], api_docs=_API_DOCS, provider="linear")
+async def linear_create_project(
     params: CreateProjectParams,
     *,
     token: str,
@@ -632,8 +632,8 @@ mutation($id: String!, $input: ProjectUpdateInput!) {
 """
 
 
-@tool(scopes=SCOPES["update_project"], api_docs=_API_DOCS, provider="linear")
-async def update_project(
+@tool(scopes=SCOPES["linear_update_project"], api_docs=_API_DOCS, provider="linear")
+async def linear_update_project(
     params: UpdateProjectParams,
     *,
     token: str,
@@ -704,8 +704,8 @@ def _build_list_cycles_query(params: ListCyclesParams) -> str:
     """
 
 
-@tool(scopes=SCOPES["list_cycles"], api_docs=_API_DOCS, provider="linear")
-async def list_cycles(
+@tool(scopes=SCOPES["linear_list_cycles"], api_docs=_API_DOCS, provider="linear")
+async def linear_list_cycles(
     params: ListCyclesParams,
     *,
     token: str,

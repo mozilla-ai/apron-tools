@@ -6,23 +6,23 @@ API docs:
 """
 
 from .tools import (
-    add_sheet,
-    append_row,
-    copy_spreadsheet,
-    create_spreadsheet,
-    find_row,
-    list_spreadsheets,
-    read_spreadsheet,
-    update_spreadsheet,
+    google_sheets_add_sheet,
+    google_sheets_append_row,
+    google_sheets_copy_spreadsheet,
+    google_sheets_create_spreadsheet,
+    google_sheets_find_row,
+    google_sheets_list_spreadsheets,
+    google_sheets_read_spreadsheet,
+    google_sheets_update_spreadsheet,
 )
 
 __all__ = [
-    "add_sheet",
-    "append_row",
-    "copy_spreadsheet",
-    "create_spreadsheet",
-    "find_row",
-    "list_spreadsheets",
-    "read_spreadsheet",
-    "update_spreadsheet",
+    "google_sheets_add_sheet",
+    "google_sheets_append_row",
+    "google_sheets_copy_spreadsheet",
+    "google_sheets_create_spreadsheet",
+    "google_sheets_find_row",
+    "google_sheets_list_spreadsheets",
+    "google_sheets_read_spreadsheet",
+    "google_sheets_update_spreadsheet",
 ]

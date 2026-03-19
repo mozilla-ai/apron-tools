@@ -8,16 +8,16 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.notion.tools import (
-    create_database,
-    create_or_update_database_entry,
-    create_page,
-    explore_teamspace,
-    get_database_entry,
-    get_database_schema,
-    query_database,
-    read_page,
-    update_database_schema,
-    update_page,
+    notion_create_database,
+    notion_create_or_update_database_entry,
+    notion_create_page,
+    notion_explore_teamspace,
+    notion_get_database_entry,
+    notion_get_database_schema,
+    notion_query_database,
+    notion_read_page,
+    notion_update_database_schema,
+    notion_update_page,
 )
 from any_tool.providers.notion.types import (
     CreateDatabaseParams,
@@ -69,7 +69,7 @@ class TestExploreTeamspace:
             method="POST",
         )
 
-        result = await explore_teamspace(ExploreTeamspaceParams(), token=_TOKEN)
+        result = await notion_explore_teamspace(ExploreTeamspaceParams(), token=_TOKEN)
 
         assert isinstance(result, ExploreTeamspaceResult)
         assert result.success is True
@@ -82,7 +82,7 @@ class TestExploreTeamspace:
         httpx_mock.add_response(json=_load_json("search_pages.json"), method="POST")
         httpx_mock.add_response(json=_load_json("search_databases.json"), method="POST")
 
-        await explore_teamspace(ExploreTeamspaceParams(), token=_TOKEN)
+        await notion_explore_teamspace(ExploreTeamspaceParams(), token=_TOKEN)
 
         request = httpx_mock.get_requests()[0]
         assert request.headers["authorization"] == f"Bearer {_TOKEN}"
@@ -91,15 +91,15 @@ class TestExploreTeamspace:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden", method="POST")
 
-        result = await explore_teamspace(ExploreTeamspaceParams(), token=_TOKEN)
+        result = await notion_explore_teamspace(ExploreTeamspaceParams(), token=_TOKEN)
 
         assert result.success is False
         assert result.error is not None
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = explore_teamspace._tool_definition
-        assert defn.name == "explore_teamspace"
+        defn = notion_explore_teamspace._tool_definition
+        assert defn.name == "notion_explore_teamspace"
         assert defn.provider == "notion"
         assert defn.scopes == ["read_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/post-search"
@@ -118,7 +118,7 @@ class TestCreatePage:
             method="POST",
         )
 
-        result = await create_page(
+        result = await notion_create_page(
             CreatePageParams(
                 parent_page_id="a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 title="Sprint Planning",
@@ -137,7 +137,7 @@ class TestCreatePage:
             method="POST",
         )
 
-        result = await create_page(
+        result = await notion_create_page(
             CreatePageParams(
                 parent_page_id="parent123",
                 title="Test Page",
@@ -156,7 +156,7 @@ class TestCreatePage:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad request", method="POST")
 
-        result = await create_page(
+        result = await notion_create_page(
             CreatePageParams(parent_page_id="bad", title="Test"),
             token=_TOKEN,
         )
@@ -166,8 +166,8 @@ class TestCreatePage:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_page._tool_definition
-        assert defn.name == "create_page"
+        defn = notion_create_page._tool_definition
+        assert defn.name == "notion_create_page"
         assert defn.provider == "notion"
         assert defn.scopes == ["insert_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/post-page"
@@ -186,7 +186,7 @@ class TestUpdatePage:
             method="PATCH",
         )
 
-        result = await update_page(
+        result = await notion_update_page(
             UpdatePageParams(page_id="page123", content="Some new content"),
             token=_TOKEN,
         )
@@ -197,7 +197,7 @@ class TestUpdatePage:
         assert result.blocks_appended == 1
 
     async def test_empty_content(self, httpx_mock: HTTPXMock) -> None:
-        result = await update_page(
+        result = await notion_update_page(
             UpdatePageParams(page_id="page123", content=""),
             token=_TOKEN,
         )
@@ -208,7 +208,7 @@ class TestUpdatePage:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not found", method="PATCH")
 
-        result = await update_page(
+        result = await notion_update_page(
             UpdatePageParams(page_id="missing", content="Hello"),
             token=_TOKEN,
         )
@@ -218,8 +218,8 @@ class TestUpdatePage:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_page._tool_definition
-        assert defn.name == "update_page"
+        defn = notion_update_page._tool_definition
+        assert defn.name == "notion_update_page"
         assert defn.provider == "notion"
         assert defn.scopes == ["update_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/patch-block-children"
@@ -242,7 +242,7 @@ class TestReadPage:
             url=f"{_BASE_URL}/v1/blocks/{page_id}/children?page_size=100",
         )
 
-        result = await read_page(ReadPageParams(page_id=page_id), token=_TOKEN)
+        result = await notion_read_page(ReadPageParams(page_id=page_id), token=_TOKEN)
 
         assert isinstance(result, ReadPageResult)
         assert result.success is True
@@ -255,7 +255,7 @@ class TestReadPage:
         httpx_mock.add_response(json=_load_json("retrieve_page.json"))
         httpx_mock.add_response(json=_load_json("block_children.json"))
 
-        await read_page(ReadPageParams(page_id="test123"), token=_TOKEN)
+        await notion_read_page(ReadPageParams(page_id="test123"), token=_TOKEN)
 
         request = httpx_mock.get_requests()[0]
         assert request.headers["authorization"] == f"Bearer {_TOKEN}"
@@ -264,14 +264,14 @@ class TestReadPage:
     async def test_page_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not found")
 
-        result = await read_page(ReadPageParams(page_id="missing"), token=_TOKEN)
+        result = await notion_read_page(ReadPageParams(page_id="missing"), token=_TOKEN)
 
         assert result.success is False
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_page._tool_definition
-        assert defn.name == "read_page"
+        defn = notion_read_page._tool_definition
+        assert defn.name == "notion_read_page"
         assert defn.provider == "notion"
         assert defn.scopes == ["read_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/retrieve-a-page"
@@ -290,7 +290,7 @@ class TestGetDatabaseSchema:
             url=f"{_BASE_URL}/v1/databases/{db_id}",
         )
 
-        result = await get_database_schema(
+        result = await notion_get_database_schema(
             GetDatabaseSchemaParams(database_id=db_id),
             token=_TOKEN,
         )
@@ -304,7 +304,7 @@ class TestGetDatabaseSchema:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not found")
 
-        result = await get_database_schema(
+        result = await notion_get_database_schema(
             GetDatabaseSchemaParams(database_id="missing"),
             token=_TOKEN,
         )
@@ -313,8 +313,8 @@ class TestGetDatabaseSchema:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_database_schema._tool_definition
-        assert defn.name == "get_database_schema"
+        defn = notion_get_database_schema._tool_definition
+        assert defn.name == "notion_get_database_schema"
         assert defn.provider == "notion"
         assert defn.scopes == ["read_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/retrieve-database"
@@ -334,7 +334,7 @@ class TestQueryDatabase:
             method="POST",
         )
 
-        result = await query_database(
+        result = await notion_query_database(
             QueryDatabaseParams(data_source_id=ds_id),
             token=_TOKEN,
         )
@@ -352,7 +352,7 @@ class TestQueryDatabase:
             method="POST",
         )
 
-        await query_database(
+        await notion_query_database(
             QueryDatabaseParams(
                 data_source_id="ds-001",
                 filter={"property": "Status", "select": {"equals": "Done"}},
@@ -372,7 +372,7 @@ class TestQueryDatabase:
             method="POST",
         )
 
-        await query_database(
+        await notion_query_database(
             QueryDatabaseParams(data_source_id="ds-001"),
             token=_TOKEN,
         )
@@ -385,7 +385,7 @@ class TestQueryDatabase:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad request", method="POST")
 
-        result = await query_database(
+        result = await notion_query_database(
             QueryDatabaseParams(data_source_id="ds-bad"),
             token=_TOKEN,
         )
@@ -394,8 +394,8 @@ class TestQueryDatabase:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = query_database._tool_definition
-        assert defn.name == "query_database"
+        defn = notion_query_database._tool_definition
+        assert defn.name == "notion_query_database"
         assert defn.provider == "notion"
         assert defn.scopes == ["read_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/query-a-data-source"
@@ -418,7 +418,7 @@ class TestGetDatabaseEntry:
             url=f"{_BASE_URL}/v1/blocks/{page_id}/children?page_size=100",
         )
 
-        result = await get_database_entry(
+        result = await notion_get_database_entry(
             GetDatabaseEntryParams(page_id=page_id),
             token=_TOKEN,
         )
@@ -431,7 +431,7 @@ class TestGetDatabaseEntry:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not found")
 
-        result = await get_database_entry(
+        result = await notion_get_database_entry(
             GetDatabaseEntryParams(page_id="missing"),
             token=_TOKEN,
         )
@@ -440,8 +440,8 @@ class TestGetDatabaseEntry:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_database_entry._tool_definition
-        assert defn.name == "get_database_entry"
+        defn = notion_get_database_entry._tool_definition
+        assert defn.name == "notion_get_database_entry"
         assert defn.provider == "notion"
         assert defn.scopes == ["read_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/retrieve-a-page"
@@ -460,7 +460,7 @@ class TestCreateOrUpdateDatabaseEntry:
             method="POST",
         )
 
-        result = await create_or_update_database_entry(
+        result = await notion_create_or_update_database_entry(
             CreateOrUpdateDatabaseEntryParams(
                 database_id="d4e5f6a7-b8c9-0123-defa-b45678901234",
                 properties={"Name": {"title": [{"text": {"content": "New Task"}}]}},
@@ -480,7 +480,7 @@ class TestCreateOrUpdateDatabaseEntry:
             method="PATCH",
         )
 
-        result = await create_or_update_database_entry(
+        result = await notion_create_or_update_database_entry(
             CreateOrUpdateDatabaseEntryParams(
                 page_id=page_id,
                 properties={"Status": {"select": {"name": "Done"}}},
@@ -497,7 +497,7 @@ class TestCreateOrUpdateDatabaseEntry:
             method="POST",
         )
 
-        await create_or_update_database_entry(
+        await notion_create_or_update_database_entry(
             CreateOrUpdateDatabaseEntryParams(
                 database_id="db123",
                 properties={"Name": {"title": [{"text": {"content": "Task"}}]}},
@@ -516,7 +516,7 @@ class TestCreateOrUpdateDatabaseEntry:
             method="PATCH",
         )
 
-        await create_or_update_database_entry(
+        await notion_create_or_update_database_entry(
             CreateOrUpdateDatabaseEntryParams(
                 page_id="page123",
                 properties={"Status": {"select": {"name": "Done"}}},
@@ -532,7 +532,7 @@ class TestCreateOrUpdateDatabaseEntry:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Validation error", method="POST")
 
-        result = await create_or_update_database_entry(
+        result = await notion_create_or_update_database_entry(
             CreateOrUpdateDatabaseEntryParams(
                 database_id="db123",
                 properties={},
@@ -544,8 +544,8 @@ class TestCreateOrUpdateDatabaseEntry:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_or_update_database_entry._tool_definition
-        assert defn.name == "create_or_update_database_entry"
+        defn = notion_create_or_update_database_entry._tool_definition
+        assert defn.name == "notion_create_or_update_database_entry"
         assert defn.provider == "notion"
         assert set(defn.scopes) == {"insert_content", "update_content"}
         assert defn.api_docs_url == "https://developers.notion.com/reference/post-page"
@@ -564,7 +564,7 @@ class TestCreateDatabase:
             method="POST",
         )
 
-        result = await create_database(
+        result = await notion_create_database(
             CreateDatabaseParams(
                 parent_page_id="a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 title="Bug Tracker",
@@ -584,7 +584,7 @@ class TestCreateDatabase:
             method="POST",
         )
 
-        await create_database(
+        await notion_create_database(
             CreateDatabaseParams(parent_page_id="parent123", title="New DB"),
             token=_TOKEN,
         )
@@ -598,7 +598,7 @@ class TestCreateDatabase:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden", method="POST")
 
-        result = await create_database(
+        result = await notion_create_database(
             CreateDatabaseParams(parent_page_id="bad", title="DB"),
             token=_TOKEN,
         )
@@ -607,8 +607,8 @@ class TestCreateDatabase:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_database._tool_definition
-        assert defn.name == "create_database"
+        defn = notion_create_database._tool_definition
+        assert defn.name == "notion_create_database"
         assert defn.provider == "notion"
         assert defn.scopes == ["insert_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/create-a-database"
@@ -628,7 +628,7 @@ class TestUpdateDatabaseSchema:
             method="PATCH",
         )
 
-        result = await update_database_schema(
+        result = await notion_update_database_schema(
             UpdateDatabaseSchemaParams(
                 database_id=db_id,
                 title="Tasks (Updated)",
@@ -641,7 +641,7 @@ class TestUpdateDatabaseSchema:
         assert result.title_text == "Tasks (Updated)"
 
     async def test_no_updates(self, httpx_mock: HTTPXMock) -> None:
-        result = await update_database_schema(
+        result = await notion_update_database_schema(
             UpdateDatabaseSchemaParams(database_id="db123"),
             token=_TOKEN,
         )
@@ -652,7 +652,7 @@ class TestUpdateDatabaseSchema:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not found", method="PATCH")
 
-        result = await update_database_schema(
+        result = await notion_update_database_schema(
             UpdateDatabaseSchemaParams(database_id="missing", title="Updated"),
             token=_TOKEN,
         )
@@ -661,8 +661,8 @@ class TestUpdateDatabaseSchema:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_database_schema._tool_definition
-        assert defn.name == "update_database_schema"
+        defn = notion_update_database_schema._tool_definition
+        assert defn.name == "notion_update_database_schema"
         assert defn.provider == "notion"
         assert defn.scopes == ["update_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/update-a-database"

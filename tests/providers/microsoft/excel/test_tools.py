@@ -8,13 +8,13 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.microsoft.excel.tools import (
-    add_worksheet,
-    append_row,
-    create_workbook,
-    get_workbook_info,
-    list_workbooks,
-    read_worksheet,
-    update_worksheet,
+    microsoft_excel_add_worksheet,
+    microsoft_excel_append_row,
+    microsoft_excel_create_workbook,
+    microsoft_excel_get_workbook_info,
+    microsoft_excel_list_workbooks,
+    microsoft_excel_read_worksheet,
+    microsoft_excel_update_worksheet,
 )
 from any_tool.providers.microsoft.excel.types import (
     AddWorksheetParams,
@@ -55,7 +55,7 @@ class TestListWorkbooks:
             json=_load_json("list_workbooks.json"),
         )
 
-        result = await list_workbooks(ListWorkbooksParams(), token=_TOKEN)
+        result = await microsoft_excel_list_workbooks(ListWorkbooksParams(), token=_TOKEN)
 
         assert isinstance(result, ListWorkbooksResult)
         assert result.success is True
@@ -69,7 +69,7 @@ class TestListWorkbooks:
             json=_load_json("list_workbooks.json"),
         )
 
-        result = await list_workbooks(ListWorkbooksParams(), token=_TOKEN)
+        result = await microsoft_excel_list_workbooks(ListWorkbooksParams(), token=_TOKEN)
 
         names = [w.name for w in result.workbooks]
         assert "README.txt" not in names
@@ -77,14 +77,14 @@ class TestListWorkbooks:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_workbooks(ListWorkbooksParams(), token=_TOKEN)
+        result = await microsoft_excel_list_workbooks(ListWorkbooksParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_workbooks._tool_definition
-        assert defn.name == "list_workbooks"
+        defn = microsoft_excel_list_workbooks._tool_definition
+        assert defn.name == "microsoft_excel_list_workbooks"
         assert defn.provider == "microsoft_excel"
         assert "Files.Read" in defn.scopes
 
@@ -105,7 +105,7 @@ class TestGetWorkbookInfo:
             json=_load_json("get_workbook_worksheets.json"),
         )
 
-        result = await get_workbook_info(
+        result = await microsoft_excel_get_workbook_info(
             GetWorkbookInfoParams(item_id=_ITEM_ID),
             token=_TOKEN,
         )
@@ -120,7 +120,7 @@ class TestGetWorkbookInfo:
     async def test_item_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await get_workbook_info(
+        result = await microsoft_excel_get_workbook_info(
             GetWorkbookInfoParams(item_id="bad-id"),
             token=_TOKEN,
         )
@@ -129,8 +129,8 @@ class TestGetWorkbookInfo:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_workbook_info._tool_definition
-        assert defn.name == "get_workbook_info"
+        defn = microsoft_excel_get_workbook_info._tool_definition
+        assert defn.name == "microsoft_excel_get_workbook_info"
         assert defn.provider == "microsoft_excel"
         assert "Files.Read" in defn.scopes
 
@@ -147,7 +147,7 @@ class TestReadWorksheet:
             json=_load_json("read_worksheet.json"),
         )
 
-        result = await read_worksheet(
+        result = await microsoft_excel_read_worksheet(
             ReadWorksheetParams(item_id=_ITEM_ID),
             token=_TOKEN,
         )
@@ -170,7 +170,7 @@ class TestReadWorksheet:
             },
         )
 
-        result = await read_worksheet(
+        result = await microsoft_excel_read_worksheet(
             ReadWorksheetParams(
                 item_id=_ITEM_ID,
                 worksheet_name="Sheet1",
@@ -186,7 +186,7 @@ class TestReadWorksheet:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await read_worksheet(
+        result = await microsoft_excel_read_worksheet(
             ReadWorksheetParams(item_id="bad-id"),
             token=_TOKEN,
         )
@@ -195,8 +195,8 @@ class TestReadWorksheet:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_worksheet._tool_definition
-        assert defn.name == "read_worksheet"
+        defn = microsoft_excel_read_worksheet._tool_definition
+        assert defn.name == "microsoft_excel_read_worksheet"
         assert defn.provider == "microsoft_excel"
         assert "Files.Read" in defn.scopes
 
@@ -213,7 +213,7 @@ class TestUpdateWorksheet:
             json=_load_json("update_worksheet.json"),
         )
 
-        result = await update_worksheet(
+        result = await microsoft_excel_update_worksheet(
             UpdateWorksheetParams(
                 item_id=_ITEM_ID,
                 worksheet_name="Sheet1",
@@ -231,7 +231,7 @@ class TestUpdateWorksheet:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await update_worksheet(
+        result = await microsoft_excel_update_worksheet(
             UpdateWorksheetParams(
                 item_id="bad-id",
                 worksheet_name="Sheet1",
@@ -245,8 +245,8 @@ class TestUpdateWorksheet:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_worksheet._tool_definition
-        assert defn.name == "update_worksheet"
+        defn = microsoft_excel_update_worksheet._tool_definition
+        assert defn.name == "microsoft_excel_update_worksheet"
         assert defn.provider == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes
 
@@ -271,7 +271,7 @@ class TestAppendRow:
             json=_load_json("append_row_result.json"),
         )
 
-        result = await append_row(
+        result = await microsoft_excel_append_row(
             AppendRowParams(
                 item_id=_ITEM_ID,
                 worksheet_name="Sheet1",
@@ -285,7 +285,7 @@ class TestAppendRow:
         assert result.range_data.address == "Sheet1!A6:D6"
 
     async def test_empty_values(self) -> None:
-        result = await append_row(
+        result = await microsoft_excel_append_row(
             AppendRowParams(
                 item_id=_ITEM_ID,
                 worksheet_name="Sheet1",
@@ -312,7 +312,7 @@ class TestAppendRow:
             text="Forbidden",
         )
 
-        result = await append_row(
+        result = await microsoft_excel_append_row(
             AppendRowParams(
                 item_id=_ITEM_ID,
                 worksheet_name="Sheet1",
@@ -325,8 +325,8 @@ class TestAppendRow:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = append_row._tool_definition
-        assert defn.name == "append_row"
+        defn = microsoft_excel_append_row._tool_definition
+        assert defn.name == "microsoft_excel_append_row"
         assert defn.provider == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes
 
@@ -347,7 +347,7 @@ class TestCreateWorkbook:
             json=_load_json("create_workbook_item.json"),
         )
 
-        result = await create_workbook(
+        result = await microsoft_excel_create_workbook(
             CreateWorkbookParams(name="NewWorkbook"),
             token=_TOKEN,
         )
@@ -367,7 +367,7 @@ class TestCreateWorkbook:
             json=_load_json("create_workbook_item.json"),
         )
 
-        result = await create_workbook(
+        result = await microsoft_excel_create_workbook(
             CreateWorkbookParams(name="Test"),
             token=_TOKEN,
         )
@@ -377,7 +377,7 @@ class TestCreateWorkbook:
     async def test_session_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=500, text="Internal Server Error")
 
-        result = await create_workbook(
+        result = await microsoft_excel_create_workbook(
             CreateWorkbookParams(name="Fail"),
             token=_TOKEN,
         )
@@ -386,8 +386,8 @@ class TestCreateWorkbook:
         assert "500" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_workbook._tool_definition
-        assert defn.name == "create_workbook"
+        defn = microsoft_excel_create_workbook._tool_definition
+        assert defn.name == "microsoft_excel_create_workbook"
         assert defn.provider == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes
 
@@ -404,7 +404,7 @@ class TestAddWorksheet:
             json=_load_json("add_worksheet.json"),
         )
 
-        result = await add_worksheet(
+        result = await microsoft_excel_add_worksheet(
             AddWorksheetParams(item_id=_ITEM_ID, name="NewSheet"),
             token=_TOKEN,
         )
@@ -417,7 +417,7 @@ class TestAddWorksheet:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Duplicate sheet name")
 
-        result = await add_worksheet(
+        result = await microsoft_excel_add_worksheet(
             AddWorksheetParams(item_id="bad-id", name="Sheet1"),
             token=_TOKEN,
         )
@@ -426,7 +426,7 @@ class TestAddWorksheet:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = add_worksheet._tool_definition
-        assert defn.name == "add_worksheet"
+        defn = microsoft_excel_add_worksheet._tool_definition
+        assert defn.name == "microsoft_excel_add_worksheet"
         assert defn.provider == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes

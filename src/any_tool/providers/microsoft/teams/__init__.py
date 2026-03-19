@@ -5,23 +5,23 @@ API docs:
 """
 
 from .tools import (
-    explore_workspace,
-    get_channel_info,
-    list_chats,
-    read_channel_messages,
-    read_chat_messages,
-    read_message_replies,
-    send_channel_message,
-    send_chat_message,
+    microsoft_teams_explore_workspace,
+    microsoft_teams_get_channel_info,
+    microsoft_teams_list_chats,
+    microsoft_teams_read_channel_messages,
+    microsoft_teams_read_chat_messages,
+    microsoft_teams_read_message_replies,
+    microsoft_teams_send_channel_message,
+    microsoft_teams_send_chat_message,
 )
 
 __all__ = [
-    "explore_workspace",
-    "get_channel_info",
-    "list_chats",
-    "read_channel_messages",
-    "read_chat_messages",
-    "read_message_replies",
-    "send_channel_message",
-    "send_chat_message",
+    "microsoft_teams_explore_workspace",
+    "microsoft_teams_get_channel_info",
+    "microsoft_teams_list_chats",
+    "microsoft_teams_read_channel_messages",
+    "microsoft_teams_read_chat_messages",
+    "microsoft_teams_read_message_replies",
+    "microsoft_teams_send_channel_message",
+    "microsoft_teams_send_chat_message",
 ]

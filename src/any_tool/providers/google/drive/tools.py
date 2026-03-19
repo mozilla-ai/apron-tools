@@ -44,11 +44,11 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
 
 
 @tool(
-    scopes=SCOPES["list_files"],
+    scopes=SCOPES["google_drive_list_files"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
     provider="google_drive",
 )
-async def list_files(
+async def google_drive_list_files(
     params: ListFilesParams,
     *,
     token: str,
@@ -90,11 +90,11 @@ async def list_files(
 
 
 @tool(
-    scopes=SCOPES["create_folder"],
+    scopes=SCOPES["google_drive_create_folder"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/create",
     provider="google_drive",
 )
-async def create_folder(
+async def google_drive_create_folder(
     params: CreateFolderParams,
     *,
     token: str,
@@ -129,11 +129,11 @@ async def create_folder(
 
 
 @tool(
-    scopes=SCOPES["get_file_info"],
+    scopes=SCOPES["google_drive_get_file_info"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/get",
     provider="google_drive",
 )
-async def get_file_info(
+async def google_drive_get_file_info(
     params: GetFileInfoParams,
     *,
     token: str,
@@ -163,11 +163,11 @@ async def get_file_info(
 
 
 @tool(
-    scopes=SCOPES["move_file"],
+    scopes=SCOPES["google_drive_move_file"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/update",
     provider="google_drive",
 )
-async def move_file(
+async def google_drive_move_file(
     params: MoveFileParams,
     *,
     token: str,
@@ -218,11 +218,11 @@ async def move_file(
 
 
 @tool(
-    scopes=SCOPES["search"],
+    scopes=SCOPES["google_drive_search"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
     provider="google_drive",
 )
-async def search(
+async def google_drive_search(
     params: SearchParams,
     *,
     token: str,
@@ -260,11 +260,11 @@ async def search(
 
 
 @tool(
-    scopes=SCOPES["share_file"],
+    scopes=SCOPES["google_drive_share_file"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/permissions/create",
     provider="google_drive",
 )
-async def share_file(
+async def google_drive_share_file(
     params: ShareFileParams,
     *,
     token: str,

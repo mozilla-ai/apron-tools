@@ -15,11 +15,11 @@ class GoogleDocsScope(StrEnum):
 
 
 SCOPES: dict[str, list[GoogleDocsScope]] = {
-    "list_documents": [GoogleDocsScope.DRIVE],
-    "create_document": [GoogleDocsScope.DOCUMENTS],
-    "read_document": [GoogleDocsScope.DOCUMENTS],
-    "update_document": [GoogleDocsScope.DOCUMENTS],
-    "copy_document": [GoogleDocsScope.DRIVE],
+    "google_docs_list_documents": [GoogleDocsScope.DRIVE],
+    "google_docs_create_document": [GoogleDocsScope.DOCUMENTS],
+    "google_docs_read_document": [GoogleDocsScope.DOCUMENTS],
+    "google_docs_update_document": [GoogleDocsScope.DOCUMENTS],
+    "google_docs_copy_document": [GoogleDocsScope.DRIVE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

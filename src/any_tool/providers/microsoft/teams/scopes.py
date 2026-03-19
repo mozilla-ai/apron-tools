@@ -19,17 +19,17 @@ class MicrosoftTeamsScope(StrEnum):
 
 
 SCOPES: dict[str, list[MicrosoftTeamsScope]] = {
-    "explore_workspace": [
+    "microsoft_teams_explore_workspace": [
         MicrosoftTeamsScope.TEAM_READ_BASIC,
         MicrosoftTeamsScope.CHANNEL_READ_BASIC,
     ],
-    "get_channel_info": [MicrosoftTeamsScope.CHANNEL_READ_BASIC],
-    "list_chats": [MicrosoftTeamsScope.CHAT_READ],
-    "read_chat_messages": [MicrosoftTeamsScope.CHAT_READ],
-    "read_channel_messages": [MicrosoftTeamsScope.CHANNEL_MESSAGE_READ],
-    "read_message_replies": [MicrosoftTeamsScope.CHANNEL_MESSAGE_READ],
-    "send_chat_message": [MicrosoftTeamsScope.CHAT_READ_WRITE],
-    "send_channel_message": [MicrosoftTeamsScope.CHANNEL_MESSAGE_SEND],
+    "microsoft_teams_get_channel_info": [MicrosoftTeamsScope.CHANNEL_READ_BASIC],
+    "microsoft_teams_list_chats": [MicrosoftTeamsScope.CHAT_READ],
+    "microsoft_teams_read_chat_messages": [MicrosoftTeamsScope.CHAT_READ],
+    "microsoft_teams_read_channel_messages": [MicrosoftTeamsScope.CHANNEL_MESSAGE_READ],
+    "microsoft_teams_read_message_replies": [MicrosoftTeamsScope.CHANNEL_MESSAGE_READ],
+    "microsoft_teams_send_chat_message": [MicrosoftTeamsScope.CHAT_READ_WRITE],
+    "microsoft_teams_send_channel_message": [MicrosoftTeamsScope.CHANNEL_MESSAGE_SEND],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

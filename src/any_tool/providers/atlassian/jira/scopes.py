@@ -16,15 +16,15 @@ class JiraScope(StrEnum):
 
 
 SCOPES: dict[str, list[JiraScope]] = {
-    "explore_projects": [JiraScope.READ_JIRA_WORK],
-    "explore_issues": [JiraScope.READ_JIRA_WORK],
-    "create_issue": [JiraScope.WRITE_JIRA_WORK],
-    "edit_issue": [JiraScope.WRITE_JIRA_WORK],
-    "assign_issue": [JiraScope.WRITE_JIRA_WORK, JiraScope.READ_JIRA_USER],
-    "add_comment": [JiraScope.WRITE_JIRA_WORK],
-    "list_versions": [JiraScope.READ_JIRA_WORK],
-    "list_boards": [JiraScope.READ_JIRA_WORK],
-    "list_sprints": [JiraScope.READ_JIRA_WORK],
+    "atlassian_jira_explore_projects": [JiraScope.READ_JIRA_WORK],
+    "atlassian_jira_explore_issues": [JiraScope.READ_JIRA_WORK],
+    "atlassian_jira_create_issue": [JiraScope.WRITE_JIRA_WORK],
+    "atlassian_jira_edit_issue": [JiraScope.WRITE_JIRA_WORK],
+    "atlassian_jira_assign_issue": [JiraScope.WRITE_JIRA_WORK, JiraScope.READ_JIRA_USER],
+    "atlassian_jira_add_comment": [JiraScope.WRITE_JIRA_WORK],
+    "atlassian_jira_list_versions": [JiraScope.READ_JIRA_WORK],
+    "atlassian_jira_list_boards": [JiraScope.READ_JIRA_WORK],
+    "atlassian_jira_list_sprints": [JiraScope.READ_JIRA_WORK],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

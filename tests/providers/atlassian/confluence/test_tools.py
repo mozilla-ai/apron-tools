@@ -8,12 +8,12 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.atlassian.confluence.tools import (
-    create_page,
-    explore_spaces,
-    get_child_pages,
-    get_page_content,
-    search_content,
-    update_page,
+    atlassian_confluence_create_page,
+    atlassian_confluence_explore_spaces,
+    atlassian_confluence_get_child_pages,
+    atlassian_confluence_get_page_content,
+    atlassian_confluence_search_content,
+    atlassian_confluence_update_page,
 )
 from any_tool.providers.atlassian.confluence.types import (
     CreatePageParams,
@@ -63,7 +63,7 @@ class TestExploreSpaces:
             json=_load_json("explore_spaces.json"),
         )
 
-        result = await explore_spaces(ExploreSpacesParams(), token=_TOKEN)
+        result = await atlassian_confluence_explore_spaces(ExploreSpacesParams(), token=_TOKEN)
 
         assert isinstance(result, ExploreSpacesResult)
         assert result.success is True
@@ -77,7 +77,7 @@ class TestExploreSpaces:
             json=[],
         )
 
-        result = await explore_spaces(ExploreSpacesParams(), token=_TOKEN)
+        result = await atlassian_confluence_explore_spaces(ExploreSpacesParams(), token=_TOKEN)
 
         assert result.success is False
         assert "cloud ID" in result.error
@@ -86,14 +86,14 @@ class TestExploreSpaces:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await explore_spaces(ExploreSpacesParams(), token=_TOKEN)
+        result = await atlassian_confluence_explore_spaces(ExploreSpacesParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = explore_spaces._tool_definition
-        assert defn.name == "explore_spaces"
+        defn = atlassian_confluence_explore_spaces._tool_definition
+        assert defn.name == "atlassian_confluence_explore_spaces"
         assert defn.provider == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
 
@@ -111,7 +111,7 @@ class TestGetPageContent:
             json=_load_json("get_page.json"),
         )
 
-        result = await get_page_content(
+        result = await atlassian_confluence_get_page_content(
             GetPageContentParams(page_id="98304"),
             token=_TOKEN,
         )
@@ -130,7 +130,7 @@ class TestGetPageContent:
             text="Unauthorized",
         )
 
-        result = await get_page_content(
+        result = await atlassian_confluence_get_page_content(
             GetPageContentParams(page_id="98304"),
             token=_TOKEN,
         )
@@ -141,7 +141,7 @@ class TestGetPageContent:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await get_page_content(
+        result = await atlassian_confluence_get_page_content(
             GetPageContentParams(page_id="99999"),
             token=_TOKEN,
         )
@@ -150,8 +150,8 @@ class TestGetPageContent:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_page_content._tool_definition
-        assert defn.name == "get_page_content"
+        defn = atlassian_confluence_get_page_content._tool_definition
+        assert defn.name == "atlassian_confluence_get_page_content"
         assert defn.provider == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
 
@@ -170,7 +170,7 @@ class TestCreatePage:
             status_code=200,
         )
 
-        result = await create_page(
+        result = await atlassian_confluence_create_page(
             CreatePageParams(
                 space_id="65541",
                 title="New Design Doc",
@@ -193,7 +193,7 @@ class TestCreatePage:
             text='{"message":"Space not found"}',
         )
 
-        result = await create_page(
+        result = await atlassian_confluence_create_page(
             CreatePageParams(space_id="99999", title="Test"),
             token=_TOKEN,
         )
@@ -202,8 +202,8 @@ class TestCreatePage:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_page._tool_definition
-        assert defn.name == "create_page"
+        defn = atlassian_confluence_create_page._tool_definition
+        assert defn.name == "atlassian_confluence_create_page"
         assert defn.provider == "atlassian_confluence"
         assert "write:confluence-content" in defn.scopes
 
@@ -229,7 +229,7 @@ class TestUpdatePage:
             method="PUT",
         )
 
-        result = await update_page(
+        result = await atlassian_confluence_update_page(
             UpdatePageParams(
                 page_id="98304",
                 title="Engineering Home (Updated)",
@@ -252,7 +252,7 @@ class TestUpdatePage:
             text="Not Found",
         )
 
-        result = await update_page(
+        result = await atlassian_confluence_update_page(
             UpdatePageParams(
                 page_id="98304",
                 title="Updated",
@@ -280,7 +280,7 @@ class TestUpdatePage:
             method="PUT",
         )
 
-        result = await update_page(
+        result = await atlassian_confluence_update_page(
             UpdatePageParams(
                 page_id="98304",
                 title="Updated",
@@ -293,8 +293,8 @@ class TestUpdatePage:
         assert "409" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_page._tool_definition
-        assert defn.name == "update_page"
+        defn = atlassian_confluence_update_page._tool_definition
+        assert defn.name == "atlassian_confluence_update_page"
         assert defn.provider == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
         assert "write:confluence-content" in defn.scopes
@@ -313,7 +313,7 @@ class TestSearchContent:
             json=_load_json("search_content.json"),
         )
 
-        result = await search_content(
+        result = await atlassian_confluence_search_content(
             SearchContentParams(cql="type=page AND space=ENG"),
             token=_TOKEN,
         )
@@ -330,7 +330,7 @@ class TestSearchContent:
             json=[],
         )
 
-        result = await search_content(
+        result = await atlassian_confluence_search_content(
             SearchContentParams(cql="type=page"),
             token=_TOKEN,
         )
@@ -342,7 +342,7 @@ class TestSearchContent:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=400, text="Invalid CQL query")
 
-        result = await search_content(
+        result = await atlassian_confluence_search_content(
             SearchContentParams(cql="INVALID"),
             token=_TOKEN,
         )
@@ -351,8 +351,8 @@ class TestSearchContent:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = search_content._tool_definition
-        assert defn.name == "search_content"
+        defn = atlassian_confluence_search_content._tool_definition
+        assert defn.name == "atlassian_confluence_search_content"
         assert defn.provider == "atlassian_confluence"
         assert "search:confluence" in defn.scopes
 
@@ -370,7 +370,7 @@ class TestGetChildPages:
             json=_load_json("get_child_pages.json"),
         )
 
-        result = await get_child_pages(
+        result = await atlassian_confluence_get_child_pages(
             GetChildPagesParams(page_id="98304"),
             token=_TOKEN,
         )
@@ -388,7 +388,7 @@ class TestGetChildPages:
             text="Unauthorized",
         )
 
-        result = await get_child_pages(
+        result = await atlassian_confluence_get_child_pages(
             GetChildPagesParams(page_id="98304"),
             token=_TOKEN,
         )
@@ -399,7 +399,7 @@ class TestGetChildPages:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=404, text="Page not found")
 
-        result = await get_child_pages(
+        result = await atlassian_confluence_get_child_pages(
             GetChildPagesParams(page_id="99999"),
             token=_TOKEN,
         )
@@ -408,7 +408,7 @@ class TestGetChildPages:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_child_pages._tool_definition
-        assert defn.name == "get_child_pages"
+        defn = atlassian_confluence_get_child_pages._tool_definition
+        assert defn.name == "atlassian_confluence_get_child_pages"
         assert defn.provider == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
