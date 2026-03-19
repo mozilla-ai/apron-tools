@@ -477,3 +477,37 @@ class TestUpdateDatabaseSchemaResult:
     def test_str_on_error(self):
         result = UpdateDatabaseSchemaResult(success=False, error="Not found")
         assert str(result) == "Error: Not found"
+
+
+class TestEmbedExternalFileTypes:
+    def test_params_defaults(self):
+        from any_tool.providers.notion.types import EmbedExternalFileParams
+
+        params = EmbedExternalFileParams(page_id="page-001", url="https://example.com/image.png")
+        assert params.caption == ""
+        assert params.file_type == "auto"
+
+    def test_params_custom(self):
+        from any_tool.providers.notion.types import EmbedExternalFileParams
+
+        params = EmbedExternalFileParams(
+            page_id="page-001", url="https://example.com/doc.pdf", caption="My file", file_type="file"
+        )
+        assert params.file_type == "file"
+        assert params.caption == "My file"
+
+    def test_result_success(self):
+        from any_tool.providers.notion.types import EmbedExternalFileResult
+
+        result = EmbedExternalFileResult(
+            success=True, block_type="image", file_url="https://example.com/img.png", page_id="page-001"
+        )
+        assert result.success is True
+        assert "image" in str(result)
+        assert "page-001" in str(result)
+
+    def test_result_error(self):
+        from any_tool.providers.notion.types import EmbedExternalFileResult
+
+        result = EmbedExternalFileResult(success=False, error="Forbidden")
+        assert str(result) == "Error: Forbidden"

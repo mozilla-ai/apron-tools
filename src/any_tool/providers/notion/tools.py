@@ -14,6 +14,8 @@ from any_tool.providers.notion.types import (
     CreatePageParams,
     CreatePageResult,
     DatabaseObject,
+    EmbedExternalFileParams,
+    EmbedExternalFileResult,
     ExploreTeamspaceParams,
     ExploreTeamspaceResult,
     GetDatabaseEntryParams,
@@ -677,3 +679,60 @@ async def notion_update_database_schema(
         )
 
     return UpdateDatabaseSchemaResult.model_validate(response.json())
+
+
+@tool(
+    scopes=SCOPES["notion_embed_external_file"],
+    api_docs="https://developers.notion.com/reference/patch-block-children",
+    provider="notion",
+    service="notion",
+)
+async def notion_embed_external_file(
+    params: EmbedExternalFileParams, *, token: str, base_url: str = _BASE_URL
+) -> EmbedExternalFileResult:
+    """Embed an external file or image as a block on a Notion page.
+
+    Notion does not support direct file uploads. This tool adds a file or
+    image block that references an externally hosted URL.
+    """
+    block_type = params.file_type
+    if block_type == "auto":
+        lower_url = params.url.lower().split("?")[0]
+        image_extensions = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg")
+        block_type = "image" if any(lower_url.endswith(ext) for ext in image_extensions) else "file"
+
+    caption_rich_text = [{"type": "text", "text": {"content": params.caption}}] if params.caption else []
+
+    block: dict = {
+        "object": "block",
+        "type": block_type,
+        block_type: {
+            "type": "external",
+            "external": {"url": params.url},
+        },
+    }
+    if caption_rich_text:
+        block[block_type]["caption"] = caption_rich_text
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            response = await client.patch(
+                f"{base_url}/v1/blocks/{params.page_id}/children",
+                headers=_headers(token),
+                json={"children": [block]},
+            )
+    except httpx.HTTPError as exc:
+        return EmbedExternalFileResult(success=False, error=str(exc))
+
+    if not response.is_success:
+        return EmbedExternalFileResult(
+            success=False,
+            error=f"Notion API error {response.status_code}: {response.text}",
+        )
+
+    return EmbedExternalFileResult(
+        success=True,
+        block_type=block_type,
+        file_url=params.url,
+        page_id=params.page_id,
+    )
