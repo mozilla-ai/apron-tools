@@ -16,6 +16,8 @@ from any_tool.providers.google.docs.types import (
     ListDocumentsResult,
     ReadDocumentParams,
     ReadDocumentResult,
+    ReplaceTextParams,
+    ReplaceTextResult,
     UpdateDocumentParams,
     UpdateDocumentResult,
 )
@@ -230,4 +232,69 @@ async def google_docs_copy_document(
         id=copy_data.get("id", ""),
         name=copy_data.get("name", params.new_title),
         original_name=original_name,
+    )
+
+
+@tool(
+    scopes=SCOPES["google_docs_replace_text"],
+    api_docs="https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/batchUpdate",
+    provider="google",
+    service="google_docs",
+)
+async def google_docs_replace_text(
+    params: ReplaceTextParams, *, token: str, base_url: str = _DOCS_BASE_URL
+) -> ReplaceTextResult:
+    """Find and replace all occurrences of a text string in a Google Doc."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            # Get document title first.
+            doc_resp = await client.get(
+                f"{base_url}/{params.document_id}",
+                headers=_headers(token),
+                params={"fields": "title"},
+            )
+            if not doc_resp.is_success:
+                return ReplaceTextResult(
+                    success=False,
+                    error=f"Docs API error {doc_resp.status_code}: {doc_resp.text}",
+                )
+            title = doc_resp.json().get("title", "Untitled")
+
+            # Perform the replacement.
+            batch_resp = await client.post(
+                f"{base_url}/{params.document_id}:batchUpdate",
+                headers=_headers(token),
+                json={
+                    "requests": [
+                        {
+                            "replaceAllText": {
+                                "containsText": {
+                                    "text": params.find_text,
+                                    "matchCase": params.match_case,
+                                },
+                                "replaceText": params.replace_text,
+                            }
+                        }
+                    ]
+                },
+            )
+    except httpx.HTTPError as exc:
+        return ReplaceTextResult(success=False, error=str(exc))
+
+    if not batch_resp.is_success:
+        return ReplaceTextResult(
+            success=False,
+            error=f"Docs API error {batch_resp.status_code}: {batch_resp.text}",
+        )
+
+    replies = batch_resp.json().get("replies", [])
+    occurrences = 0
+    if replies:
+        occurrences = replies[0].get("replaceAllText", {}).get("occurrencesChanged", 0)
+
+    return ReplaceTextResult(
+        success=True,
+        document_id=params.document_id,
+        title=title,
+        occurrences_changed=occurrences,
     )

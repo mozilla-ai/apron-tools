@@ -21,6 +21,7 @@ from .docs import (
     google_docs_create_document,
     google_docs_list_documents,
     google_docs_read_document,
+    google_docs_replace_text,
     google_docs_update_document,
 )
 from .drive import (
@@ -86,6 +87,7 @@ __all__ = [
     "google_docs_create_document",
     "google_docs_list_documents",
     "google_docs_read_document",
+    "google_docs_replace_text",
     "google_docs_update_document",
     "google_drive_create_folder",
     "google_drive_get_file_info",

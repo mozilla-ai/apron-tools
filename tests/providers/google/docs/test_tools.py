@@ -274,3 +274,60 @@ class TestCopyDocument:
         assert defn.provider == "google"
         assert defn.service == "google_docs"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
+
+
+class TestGoogleDocsReplaceText:
+    async def test_success(self, httpx_mock) -> None:
+        from any_tool.providers.google.docs.tools import google_docs_replace_text
+        from any_tool.providers.google.docs.types import ReplaceTextParams
+
+        httpx_mock.add_response(json={"title": "My Document"})
+        httpx_mock.add_response(
+            json={
+                "documentId": "doc-001",
+                "replies": [{"replaceAllText": {"occurrencesChanged": 3}}],
+            }
+        )
+        result = await google_docs_replace_text(
+            ReplaceTextParams(document_id="doc-001", find_text="old", replace_text="new"),
+            token="test-token",
+        )
+        assert result.success is True
+        assert result.occurrences_changed == 3
+        assert result.title == "My Document"
+        assert "3 occurrence(s)" in str(result)
+
+    async def test_zero_replacements(self, httpx_mock) -> None:
+        from any_tool.providers.google.docs.tools import google_docs_replace_text
+        from any_tool.providers.google.docs.types import ReplaceTextParams
+
+        httpx_mock.add_response(json={"title": "My Document"})
+        httpx_mock.add_response(
+            json={"documentId": "doc-001", "replies": [{"replaceAllText": {"occurrencesChanged": 0}}]}
+        )
+        result = await google_docs_replace_text(
+            ReplaceTextParams(document_id="doc-001", find_text="nonexistent", replace_text="new"),
+            token="test-token",
+        )
+        assert result.success is True
+        assert result.occurrences_changed == 0
+
+    async def test_api_error(self, httpx_mock) -> None:
+        from any_tool.providers.google.docs.tools import google_docs_replace_text
+        from any_tool.providers.google.docs.types import ReplaceTextParams
+
+        httpx_mock.add_response(status_code=404, text="Not Found")
+        result = await google_docs_replace_text(
+            ReplaceTextParams(document_id="bad-id", find_text="old", replace_text="new"),
+            token="test-token",
+        )
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        from any_tool.providers.google.docs.tools import google_docs_replace_text
+
+        defn = google_docs_replace_text._tool_definition
+        assert defn.name == "google_docs_replace_text"
+        assert defn.provider == "google"
+        assert defn.service == "google_docs"

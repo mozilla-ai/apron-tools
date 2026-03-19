@@ -20,6 +20,7 @@ SCOPES: dict[str, list[GoogleDocsScope]] = {
     "google_docs_read_document": [GoogleDocsScope.DOCUMENTS],
     "google_docs_update_document": [GoogleDocsScope.DOCUMENTS],
     "google_docs_copy_document": [GoogleDocsScope.DRIVE],
+    "google_docs_replace_text": [GoogleDocsScope.DOCUMENTS],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

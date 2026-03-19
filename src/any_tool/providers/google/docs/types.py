@@ -274,3 +274,33 @@ class CopyDocumentResult(ToolResult):
             return f"Error: {self.error}"
         url = f"https://docs.google.com/document/d/{self.id}/edit"
         return f"Document copied.\nOriginal: '{self.original_name}'\nCopy: '{self.name}'\nID: {self.id}\nURL: {url}"
+
+
+# ---------------------------------------------------------------------------
+# google_docs_replace_text
+# ---------------------------------------------------------------------------
+
+
+class ReplaceTextParams(BaseModel):
+    """Parameters for finding and replacing text in a Google Doc."""
+
+    document_id: str
+    find_text: str
+    replace_text: str
+    match_case: bool = True
+
+
+class ReplaceTextResult(ToolResult):
+    """Result of a find-and-replace operation."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    document_id: str = ""
+    title: str = ""
+    occurrences_changed: int = 0
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Replaced {self.occurrences_changed} occurrence(s) in document '{self.title}'."
