@@ -1,5 +1,5 @@
-from any_tool.registry import discover_tools, get_tools_for_provider, get_tools_for_service
-from any_tool.types import ToolDefinition
+from apron_tools.registry import discover_tools, get_tools_for_provider, get_tools_for_service
+from apron_tools.types import ToolDefinition
 
 
 class TestDiscoverTools:

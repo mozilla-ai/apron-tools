@@ -2,8 +2,8 @@ import asyncio
 
 from pydantic import BaseModel
 
-from any_tool.tool import tool
-from any_tool.types import ToolDefinition, ToolResult
+from apron_tools.tool import tool
+from apron_tools.types import ToolDefinition, ToolResult
 
 
 class DummyParams(BaseModel):

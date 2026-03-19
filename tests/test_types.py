@@ -1,6 +1,6 @@
 from pydantic import TypeAdapter
 
-from any_tool.types import (
+from apron_tools.types import (
     CapabilityGroup,
     FileFromBytes,
     FileFromUrl,

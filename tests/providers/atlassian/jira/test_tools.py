@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.atlassian.jira.tools import (
+from apron_tools.providers.atlassian.jira.tools import (
     atlassian_jira_add_comment,
     atlassian_jira_assign_issue,
     atlassian_jira_create_issue,
@@ -18,7 +18,7 @@ from any_tool.providers.atlassian.jira.tools import (
     atlassian_jira_list_sprints,
     atlassian_jira_list_versions,
 )
-from any_tool.providers.atlassian.jira.types import (
+from apron_tools.providers.atlassian.jira.types import (
     AddCommentParams,
     AddCommentResult,
     AssignIssueParams,

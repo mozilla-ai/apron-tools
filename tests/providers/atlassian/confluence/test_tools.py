@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.atlassian.confluence.tools import (
+from apron_tools.providers.atlassian.confluence.tools import (
     atlassian_confluence_create_page,
     atlassian_confluence_explore_spaces,
     atlassian_confluence_get_child_pages,
@@ -15,7 +15,7 @@ from any_tool.providers.atlassian.confluence.tools import (
     atlassian_confluence_search_content,
     atlassian_confluence_update_page,
 )
-from any_tool.providers.atlassian.confluence.types import (
+from apron_tools.providers.atlassian.confluence.types import (
     CreatePageParams,
     CreatePageResult,
     ExploreSpacesParams,

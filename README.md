@@ -1,17 +1,17 @@
-# any-tool
+# apron-tools
 
 Agent-ready provider API wrappers with typed schemas, OAuth scope mappings, and LLM function-calling definitions.
 
-## What is any-tool?
+## What is apron-tools?
 
-Provider SDKs are designed for human developers — they expose hundreds or thousands of operations per provider. any-tool adds what agents need:
+Provider SDKs are designed for human developers — they expose hundreds or thousands of operations per provider. apron-tools adds what agents need:
 
 - **LLM function-calling schemas** — structured tool definitions generated from Pydantic models.
 - **Curation** — a selected subset of operations useful for agents, not the entire API surface.
 - **Tool-to-scope mappings** — which OAuth scopes each tool requires.
 - **Provider quirk handling** — surfaced and handled, not buried in SDK internals.
 
-any-tool defines tools, not transport. The same definitions can be served as MCP, OpenAPI, GraphQL, or plain Python callables. Tool definitions are more durable than wire protocols.
+apron-tools defines tools, not transport. The same definitions can be served as MCP, OpenAPI, GraphQL, or plain Python callables. Tool definitions are more durable than wire protocols.
 
 ## Installation
 
@@ -19,23 +19,23 @@ any-tool defines tools, not transport. The same definitions can be served as MCP
 # Core only (tool definitions and schemas, no provider SDK dependencies).
 
 # via uv
-uv add any-tool
+uv add apron-tools
 # via pip
-pip install any-tool
+pip install apron-tools
 
 # With specific provider extras (installs provider SDK dependencies).
 
 # via uv
-uv add any-tool --extra slack --extra google
+uv add apron-tools --extra slack --extra google
 # via pip
-pip install any-tool[slack,google]
+pip install apron-tools[slack,google]
 
 # All providers.
 
 # via uv
-uv add any-tool --extra all
+uv add apron-tools --extra all
 # via pip
-pip install any-tool[all]
+pip install apron-tools[all]
 ```
 
 ## Usage
@@ -43,7 +43,7 @@ pip install any-tool[all]
 ### Discover available tools
 
 ```python
-from any_tool import discover_tools, get_tools_for_provider
+from apron_tools import discover_tools, get_tools_for_provider
 
 # Discover tools across all installed providers.
 # Only providers whose dependencies are installed will be found.
@@ -61,8 +61,8 @@ for td in typeform_tools:
 ### Call a tool
 
 ```python
-from any_tool.providers.typeform.tools import list_forms
-from any_tool.providers.typeform.types import ListFormsParams
+from apron_tools.providers.typeform.tools import list_forms
+from apron_tools.providers.typeform.types import ListFormsParams
 
 result = await list_forms(ListFormsParams(page_size=10), token="your-typeform-token")
 
@@ -83,7 +83,7 @@ result.model_dump_json()
 Every tool function decorated with `@tool` has a `_tool_definition` attribute containing its metadata:
 
 ```python
-from any_tool.providers.typeform.tools import list_forms
+from apron_tools.providers.typeform.tools import list_forms
 
 td = list_forms._tool_definition
 td.name           # "list_forms"
@@ -96,17 +96,17 @@ td.api_docs_url    # "https://www.typeform.com/developers/create/reference/retri
 
 ## Adding a provider
 
-Each provider is a directory under `src/any_tool/providers/`:
+Each provider is a directory under `src/apron_tools/providers/`:
 
 ```
-src/any_tool/providers/yourprovider/
+src/apron_tools/providers/yourprovider/
 ├── __init__.py     # Export tool functions
 ├── types.py        # Pydantic input/output models
 ├── tools.py        # Async tool functions with @tool decorator
 └── scopes.py       # OAuth scope enum and mappings
 ```
 
-See `src/any_tool/providers/typeform/` for the reference implementation.
+See `src/apron_tools/providers/typeform/` for the reference implementation.
 
 ### Provider PR checklist
 

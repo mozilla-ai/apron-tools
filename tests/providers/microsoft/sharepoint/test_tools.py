@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.microsoft.sharepoint.tools import (
+from apron_tools.providers.microsoft.sharepoint.tools import (
     microsoft_sharepoint_create_folder,
     microsoft_sharepoint_explore_drive,
     microsoft_sharepoint_list_drives,
@@ -15,7 +15,7 @@ from any_tool.providers.microsoft.sharepoint.tools import (
     microsoft_sharepoint_move_file,
     microsoft_sharepoint_search,
 )
-from any_tool.providers.microsoft.sharepoint.types import (
+from apron_tools.providers.microsoft.sharepoint.types import (
     CreateFolderParams,
     CreateFolderResult,
     ExploreDriveParams,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from any_tool.providers.slack.types import (
+from apron_tools.providers.slack.types import (
     AddReactionParams,
     AddReactionResult,
     DownloadFileParams,
@@ -499,7 +499,7 @@ class TestGetFileInfoResult:
     def test_str_output(self):
         data = _load_json("files_info.json")
         f = data["file"]
-        from any_tool.providers.slack.types import SlackFile
+        from apron_tools.providers.slack.types import SlackFile
 
         result = GetFileInfoResult(
             success=True,

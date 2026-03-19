@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from any_tool.providers.google.slides.types import (
+from apron_tools.providers.google.slides.types import (
     AddSlideParams,
     AddSlideResult,
     CopyPresentationParams,

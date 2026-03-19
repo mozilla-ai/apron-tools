@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.linear.tools import (
+from apron_tools.providers.linear.tools import (
     linear_create_issue,
     linear_create_project,
     linear_list_cycles,
@@ -20,7 +20,7 @@ from any_tool.providers.linear.tools import (
     linear_update_project,
     linear_whoami,
 )
-from any_tool.providers.linear.types import (
+from apron_tools.providers.linear.types import (
     CreateIssueParams,
     CreateIssueResult,
     CreateProjectParams,
