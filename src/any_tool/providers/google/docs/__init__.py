@@ -10,6 +10,7 @@ from .tools import (
     google_docs_create_document,
     google_docs_list_documents,
     google_docs_read_document,
+    google_docs_replace_text,
     google_docs_update_document,
 )
 
@@ -18,5 +19,6 @@ __all__ = [
     "google_docs_create_document",
     "google_docs_list_documents",
     "google_docs_read_document",
+    "google_docs_replace_text",
     "google_docs_update_document",
 ]
