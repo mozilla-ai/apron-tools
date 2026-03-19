@@ -140,7 +140,17 @@ uv run pre-commit run --all-files  # Run linters
 Integration tests call real provider APIs and are skipped by default. To run them:
 
 ```bash
-ANY_TOOL_INTEGRATION_TESTS=1 TYPEFORM_TOKEN=xxx make test-integration
+APRON_TOOLS_INTEGRATION_TESTS=1 TYPEFORM_TOKEN=xxx make test-integration
+```
+
+Each provider has its own token env var. Only providers with credentials set will run; the rest skip cleanly:
+
+```bash
+# Run just Slack integration tests.
+APRON_TOOLS_INTEGRATION_TESTS=1 SLACK_TOKEN=xoxb-... make test-integration
+
+# Run Google + Notion integration tests.
+APRON_TOOLS_INTEGRATION_TESTS=1 GOOGLE_TOKEN=... NOTION_TOKEN=... make test-integration
 ```
 
 ## License
