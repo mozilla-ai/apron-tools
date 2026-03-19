@@ -1,0 +1,16 @@
+{
+  "id": "item-001",
+  "name": "Budget.xlsx",
+  "size": 12345,
+  "webUrl": "https://contoso.sharepoint.com/sites/team/Documents/Budget.xlsx",
+  "createdDateTime": "2024-01-15T10:00:00Z",
+  "lastModifiedDateTime": "2024-03-10T14:22:00Z",
+  "file": {
+    "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  "parentReference": {
+    "id": "folder-001",
+    "name": "Documents",
+    "path": "/drive/root:/Documents"
+  }
+}

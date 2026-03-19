@@ -1,0 +1,24 @@
+# Microsoft Excel testdata
+
+- **Graph API docs:** https://learn.microsoft.com/en-us/graph/api/overview
+- **Excel resource docs:** https://learn.microsoft.com/en-us/graph/api/resources/excel
+- **Endpoint references:**
+  - Search drive items: https://learn.microsoft.com/en-us/graph/api/driveitem-search
+  - Get drive item: https://learn.microsoft.com/en-us/graph/api/driveitem-get
+  - List worksheets: https://learn.microsoft.com/en-us/graph/api/workbook-list-worksheets
+  - Used range: https://learn.microsoft.com/en-us/graph/api/range-usedrange
+  - Update range: https://learn.microsoft.com/en-us/graph/api/range-update
+  - Add worksheet: https://learn.microsoft.com/en-us/graph/api/worksheetcollection-add
+  - List children: https://learn.microsoft.com/en-us/graph/api/driveitem-list-children
+- **Auth:** OAuth 2.0 Bearer token (Microsoft Graph)
+- **list_workbooks.json:** Based on drive search response filtered to Excel file extensions.
+- **get_workbook_item.json:** Drive item metadata for a single workbook file.
+- **get_workbook_worksheets.json:** Worksheets listing for a workbook.
+- **read_worksheet.json:** Used range response with cell values.
+- **update_worksheet.json:** Range update response after PATCH.
+- **append_row_tables.json:** Tables listing for a worksheet.
+- **append_row_used_range.json:** Used range response for calculating the next empty row.
+- **append_row_result.json:** Range update response after appending rows.
+- **create_workbook_session.json:** Workbook session creation response.
+- **create_workbook_item.json:** Drive item metadata for the newly created workbook.
+- **add_worksheet.json:** Add worksheet response.

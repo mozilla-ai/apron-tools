@@ -1,0 +1,13 @@
+{
+  "address": "Sheet1!A1:D5",
+  "cellCount": 20,
+  "columnCount": 4,
+  "rowCount": 5,
+  "values": [
+    ["Name", "Age", "City", "Score"],
+    ["Alice", 30, "New York", 95],
+    ["Bob", 25, "London", 87],
+    ["Charlie", 35, "Tokyo", 92],
+    ["Diana", 28, "Paris", 88]
+  ]
+}
