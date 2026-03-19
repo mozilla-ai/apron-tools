@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Base64Bytes, BaseModel, Field, HttpUrl
 
 
 class ToolResult(BaseModel):
@@ -87,11 +87,13 @@ class FileFromBytes(BaseModel):
     """File provided as raw bytes.
 
     For programmatic callers that already have file data in memory.
+    Data is base64-encoded when serialised to JSON, ensuring binary
+    content round-trips safely across language boundaries.
     """
 
     type: Literal["bytes"] = "bytes"
-    data: bytes
-    """Raw file content."""
+    data: Base64Bytes
+    """File content. Accepts base64 strings (JSON callers) or raw bytes (Python callers)."""
 
     filename: str
     """Filename for the uploaded file."""
@@ -108,8 +110,8 @@ class FileFromUrl(BaseModel):
     """
 
     type: Literal["url"] = "url"
-    url: str
-    """URL to fetch the file from."""
+    url: HttpUrl
+    """HTTP(S) URL to fetch the file from."""
 
     filename: str | None = None
     """Override filename. Inferred from the URL or Content-Disposition header if not provided."""
