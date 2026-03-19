@@ -1,0 +1,18 @@
+{
+  "value": [
+    {
+      "id": "team-001",
+      "displayName": "Engineering",
+      "description": "Engineering team for product development",
+      "isArchived": false,
+      "tenantId": "tenant-001"
+    },
+    {
+      "id": "team-002",
+      "displayName": "Marketing",
+      "description": "Marketing and communications",
+      "isArchived": false,
+      "tenantId": "tenant-001"
+    }
+  ]
+}

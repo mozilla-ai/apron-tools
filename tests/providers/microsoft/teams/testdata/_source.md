@@ -1,0 +1,24 @@
+# Microsoft Teams testdata
+
+- **Graph API docs:** https://learn.microsoft.com/en-us/graph/api/resources/teams-api-overview
+- **Endpoint references:**
+  - List joined teams: https://learn.microsoft.com/en-us/graph/api/user-list-joinedteams
+  - List channels: https://learn.microsoft.com/en-us/graph/api/channel-list
+  - Get channel: https://learn.microsoft.com/en-us/graph/api/channel-get
+  - List chats: https://learn.microsoft.com/en-us/graph/api/chat-list
+  - List chat messages: https://learn.microsoft.com/en-us/graph/api/chat-list-messages
+  - List channel messages: https://learn.microsoft.com/en-us/graph/api/channel-list-messages
+  - List message replies: https://learn.microsoft.com/en-us/graph/api/chatmessage-list-replies
+  - Send chat message: https://learn.microsoft.com/en-us/graph/api/chat-post-messages
+  - Send channel message: https://learn.microsoft.com/en-us/graph/api/channel-post-messages
+- **Auth:** OAuth 2.0 Bearer token (Microsoft Graph)
+- **joined_teams.json:** Based on GET /me/joinedTeams response.
+- **channels.json:** Based on GET /teams/{teamId}/channels response.
+- **members.json:** Based on GET /teams/{teamId}/members response.
+- **get_channel.json:** Based on GET /teams/{teamId}/channels/{channelId} response.
+- **list_chats.json:** Based on GET /me/chats response.
+- **chat_messages.json:** Based on GET /me/chats/{chatId}/messages response.
+- **channel_messages.json:** Based on GET /teams/{teamId}/channels/{channelId}/messages response.
+- **parent_message.json:** Single message used as parent in replies.
+- **message_replies.json:** Based on GET .../messages/{messageId}/replies response.
+- **send_message.json:** Based on POST message response (chat or channel).
