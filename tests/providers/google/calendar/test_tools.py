@@ -70,7 +70,8 @@ class TestListCalendars:
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_list_calendars._tool_definition
         assert defn.name == "google_calendar_list_calendars"
-        assert defn.provider == "google_calendar"
+        assert defn.provider == "google"
+        assert defn.service == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes
 
 
@@ -138,7 +139,8 @@ class TestListEvents:
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_list_events._tool_definition
         assert defn.name == "google_calendar_list_events"
-        assert defn.provider == "google_calendar"
+        assert defn.provider == "google"
+        assert defn.service == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes
 
 
@@ -180,7 +182,8 @@ class TestGetEvent:
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_get_event._tool_definition
         assert defn.name == "google_calendar_get_event"
-        assert defn.provider == "google_calendar"
+        assert defn.provider == "google"
+        assert defn.service == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes
 
 
@@ -281,7 +284,8 @@ class TestCreateEvent:
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_create_event._tool_definition
         assert defn.name == "google_calendar_create_event"
-        assert defn.provider == "google_calendar"
+        assert defn.provider == "google"
+        assert defn.service == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar" in defn.scopes
 
 
@@ -387,5 +391,6 @@ class TestUpdateEvent:
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_update_event._tool_definition
         assert defn.name == "google_calendar_update_event"
-        assert defn.provider == "google_calendar"
+        assert defn.provider == "google"
+        assert defn.service == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar" in defn.scopes

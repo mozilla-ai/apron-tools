@@ -103,7 +103,8 @@ class TestExploreProjects:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_explore_projects._tool_definition
         assert defn.name == "atlassian_jira_explore_projects"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
 
@@ -160,7 +161,8 @@ class TestExploreIssues:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_explore_issues._tool_definition
         assert defn.name == "atlassian_jira_explore_issues"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
 
@@ -206,7 +208,8 @@ class TestCreateIssue:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_create_issue._tool_definition
         assert defn.name == "atlassian_jira_create_issue"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
 
 
@@ -258,7 +261,8 @@ class TestEditIssue:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_edit_issue._tool_definition
         assert defn.name == "atlassian_jira_edit_issue"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
 
 
@@ -322,7 +326,8 @@ class TestAssignIssue:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_assign_issue._tool_definition
         assert defn.name == "atlassian_jira_assign_issue"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
         assert "read:jira-user" in defn.scopes
 
@@ -366,7 +371,8 @@ class TestAddComment:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_add_comment._tool_definition
         assert defn.name == "atlassian_jira_add_comment"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
 
 
@@ -408,7 +414,8 @@ class TestListVersions:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_list_versions._tool_definition
         assert defn.name == "atlassian_jira_list_versions"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
 
@@ -447,7 +454,8 @@ class TestListBoards:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_list_boards._tool_definition
         assert defn.name == "atlassian_jira_list_boards"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
 
@@ -490,5 +498,6 @@ class TestListSprints:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_jira_list_sprints._tool_definition
         assert defn.name == "atlassian_jira_list_sprints"
-        assert defn.provider == "atlassian_jira"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
         assert "read:jira-work" in defn.scopes

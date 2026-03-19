@@ -77,7 +77,8 @@ class TestListSpreadsheets:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_list_spreadsheets._tool_definition
         assert defn.name == "google_sheets_list_spreadsheets"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -117,7 +118,8 @@ class TestCreateSpreadsheet:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_create_spreadsheet._tool_definition
         assert defn.name == "google_sheets_create_spreadsheet"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
 
@@ -187,7 +189,8 @@ class TestCopySpreadsheet:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_copy_spreadsheet._tool_definition
         assert defn.name == "google_sheets_copy_spreadsheet"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -275,7 +278,8 @@ class TestReadSpreadsheet:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_read_spreadsheet._tool_definition
         assert defn.name == "google_sheets_read_spreadsheet"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
 
@@ -326,7 +330,8 @@ class TestUpdateSpreadsheet:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_update_spreadsheet._tool_definition
         assert defn.name == "google_sheets_update_spreadsheet"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
 
@@ -374,7 +379,8 @@ class TestAppendRow:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_append_row._tool_definition
         assert defn.name == "google_sheets_append_row"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
 
@@ -415,7 +421,8 @@ class TestAddSheet:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_add_sheet._tool_definition
         assert defn.name == "google_sheets_add_sheet"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
 
@@ -483,5 +490,6 @@ class TestFindRow:
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_find_row._tool_definition
         assert defn.name == "google_sheets_find_row"
-        assert defn.provider == "google_sheets"
+        assert defn.provider == "google"
+        assert defn.service == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes

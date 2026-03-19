@@ -68,7 +68,8 @@ class TestListDocuments:
     async def test_has_tool_definition(self) -> None:
         defn = google_docs_list_documents._tool_definition
         assert defn.name == "google_docs_list_documents"
-        assert defn.provider == "google_docs"
+        assert defn.provider == "google"
+        assert defn.service == "google_docs"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -108,7 +109,8 @@ class TestCreateDocument:
     async def test_has_tool_definition(self) -> None:
         defn = google_docs_create_document._tool_definition
         assert defn.name == "google_docs_create_document"
-        assert defn.provider == "google_docs"
+        assert defn.provider == "google"
+        assert defn.service == "google_docs"
         assert "https://www.googleapis.com/auth/documents" in defn.scopes
 
 
@@ -149,7 +151,8 @@ class TestReadDocument:
     async def test_has_tool_definition(self) -> None:
         defn = google_docs_read_document._tool_definition
         assert defn.name == "google_docs_read_document"
-        assert defn.provider == "google_docs"
+        assert defn.provider == "google"
+        assert defn.service == "google_docs"
         assert "https://www.googleapis.com/auth/documents" in defn.scopes
 
 
@@ -197,7 +200,8 @@ class TestUpdateDocument:
     async def test_has_tool_definition(self) -> None:
         defn = google_docs_update_document._tool_definition
         assert defn.name == "google_docs_update_document"
-        assert defn.provider == "google_docs"
+        assert defn.provider == "google"
+        assert defn.service == "google_docs"
         assert "https://www.googleapis.com/auth/documents" in defn.scopes
 
 
@@ -267,5 +271,6 @@ class TestCopyDocument:
     async def test_has_tool_definition(self) -> None:
         defn = google_docs_copy_document._tool_definition
         assert defn.name == "google_docs_copy_document"
-        assert defn.provider == "google_docs"
+        assert defn.provider == "google"
+        assert defn.service == "google_docs"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes

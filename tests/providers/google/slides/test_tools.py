@@ -84,7 +84,8 @@ class TestListPresentations:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_list_presentations._tool_definition
         assert defn.name == "google_slides_list_presentations"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -125,7 +126,8 @@ class TestCreatePresentation:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_create_presentation._tool_definition
         assert defn.name == "google_slides_create_presentation"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
 
@@ -195,7 +197,8 @@ class TestCopyPresentation:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_copy_presentation._tool_definition
         assert defn.name == "google_slides_copy_presentation"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -238,7 +241,8 @@ class TestReadPresentation:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_read_presentation._tool_definition
         assert defn.name == "google_slides_read_presentation"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
 
@@ -278,7 +282,8 @@ class TestAddSlide:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_add_slide._tool_definition
         assert defn.name == "google_slides_add_slide"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
 
@@ -347,7 +352,8 @@ class TestUpdateSlideText:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_update_slide_text._tool_definition
         assert defn.name == "google_slides_update_slide_text"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
 
@@ -393,7 +399,8 @@ class TestDuplicateSlide:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_duplicate_slide._tool_definition
         assert defn.name == "google_slides_duplicate_slide"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
 
@@ -456,7 +463,8 @@ class TestInsertElement:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_insert_element._tool_definition
         assert defn.name == "google_slides_insert_element"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
 
@@ -509,7 +517,8 @@ class TestUpdateTableCell:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_update_table_cell._tool_definition
         assert defn.name == "google_slides_update_table_cell"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
 
@@ -590,5 +599,6 @@ class TestFormatText:
     async def test_has_tool_definition(self) -> None:
         defn = google_slides_format_text._tool_definition
         assert defn.name == "google_slides_format_text"
-        assert defn.provider == "google_slides"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes

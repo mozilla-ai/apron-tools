@@ -57,6 +57,8 @@ class TestToolDefinition:
         td = ToolDefinition(
             name="test_tool",
             provider="test",
+            service="test",
+            integration="test",
             description="A test tool.",
             input_schema={"type": "object"},
             output_schema={"type": "object"},
@@ -65,6 +67,8 @@ class TestToolDefinition:
         )
         assert td.name == "test_tool"
         assert td.provider == "test"
+        assert td.service == "test"
+        assert td.integration == "test"
         assert td.scopes == ["read"]
 
         try:

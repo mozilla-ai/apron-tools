@@ -85,7 +85,8 @@ class TestListWorkbooks:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_excel_list_workbooks._tool_definition
         assert defn.name == "microsoft_excel_list_workbooks"
-        assert defn.provider == "microsoft_excel"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_excel"
         assert "Files.Read" in defn.scopes
 
 
@@ -131,7 +132,8 @@ class TestGetWorkbookInfo:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_excel_get_workbook_info._tool_definition
         assert defn.name == "microsoft_excel_get_workbook_info"
-        assert defn.provider == "microsoft_excel"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_excel"
         assert "Files.Read" in defn.scopes
 
 
@@ -197,7 +199,8 @@ class TestReadWorksheet:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_excel_read_worksheet._tool_definition
         assert defn.name == "microsoft_excel_read_worksheet"
-        assert defn.provider == "microsoft_excel"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_excel"
         assert "Files.Read" in defn.scopes
 
 
@@ -247,7 +250,8 @@ class TestUpdateWorksheet:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_excel_update_worksheet._tool_definition
         assert defn.name == "microsoft_excel_update_worksheet"
-        assert defn.provider == "microsoft_excel"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes
 
 
@@ -327,7 +331,8 @@ class TestAppendRow:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_excel_append_row._tool_definition
         assert defn.name == "microsoft_excel_append_row"
-        assert defn.provider == "microsoft_excel"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes
 
 
@@ -388,7 +393,8 @@ class TestCreateWorkbook:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_excel_create_workbook._tool_definition
         assert defn.name == "microsoft_excel_create_workbook"
-        assert defn.provider == "microsoft_excel"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes
 
 
@@ -428,5 +434,6 @@ class TestAddWorksheet:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_excel_add_worksheet._tool_definition
         assert defn.name == "microsoft_excel_add_worksheet"
-        assert defn.provider == "microsoft_excel"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_excel"
         assert "Files.ReadWrite" in defn.scopes
