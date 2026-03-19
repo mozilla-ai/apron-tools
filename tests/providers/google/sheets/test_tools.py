@@ -8,14 +8,14 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.google.sheets.tools import (
-    add_sheet,
-    append_row,
-    copy_spreadsheet,
-    create_spreadsheet,
-    find_row,
-    list_spreadsheets,
-    read_spreadsheet,
-    update_spreadsheet,
+    google_sheets_add_sheet,
+    google_sheets_append_row,
+    google_sheets_copy_spreadsheet,
+    google_sheets_create_spreadsheet,
+    google_sheets_find_row,
+    google_sheets_list_spreadsheets,
+    google_sheets_read_spreadsheet,
+    google_sheets_update_spreadsheet,
 )
 from any_tool.providers.google.sheets.types import (
     AddSheetParams,
@@ -59,7 +59,7 @@ class TestListSpreadsheets:
             json=_load_json("list_spreadsheets.json"),
         )
 
-        result = await list_spreadsheets(ListSpreadsheetsParams(), token=_TOKEN)
+        result = await google_sheets_list_spreadsheets(ListSpreadsheetsParams(), token=_TOKEN)
 
         assert isinstance(result, ListSpreadsheetsResult)
         assert result.success is True
@@ -69,14 +69,14 @@ class TestListSpreadsheets:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_spreadsheets(ListSpreadsheetsParams(), token=_TOKEN)
+        result = await google_sheets_list_spreadsheets(ListSpreadsheetsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_spreadsheets._tool_definition
-        assert defn.name == "list_spreadsheets"
+        defn = google_sheets_list_spreadsheets._tool_definition
+        assert defn.name == "google_sheets_list_spreadsheets"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -93,7 +93,7 @@ class TestCreateSpreadsheet:
             json=_load_json("create_spreadsheet.json"),
         )
 
-        result = await create_spreadsheet(
+        result = await google_sheets_create_spreadsheet(
             CreateSpreadsheetParams(title="Budget 2024"),
             token=_TOKEN,
         )
@@ -106,7 +106,7 @@ class TestCreateSpreadsheet:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await create_spreadsheet(
+        result = await google_sheets_create_spreadsheet(
             CreateSpreadsheetParams(title="Test"),
             token=_TOKEN,
         )
@@ -115,8 +115,8 @@ class TestCreateSpreadsheet:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_spreadsheet._tool_definition
-        assert defn.name == "create_spreadsheet"
+        defn = google_sheets_create_spreadsheet._tool_definition
+        assert defn.name == "google_sheets_create_spreadsheet"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
@@ -137,7 +137,7 @@ class TestCopySpreadsheet:
             json=_load_json("copy_spreadsheet.json"),
         )
 
-        result = await copy_spreadsheet(
+        result = await google_sheets_copy_spreadsheet(
             CopySpreadsheetParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 new_title="Copy of Budget 2024",
@@ -154,7 +154,7 @@ class TestCopySpreadsheet:
     async def test_meta_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await copy_spreadsheet(
+        result = await google_sheets_copy_spreadsheet(
             CopySpreadsheetParams(spreadsheet_id="bad_id", new_title="Copy"),
             token=_TOKEN,
         )
@@ -173,7 +173,7 @@ class TestCopySpreadsheet:
             text="Forbidden",
         )
 
-        result = await copy_spreadsheet(
+        result = await google_sheets_copy_spreadsheet(
             CopySpreadsheetParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 new_title="Copy",
@@ -185,8 +185,8 @@ class TestCopySpreadsheet:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = copy_spreadsheet._tool_definition
-        assert defn.name == "copy_spreadsheet"
+        defn = google_sheets_copy_spreadsheet._tool_definition
+        assert defn.name == "google_sheets_copy_spreadsheet"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -203,7 +203,7 @@ class TestReadSpreadsheet:
             json=_load_json("read_spreadsheet_values.json"),
         )
 
-        result = await read_spreadsheet(
+        result = await google_sheets_read_spreadsheet(
             ReadSpreadsheetParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 range="Sheet1!A1:D5",
@@ -227,7 +227,7 @@ class TestReadSpreadsheet:
             json=_load_json("read_spreadsheet_values.json"),
         )
 
-        result = await read_spreadsheet(
+        result = await google_sheets_read_spreadsheet(
             ReadSpreadsheetParams(spreadsheet_id=_SPREADSHEET_ID),
             token=_TOKEN,
         )
@@ -245,7 +245,7 @@ class TestReadSpreadsheet:
             json=_load_json("read_spreadsheet_values.json"),
         )
 
-        result = await read_spreadsheet(
+        result = await google_sheets_read_spreadsheet(
             ReadSpreadsheetParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 range="Sheet1!A1:D5",
@@ -261,7 +261,7 @@ class TestReadSpreadsheet:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await read_spreadsheet(
+        result = await google_sheets_read_spreadsheet(
             ReadSpreadsheetParams(
                 spreadsheet_id="bad_id",
                 range="Sheet1!A1:D5",
@@ -273,8 +273,8 @@ class TestReadSpreadsheet:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_spreadsheet._tool_definition
-        assert defn.name == "read_spreadsheet"
+        defn = google_sheets_read_spreadsheet._tool_definition
+        assert defn.name == "google_sheets_read_spreadsheet"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
@@ -291,7 +291,7 @@ class TestUpdateSpreadsheet:
             json=_load_json("update_spreadsheet.json"),
         )
 
-        result = await update_spreadsheet(
+        result = await google_sheets_update_spreadsheet(
             UpdateSpreadsheetParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 range="Sheet1!A1:D5",
@@ -311,7 +311,7 @@ class TestUpdateSpreadsheet:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await update_spreadsheet(
+        result = await google_sheets_update_spreadsheet(
             UpdateSpreadsheetParams(
                 spreadsheet_id="bad_id",
                 range="Sheet1!A1:B2",
@@ -324,8 +324,8 @@ class TestUpdateSpreadsheet:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_spreadsheet._tool_definition
-        assert defn.name == "update_spreadsheet"
+        defn = google_sheets_update_spreadsheet._tool_definition
+        assert defn.name == "google_sheets_update_spreadsheet"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
@@ -342,7 +342,7 @@ class TestAppendRow:
             json=_load_json("append_row.json"),
         )
 
-        result = await append_row(
+        result = await google_sheets_append_row(
             AppendRowParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 range="Sheet1",
@@ -359,7 +359,7 @@ class TestAppendRow:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await append_row(
+        result = await google_sheets_append_row(
             AppendRowParams(
                 spreadsheet_id="bad_id",
                 range="Sheet1",
@@ -372,8 +372,8 @@ class TestAppendRow:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = append_row._tool_definition
-        assert defn.name == "append_row"
+        defn = google_sheets_append_row._tool_definition
+        assert defn.name == "google_sheets_append_row"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
@@ -390,7 +390,7 @@ class TestAddSheet:
             json=_load_json("add_sheet.json"),
         )
 
-        result = await add_sheet(
+        result = await google_sheets_add_sheet(
             AddSheetParams(spreadsheet_id=_SPREADSHEET_ID, title="New Sheet"),
             token=_TOKEN,
         )
@@ -404,7 +404,7 @@ class TestAddSheet:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Duplicate sheet title")
 
-        result = await add_sheet(
+        result = await google_sheets_add_sheet(
             AddSheetParams(spreadsheet_id="bad_id", title="Sheet1"),
             token=_TOKEN,
         )
@@ -413,8 +413,8 @@ class TestAddSheet:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = add_sheet._tool_definition
-        assert defn.name == "add_sheet"
+        defn = google_sheets_add_sheet._tool_definition
+        assert defn.name == "google_sheets_add_sheet"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes
 
@@ -431,7 +431,7 @@ class TestFindRow:
             json=_load_json("find_row_values.json"),
         )
 
-        result = await find_row(
+        result = await google_sheets_find_row(
             FindRowParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 sheet="Sheet1",
@@ -451,7 +451,7 @@ class TestFindRow:
             json=_load_json("find_row_values.json"),
         )
 
-        result = await find_row(
+        result = await google_sheets_find_row(
             FindRowParams(
                 spreadsheet_id=_SPREADSHEET_ID,
                 sheet="Sheet1",
@@ -467,7 +467,7 @@ class TestFindRow:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await find_row(
+        result = await google_sheets_find_row(
             FindRowParams(
                 spreadsheet_id="bad_id",
                 sheet="Sheet1",
@@ -481,7 +481,7 @@ class TestFindRow:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = find_row._tool_definition
-        assert defn.name == "find_row"
+        defn = google_sheets_find_row._tool_definition
+        assert defn.name == "google_sheets_find_row"
         assert defn.provider == "google_sheets"
         assert "https://www.googleapis.com/auth/spreadsheets" in defn.scopes

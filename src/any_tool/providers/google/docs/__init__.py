@@ -6,17 +6,17 @@ API docs:
 """
 
 from .tools import (
-    copy_document,
-    create_document,
-    list_documents,
-    read_document,
-    update_document,
+    google_docs_copy_document,
+    google_docs_create_document,
+    google_docs_list_documents,
+    google_docs_read_document,
+    google_docs_update_document,
 )
 
 __all__ = [
-    "copy_document",
-    "create_document",
-    "list_documents",
-    "read_document",
-    "update_document",
+    "google_docs_copy_document",
+    "google_docs_create_document",
+    "google_docs_list_documents",
+    "google_docs_read_document",
+    "google_docs_update_document",
 ]

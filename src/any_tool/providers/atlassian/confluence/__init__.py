@@ -4,19 +4,19 @@ API docs: https://developer.atlassian.com/cloud/confluence/rest/v2/intro/
 """
 
 from .tools import (
-    create_page,
-    explore_spaces,
-    get_child_pages,
-    get_page_content,
-    search_content,
-    update_page,
+    atlassian_confluence_create_page,
+    atlassian_confluence_explore_spaces,
+    atlassian_confluence_get_child_pages,
+    atlassian_confluence_get_page_content,
+    atlassian_confluence_search_content,
+    atlassian_confluence_update_page,
 )
 
 __all__ = [
-    "create_page",
-    "explore_spaces",
-    "get_child_pages",
-    "get_page_content",
-    "search_content",
-    "update_page",
+    "atlassian_confluence_create_page",
+    "atlassian_confluence_explore_spaces",
+    "atlassian_confluence_get_child_pages",
+    "atlassian_confluence_get_page_content",
+    "atlassian_confluence_search_content",
+    "atlassian_confluence_update_page",
 ]

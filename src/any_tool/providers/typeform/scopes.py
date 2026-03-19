@@ -15,9 +15,9 @@ class TypeformScope(StrEnum):
 
 
 SCOPES: dict[str, list[TypeformScope]] = {
-    "list_forms": [TypeformScope.FORMS_READ],
-    "get_form": [TypeformScope.FORMS_READ],
-    "get_responses": [TypeformScope.RESPONSES_READ],
+    "typeform_list_forms": [TypeformScope.FORMS_READ],
+    "typeform_get_form": [TypeformScope.FORMS_READ],
+    "typeform_get_responses": [TypeformScope.RESPONSES_READ],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

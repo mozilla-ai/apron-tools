@@ -15,11 +15,11 @@ class GoogleCalendarScope(StrEnum):
 
 
 SCOPES: dict[str, list[GoogleCalendarScope]] = {
-    "list_calendars": [GoogleCalendarScope.CALENDAR_READONLY],
-    "list_events": [GoogleCalendarScope.CALENDAR_READONLY],
-    "get_event": [GoogleCalendarScope.CALENDAR_READONLY],
-    "create_event": [GoogleCalendarScope.CALENDAR],
-    "update_event": [GoogleCalendarScope.CALENDAR],
+    "google_calendar_list_calendars": [GoogleCalendarScope.CALENDAR_READONLY],
+    "google_calendar_list_events": [GoogleCalendarScope.CALENDAR_READONLY],
+    "google_calendar_get_event": [GoogleCalendarScope.CALENDAR_READONLY],
+    "google_calendar_create_event": [GoogleCalendarScope.CALENDAR],
+    "google_calendar_update_event": [GoogleCalendarScope.CALENDAR],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

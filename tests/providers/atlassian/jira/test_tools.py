@@ -8,15 +8,15 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.atlassian.jira.tools import (
-    add_comment,
-    assign_issue,
-    create_issue,
-    edit_issue,
-    explore_issues,
-    explore_projects,
-    list_boards,
-    list_sprints,
-    list_versions,
+    atlassian_jira_add_comment,
+    atlassian_jira_assign_issue,
+    atlassian_jira_create_issue,
+    atlassian_jira_edit_issue,
+    atlassian_jira_explore_issues,
+    atlassian_jira_explore_projects,
+    atlassian_jira_list_boards,
+    atlassian_jira_list_sprints,
+    atlassian_jira_list_versions,
 )
 from any_tool.providers.atlassian.jira.types import (
     AddCommentParams,
@@ -72,7 +72,7 @@ class TestExploreProjects:
             json=_load_json("project_search.json"),
         )
 
-        result = await explore_projects(ExploreProjectsParams(), token=_TOKEN)
+        result = await atlassian_jira_explore_projects(ExploreProjectsParams(), token=_TOKEN)
 
         assert isinstance(result, ExploreProjectsResult)
         assert result.success is True
@@ -86,7 +86,7 @@ class TestExploreProjects:
             json=[],
         )
 
-        result = await explore_projects(ExploreProjectsParams(), token=_TOKEN)
+        result = await atlassian_jira_explore_projects(ExploreProjectsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "cloud ID" in result.error
@@ -95,14 +95,14 @@ class TestExploreProjects:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await explore_projects(ExploreProjectsParams(), token=_TOKEN)
+        result = await atlassian_jira_explore_projects(ExploreProjectsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = explore_projects._tool_definition
-        assert defn.name == "explore_projects"
+        defn = atlassian_jira_explore_projects._tool_definition
+        assert defn.name == "atlassian_jira_explore_projects"
         assert defn.provider == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
@@ -120,7 +120,7 @@ class TestExploreIssues:
             json=_load_json("search_issues.json"),
         )
 
-        result = await explore_issues(
+        result = await atlassian_jira_explore_issues(
             ExploreIssuesParams(project_key="EX"),
             token=_TOKEN,
         )
@@ -138,7 +138,7 @@ class TestExploreIssues:
             text="Unauthorized",
         )
 
-        result = await explore_issues(
+        result = await atlassian_jira_explore_issues(
             ExploreIssuesParams(project_key="EX"),
             token=_TOKEN,
         )
@@ -149,7 +149,7 @@ class TestExploreIssues:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await explore_issues(
+        result = await atlassian_jira_explore_issues(
             ExploreIssuesParams(project_key="EX"),
             token=_TOKEN,
         )
@@ -158,8 +158,8 @@ class TestExploreIssues:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = explore_issues._tool_definition
-        assert defn.name == "explore_issues"
+        defn = atlassian_jira_explore_issues._tool_definition
+        assert defn.name == "atlassian_jira_explore_issues"
         assert defn.provider == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
@@ -178,7 +178,7 @@ class TestCreateIssue:
             status_code=201,
         )
 
-        result = await create_issue(
+        result = await atlassian_jira_create_issue(
             CreateIssueParams(project_key="EX", summary="New task"),
             token=_TOKEN,
         )
@@ -195,7 +195,7 @@ class TestCreateIssue:
             text='{"errorMessages":["Project not found"]}',
         )
 
-        result = await create_issue(
+        result = await atlassian_jira_create_issue(
             CreateIssueParams(project_key="NOPE", summary="Test"),
             token=_TOKEN,
         )
@@ -204,8 +204,8 @@ class TestCreateIssue:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_issue._tool_definition
-        assert defn.name == "create_issue"
+        defn = atlassian_jira_create_issue._tool_definition
+        assert defn.name == "atlassian_jira_create_issue"
         assert defn.provider == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
 
@@ -223,7 +223,7 @@ class TestEditIssue:
             status_code=204,
         )
 
-        result = await edit_issue(
+        result = await atlassian_jira_edit_issue(
             EditIssueParams(issue_key="EX-1", summary="Updated title"),
             token=_TOKEN,
         )
@@ -235,7 +235,7 @@ class TestEditIssue:
     async def test_no_changes(self, httpx_mock: HTTPXMock) -> None:
         _mock_cloud_id(httpx_mock)
 
-        result = await edit_issue(
+        result = await atlassian_jira_edit_issue(
             EditIssueParams(issue_key="EX-1"),
             token=_TOKEN,
         )
@@ -247,7 +247,7 @@ class TestEditIssue:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await edit_issue(
+        result = await atlassian_jira_edit_issue(
             EditIssueParams(issue_key="EX-999", summary="Nope"),
             token=_TOKEN,
         )
@@ -256,8 +256,8 @@ class TestEditIssue:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = edit_issue._tool_definition
-        assert defn.name == "edit_issue"
+        defn = atlassian_jira_edit_issue._tool_definition
+        assert defn.name == "atlassian_jira_edit_issue"
         assert defn.provider == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
 
@@ -279,7 +279,7 @@ class TestAssignIssue:
             status_code=204,
         )
 
-        result = await assign_issue(
+        result = await atlassian_jira_assign_issue(
             AssignIssueParams(issue_key="EX-1"),
             token=_TOKEN,
         )
@@ -295,7 +295,7 @@ class TestAssignIssue:
             status_code=204,
         )
 
-        result = await assign_issue(
+        result = await atlassian_jira_assign_issue(
             AssignIssueParams(issue_key="EX-1", assign_to_me=False),
             token=_TOKEN,
         )
@@ -311,7 +311,7 @@ class TestAssignIssue:
             text="Unauthorized",
         )
 
-        result = await assign_issue(
+        result = await atlassian_jira_assign_issue(
             AssignIssueParams(issue_key="EX-1"),
             token=_TOKEN,
         )
@@ -320,8 +320,8 @@ class TestAssignIssue:
         assert "account ID" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = assign_issue._tool_definition
-        assert defn.name == "assign_issue"
+        defn = atlassian_jira_assign_issue._tool_definition
+        assert defn.name == "atlassian_jira_assign_issue"
         assert defn.provider == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
         assert "read:jira-user" in defn.scopes
@@ -341,7 +341,7 @@ class TestAddComment:
             status_code=201,
         )
 
-        result = await add_comment(
+        result = await atlassian_jira_add_comment(
             AddCommentParams(issue_key="EX-1", comment="Looks good"),
             token=_TOKEN,
         )
@@ -355,7 +355,7 @@ class TestAddComment:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await add_comment(
+        result = await atlassian_jira_add_comment(
             AddCommentParams(issue_key="EX-999", comment="Hi"),
             token=_TOKEN,
         )
@@ -364,8 +364,8 @@ class TestAddComment:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = add_comment._tool_definition
-        assert defn.name == "add_comment"
+        defn = atlassian_jira_add_comment._tool_definition
+        assert defn.name == "atlassian_jira_add_comment"
         assert defn.provider == "atlassian_jira"
         assert "write:jira-work" in defn.scopes
 
@@ -383,7 +383,7 @@ class TestListVersions:
             json=_load_json("list_versions.json"),
         )
 
-        result = await list_versions(
+        result = await atlassian_jira_list_versions(
             ListVersionsParams(project_key="EX"),
             token=_TOKEN,
         )
@@ -398,7 +398,7 @@ class TestListVersions:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=404, text="Project not found")
 
-        result = await list_versions(
+        result = await atlassian_jira_list_versions(
             ListVersionsParams(project_key="NOPE"),
             token=_TOKEN,
         )
@@ -406,8 +406,8 @@ class TestListVersions:
         assert result.success is False
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_versions._tool_definition
-        assert defn.name == "list_versions"
+        defn = atlassian_jira_list_versions._tool_definition
+        assert defn.name == "atlassian_jira_list_versions"
         assert defn.provider == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
@@ -425,7 +425,7 @@ class TestListBoards:
             json=_load_json("list_boards.json"),
         )
 
-        result = await list_boards(
+        result = await atlassian_jira_list_boards(
             ListBoardsParams(),
             token=_TOKEN,
         )
@@ -440,13 +440,13 @@ class TestListBoards:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=401, text="Unauthorized")
 
-        result = await list_boards(ListBoardsParams(), token=_TOKEN)
+        result = await atlassian_jira_list_boards(ListBoardsParams(), token=_TOKEN)
 
         assert result.success is False
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_boards._tool_definition
-        assert defn.name == "list_boards"
+        defn = atlassian_jira_list_boards._tool_definition
+        assert defn.name == "atlassian_jira_list_boards"
         assert defn.provider == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
 
@@ -464,7 +464,7 @@ class TestListSprints:
             json=_load_json("list_sprints.json"),
         )
 
-        result = await list_sprints(
+        result = await atlassian_jira_list_sprints(
             ListSprintsParams(board_id=84),
             token=_TOKEN,
         )
@@ -480,7 +480,7 @@ class TestListSprints:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(status_code=404, text="Board not found")
 
-        result = await list_sprints(
+        result = await atlassian_jira_list_sprints(
             ListSprintsParams(board_id=999),
             token=_TOKEN,
         )
@@ -488,7 +488,7 @@ class TestListSprints:
         assert result.success is False
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_sprints._tool_definition
-        assert defn.name == "list_sprints"
+        defn = atlassian_jira_list_sprints._tool_definition
+        assert defn.name == "atlassian_jira_list_sprints"
         assert defn.provider == "atlassian_jira"
         assert "read:jira-work" in defn.scopes

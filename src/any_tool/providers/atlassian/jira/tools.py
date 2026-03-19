@@ -80,11 +80,11 @@ def _agile_url(cloud_id: str, path: str, *, base_url: str) -> str:
 
 
 @tool(
-    scopes=SCOPES["explore_projects"],
+    scopes=SCOPES["atlassian_jira_explore_projects"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-search/#api-rest-api-3-project-search-get",
     provider="atlassian_jira",
 )
-async def explore_projects(
+async def atlassian_jira_explore_projects(
     params: ExploreProjectsParams,
     *,
     token: str,
@@ -120,11 +120,11 @@ async def explore_projects(
 
 
 @tool(
-    scopes=SCOPES["explore_issues"],
+    scopes=SCOPES["atlassian_jira_explore_issues"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-post",
     provider="atlassian_jira",
 )
-async def explore_issues(
+async def atlassian_jira_explore_issues(
     params: ExploreIssuesParams,
     *,
     token: str,
@@ -186,11 +186,11 @@ async def explore_issues(
 
 
 @tool(
-    scopes=SCOPES["create_issue"],
+    scopes=SCOPES["atlassian_jira_create_issue"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post",
     provider="atlassian_jira",
 )
-async def create_issue(
+async def atlassian_jira_create_issue(
     params: CreateIssueParams,
     *,
     token: str,
@@ -243,11 +243,11 @@ async def create_issue(
 
 
 @tool(
-    scopes=SCOPES["edit_issue"],
+    scopes=SCOPES["atlassian_jira_edit_issue"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-put",
     provider="atlassian_jira",
 )
-async def edit_issue(
+async def atlassian_jira_edit_issue(
     params: EditIssueParams,
     *,
     token: str,
@@ -301,11 +301,11 @@ async def edit_issue(
 
 
 @tool(
-    scopes=SCOPES["assign_issue"],
+    scopes=SCOPES["atlassian_jira_assign_issue"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-assignee-put",
     provider="atlassian_jira",
 )
-async def assign_issue(
+async def atlassian_jira_assign_issue(
     params: AssignIssueParams,
     *,
     token: str,
@@ -362,11 +362,11 @@ async def assign_issue(
 
 
 @tool(
-    scopes=SCOPES["add_comment"],
+    scopes=SCOPES["atlassian_jira_add_comment"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/#api-rest-api-3-issue-issueidorkey-comment-post",
     provider="atlassian_jira",
 )
-async def add_comment(
+async def atlassian_jira_add_comment(
     params: AddCommentParams,
     *,
     token: str,
@@ -418,11 +418,11 @@ async def add_comment(
 
 
 @tool(
-    scopes=SCOPES["list_versions"],
+    scopes=SCOPES["atlassian_jira_list_versions"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-project-versions/#api-rest-api-3-project-projectidorkey-version-get",
     provider="atlassian_jira",
 )
-async def list_versions(
+async def atlassian_jira_list_versions(
     params: ListVersionsParams,
     *,
     token: str,
@@ -462,11 +462,11 @@ async def list_versions(
 
 
 @tool(
-    scopes=SCOPES["list_boards"],
+    scopes=SCOPES["atlassian_jira_list_boards"],
     api_docs="https://developer.atlassian.com/cloud/jira/software/rest/api-group-board/#api-rest-agile-1-0-board-get",
     provider="atlassian_jira",
 )
-async def list_boards(
+async def atlassian_jira_list_boards(
     params: ListBoardsParams,
     *,
     token: str,
@@ -506,11 +506,11 @@ async def list_boards(
 
 
 @tool(
-    scopes=SCOPES["list_sprints"],
+    scopes=SCOPES["atlassian_jira_list_sprints"],
     api_docs="https://developer.atlassian.com/cloud/jira/software/rest/api-group-sprint/#api-rest-agile-1-0-board-boardid-sprint-get",
     provider="atlassian_jira",
 )
-async def list_sprints(
+async def atlassian_jira_list_sprints(
     params: ListSprintsParams,
     *,
     token: str,

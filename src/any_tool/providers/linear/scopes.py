@@ -16,17 +16,17 @@ class LinearScope(StrEnum):
 
 
 SCOPES: dict[str, list[LinearScope]] = {
-    "whoami": [LinearScope.READ],
-    "list_teams": [LinearScope.READ],
-    "list_users": [LinearScope.READ, LinearScope.ADMIN],
-    "list_issues": [LinearScope.READ],
-    "read_issue": [LinearScope.READ],
-    "create_issue": [LinearScope.WRITE],
-    "update_issue": [LinearScope.WRITE],
-    "list_projects": [LinearScope.READ],
-    "create_project": [LinearScope.WRITE],
-    "update_project": [LinearScope.WRITE],
-    "list_cycles": [LinearScope.READ],
+    "linear_whoami": [LinearScope.READ],
+    "linear_list_teams": [LinearScope.READ],
+    "linear_list_users": [LinearScope.READ, LinearScope.ADMIN],
+    "linear_list_issues": [LinearScope.READ],
+    "linear_read_issue": [LinearScope.READ],
+    "linear_create_issue": [LinearScope.WRITE],
+    "linear_update_issue": [LinearScope.WRITE],
+    "linear_list_projects": [LinearScope.READ],
+    "linear_create_project": [LinearScope.WRITE],
+    "linear_update_project": [LinearScope.WRITE],
+    "linear_list_cycles": [LinearScope.READ],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

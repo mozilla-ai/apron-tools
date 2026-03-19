@@ -8,14 +8,14 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.microsoft.teams.tools import (
-    explore_workspace,
-    get_channel_info,
-    list_chats,
-    read_channel_messages,
-    read_chat_messages,
-    read_message_replies,
-    send_channel_message,
-    send_chat_message,
+    microsoft_teams_explore_workspace,
+    microsoft_teams_get_channel_info,
+    microsoft_teams_list_chats,
+    microsoft_teams_read_channel_messages,
+    microsoft_teams_read_chat_messages,
+    microsoft_teams_read_message_replies,
+    microsoft_teams_send_channel_message,
+    microsoft_teams_send_chat_message,
 )
 from any_tool.providers.microsoft.teams.types import (
     ExploreWorkspaceParams,
@@ -77,7 +77,7 @@ class TestExploreWorkspace:
             json={"value": []},
         )
 
-        result = await explore_workspace(ExploreWorkspaceParams(), token=_TOKEN)
+        result = await microsoft_teams_explore_workspace(ExploreWorkspaceParams(), token=_TOKEN)
 
         assert isinstance(result, ExploreWorkspaceResult)
         assert result.success is True
@@ -89,14 +89,14 @@ class TestExploreWorkspace:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=401, text="Unauthorized")
 
-        result = await explore_workspace(ExploreWorkspaceParams(), token=_TOKEN)
+        result = await microsoft_teams_explore_workspace(ExploreWorkspaceParams(), token=_TOKEN)
 
         assert result.success is False
         assert "401" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = explore_workspace._tool_definition
-        assert defn.name == "explore_workspace"
+        defn = microsoft_teams_explore_workspace._tool_definition
+        assert defn.name == "microsoft_teams_explore_workspace"
         assert defn.provider == "microsoft_teams"
         assert "Team.ReadBasic.All" in defn.scopes
 
@@ -113,7 +113,7 @@ class TestGetChannelInfo:
             json=_load_json("get_channel.json"),
         )
 
-        result = await get_channel_info(
+        result = await microsoft_teams_get_channel_info(
             GetChannelInfoParams(team_id=_TEAM_ID, channel_id=_CHANNEL_ID),
             token=_TOKEN,
         )
@@ -127,7 +127,7 @@ class TestGetChannelInfo:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await get_channel_info(
+        result = await microsoft_teams_get_channel_info(
             GetChannelInfoParams(team_id="bad-id", channel_id="bad-id"),
             token=_TOKEN,
         )
@@ -136,8 +136,8 @@ class TestGetChannelInfo:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_channel_info._tool_definition
-        assert defn.name == "get_channel_info"
+        defn = microsoft_teams_get_channel_info._tool_definition
+        assert defn.name == "microsoft_teams_get_channel_info"
         assert defn.provider == "microsoft_teams"
         assert "Channel.ReadBasic.All" in defn.scopes
 
@@ -154,7 +154,7 @@ class TestListChats:
             json=_load_json("list_chats.json"),
         )
 
-        result = await list_chats(ListChatsParams(), token=_TOKEN)
+        result = await microsoft_teams_list_chats(ListChatsParams(), token=_TOKEN)
 
         assert isinstance(result, ListChatsResult)
         assert result.success is True
@@ -165,14 +165,14 @@ class TestListChats:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_chats(ListChatsParams(), token=_TOKEN)
+        result = await microsoft_teams_list_chats(ListChatsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_chats._tool_definition
-        assert defn.name == "list_chats"
+        defn = microsoft_teams_list_chats._tool_definition
+        assert defn.name == "microsoft_teams_list_chats"
         assert defn.provider == "microsoft_teams"
         assert "Chat.Read" in defn.scopes
 
@@ -189,7 +189,7 @@ class TestReadChatMessages:
             json=_load_json("chat_messages.json"),
         )
 
-        result = await read_chat_messages(
+        result = await microsoft_teams_read_chat_messages(
             ReadChatMessagesParams(chat_id=_CHAT_ID),
             token=_TOKEN,
         )
@@ -202,7 +202,7 @@ class TestReadChatMessages:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await read_chat_messages(
+        result = await microsoft_teams_read_chat_messages(
             ReadChatMessagesParams(chat_id="bad-id"),
             token=_TOKEN,
         )
@@ -211,8 +211,8 @@ class TestReadChatMessages:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_chat_messages._tool_definition
-        assert defn.name == "read_chat_messages"
+        defn = microsoft_teams_read_chat_messages._tool_definition
+        assert defn.name == "microsoft_teams_read_chat_messages"
         assert defn.provider == "microsoft_teams"
         assert "Chat.Read" in defn.scopes
 
@@ -229,7 +229,7 @@ class TestReadChannelMessages:
             json=_load_json("channel_messages.json"),
         )
 
-        result = await read_channel_messages(
+        result = await microsoft_teams_read_channel_messages(
             ReadChannelMessagesParams(team_id=_TEAM_ID, channel_id=_CHANNEL_ID),
             token=_TOKEN,
         )
@@ -244,7 +244,7 @@ class TestReadChannelMessages:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=500, text="Internal Server Error")
 
-        result = await read_channel_messages(
+        result = await microsoft_teams_read_channel_messages(
             ReadChannelMessagesParams(team_id="bad-id", channel_id="bad-id"),
             token=_TOKEN,
         )
@@ -253,8 +253,8 @@ class TestReadChannelMessages:
         assert "500" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_channel_messages._tool_definition
-        assert defn.name == "read_channel_messages"
+        defn = microsoft_teams_read_channel_messages._tool_definition
+        assert defn.name == "microsoft_teams_read_channel_messages"
         assert defn.provider == "microsoft_teams"
         assert "ChannelMessage.Read.All" in defn.scopes
 
@@ -275,7 +275,7 @@ class TestReadMessageReplies:
             json=_load_json("message_replies.json"),
         )
 
-        result = await read_message_replies(
+        result = await microsoft_teams_read_message_replies(
             ReadMessageRepliesParams(
                 team_id=_TEAM_ID,
                 channel_id=_CHANNEL_ID,
@@ -296,7 +296,7 @@ class TestReadMessageReplies:
     async def test_parent_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await read_message_replies(
+        result = await microsoft_teams_read_message_replies(
             ReadMessageRepliesParams(
                 team_id="bad-id",
                 channel_id="bad-id",
@@ -319,7 +319,7 @@ class TestReadMessageReplies:
             text="Forbidden",
         )
 
-        result = await read_message_replies(
+        result = await microsoft_teams_read_message_replies(
             ReadMessageRepliesParams(
                 team_id=_TEAM_ID,
                 channel_id=_CHANNEL_ID,
@@ -332,8 +332,8 @@ class TestReadMessageReplies:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_message_replies._tool_definition
-        assert defn.name == "read_message_replies"
+        defn = microsoft_teams_read_message_replies._tool_definition
+        assert defn.name == "microsoft_teams_read_message_replies"
         assert defn.provider == "microsoft_teams"
         assert "ChannelMessage.Read.All" in defn.scopes
 
@@ -350,7 +350,7 @@ class TestSendChatMessage:
             json=_load_json("send_message.json"),
         )
 
-        result = await send_chat_message(
+        result = await microsoft_teams_send_chat_message(
             SendChatMessageParams(chat_id=_CHAT_ID, message="Hello everyone!"),
             token=_TOKEN,
         )
@@ -362,7 +362,7 @@ class TestSendChatMessage:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await send_chat_message(
+        result = await microsoft_teams_send_chat_message(
             SendChatMessageParams(chat_id="bad-id", message="Hello"),
             token=_TOKEN,
         )
@@ -371,8 +371,8 @@ class TestSendChatMessage:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = send_chat_message._tool_definition
-        assert defn.name == "send_chat_message"
+        defn = microsoft_teams_send_chat_message._tool_definition
+        assert defn.name == "microsoft_teams_send_chat_message"
         assert defn.provider == "microsoft_teams"
         assert "Chat.ReadWrite" in defn.scopes
 
@@ -389,7 +389,7 @@ class TestSendChannelMessage:
             json=_load_json("send_message.json"),
         )
 
-        result = await send_channel_message(
+        result = await microsoft_teams_send_channel_message(
             SendChannelMessageParams(
                 team_id=_TEAM_ID,
                 channel_id=_CHANNEL_ID,
@@ -405,7 +405,7 @@ class TestSendChannelMessage:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await send_channel_message(
+        result = await microsoft_teams_send_channel_message(
             SendChannelMessageParams(
                 team_id="bad-id",
                 channel_id="bad-id",
@@ -418,7 +418,7 @@ class TestSendChannelMessage:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = send_channel_message._tool_definition
-        assert defn.name == "send_channel_message"
+        defn = microsoft_teams_send_channel_message._tool_definition
+        assert defn.name == "microsoft_teams_send_channel_message"
         assert defn.provider == "microsoft_teams"
         assert "ChannelMessage.Send" in defn.scopes

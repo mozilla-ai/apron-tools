@@ -8,11 +8,11 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.google.calendar.tools import (
-    create_event,
-    get_event,
-    list_calendars,
-    list_events,
-    update_event,
+    google_calendar_create_event,
+    google_calendar_get_event,
+    google_calendar_list_calendars,
+    google_calendar_list_events,
+    google_calendar_update_event,
 )
 from any_tool.providers.google.calendar.types import (
     CreateEventParams,
@@ -51,7 +51,7 @@ class TestListCalendars:
             json=_load_json("list_calendars.json"),
         )
 
-        result = await list_calendars(ListCalendarsParams(), token=_TOKEN)
+        result = await google_calendar_list_calendars(ListCalendarsParams(), token=_TOKEN)
 
         assert isinstance(result, ListCalendarsResult)
         assert result.success is True
@@ -62,14 +62,14 @@ class TestListCalendars:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_calendars(ListCalendarsParams(), token=_TOKEN)
+        result = await google_calendar_list_calendars(ListCalendarsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_calendars._tool_definition
-        assert defn.name == "list_calendars"
+        defn = google_calendar_list_calendars._tool_definition
+        assert defn.name == "google_calendar_list_calendars"
         assert defn.provider == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes
 
@@ -86,7 +86,7 @@ class TestListEvents:
             json=_load_json("list_events.json"),
         )
 
-        result = await list_events(ListEventsParams(calendar_id=_CALENDAR_ID), token=_TOKEN)
+        result = await google_calendar_list_events(ListEventsParams(calendar_id=_CALENDAR_ID), token=_TOKEN)
 
         assert isinstance(result, ListEventsResult)
         assert result.success is True
@@ -99,7 +99,7 @@ class TestListEvents:
             json=_load_json("list_events.json"),
         )
 
-        result = await list_events(
+        result = await google_calendar_list_events(
             ListEventsParams(
                 calendar_id=_CALENDAR_ID,
                 time_min="2024-03-15T00:00:00Z",
@@ -118,7 +118,7 @@ class TestListEvents:
             json=_load_json("list_events.json"),
         )
 
-        result = await list_events(
+        result = await google_calendar_list_events(
             ListEventsParams(calendar_id=_CALENDAR_ID, query="standup"),
             token=_TOKEN,
         )
@@ -130,14 +130,14 @@ class TestListEvents:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await list_events(ListEventsParams(calendar_id="bad-id"), token=_TOKEN)
+        result = await google_calendar_list_events(ListEventsParams(calendar_id="bad-id"), token=_TOKEN)
 
         assert result.success is False
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_events._tool_definition
-        assert defn.name == "list_events"
+        defn = google_calendar_list_events._tool_definition
+        assert defn.name == "google_calendar_list_events"
         assert defn.provider == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes
 
@@ -154,7 +154,7 @@ class TestGetEvent:
             json=_load_json("get_event.json"),
         )
 
-        result = await get_event(
+        result = await google_calendar_get_event(
             GetEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID),
             token=_TOKEN,
         )
@@ -169,7 +169,7 @@ class TestGetEvent:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await get_event(
+        result = await google_calendar_get_event(
             GetEventParams(calendar_id=_CALENDAR_ID, event_id="bad-id"),
             token=_TOKEN,
         )
@@ -178,8 +178,8 @@ class TestGetEvent:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_event._tool_definition
-        assert defn.name == "get_event"
+        defn = google_calendar_get_event._tool_definition
+        assert defn.name == "google_calendar_get_event"
         assert defn.provider == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes
 
@@ -196,7 +196,7 @@ class TestCreateEvent:
             json=_load_json("create_event.json"),
         )
 
-        result = await create_event(
+        result = await google_calendar_create_event(
             CreateEventParams(
                 calendar_id=_CALENDAR_ID,
                 summary="Project Review",
@@ -220,7 +220,7 @@ class TestCreateEvent:
             json=_load_json("create_event.json"),
         )
 
-        await create_event(
+        await google_calendar_create_event(
             CreateEventParams(
                 calendar_id=_CALENDAR_ID,
                 summary="Test Event",
@@ -246,7 +246,7 @@ class TestCreateEvent:
             json=_load_json("create_event.json"),
         )
 
-        await create_event(
+        await google_calendar_create_event(
             CreateEventParams(
                 calendar_id=_CALENDAR_ID,
                 summary="Quick Meeting",
@@ -265,7 +265,7 @@ class TestCreateEvent:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await create_event(
+        result = await google_calendar_create_event(
             CreateEventParams(
                 calendar_id=_CALENDAR_ID,
                 summary="Bad Event",
@@ -279,8 +279,8 @@ class TestCreateEvent:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_event._tool_definition
-        assert defn.name == "create_event"
+        defn = google_calendar_create_event._tool_definition
+        assert defn.name == "google_calendar_create_event"
         assert defn.provider == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar" in defn.scopes
 
@@ -303,7 +303,7 @@ class TestUpdateEvent:
             json=_load_json("update_event.json"),
         )
 
-        result = await update_event(
+        result = await google_calendar_update_event(
             UpdateEventParams(
                 calendar_id=_CALENDAR_ID,
                 event_id=_EVENT_ID,
@@ -329,7 +329,7 @@ class TestUpdateEvent:
             json=_load_json("update_event.json"),
         )
 
-        await update_event(
+        await google_calendar_update_event(
             UpdateEventParams(
                 calendar_id=_CALENDAR_ID,
                 event_id=_EVENT_ID,
@@ -349,7 +349,7 @@ class TestUpdateEvent:
     async def test_get_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await update_event(
+        result = await google_calendar_update_event(
             UpdateEventParams(
                 calendar_id=_CALENDAR_ID,
                 event_id="bad-id",
@@ -372,7 +372,7 @@ class TestUpdateEvent:
             text="Forbidden",
         )
 
-        result = await update_event(
+        result = await google_calendar_update_event(
             UpdateEventParams(
                 calendar_id=_CALENDAR_ID,
                 event_id=_EVENT_ID,
@@ -385,7 +385,7 @@ class TestUpdateEvent:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_event._tool_definition
-        assert defn.name == "update_event"
+        defn = google_calendar_update_event._tool_definition
+        assert defn.name == "google_calendar_update_event"
         assert defn.provider == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar" in defn.scopes

@@ -8,11 +8,11 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.google.docs.tools import (
-    copy_document,
-    create_document,
-    list_documents,
-    read_document,
-    update_document,
+    google_docs_copy_document,
+    google_docs_create_document,
+    google_docs_list_documents,
+    google_docs_read_document,
+    google_docs_update_document,
 )
 from any_tool.providers.google.docs.types import (
     CopyDocumentParams,
@@ -50,7 +50,7 @@ class TestListDocuments:
             json=_load_json("list_documents.json"),
         )
 
-        result = await list_documents(ListDocumentsParams(), token=_TOKEN)
+        result = await google_docs_list_documents(ListDocumentsParams(), token=_TOKEN)
 
         assert isinstance(result, ListDocumentsResult)
         assert result.success is True
@@ -60,14 +60,14 @@ class TestListDocuments:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_documents(ListDocumentsParams(), token=_TOKEN)
+        result = await google_docs_list_documents(ListDocumentsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_documents._tool_definition
-        assert defn.name == "list_documents"
+        defn = google_docs_list_documents._tool_definition
+        assert defn.name == "google_docs_list_documents"
         assert defn.provider == "google_docs"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -84,7 +84,7 @@ class TestCreateDocument:
             json=_load_json("create_document.json"),
         )
 
-        result = await create_document(
+        result = await google_docs_create_document(
             CreateDocumentParams(title="Meeting Notes"),
             token=_TOKEN,
         )
@@ -97,7 +97,7 @@ class TestCreateDocument:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await create_document(
+        result = await google_docs_create_document(
             CreateDocumentParams(title="Test"),
             token=_TOKEN,
         )
@@ -106,8 +106,8 @@ class TestCreateDocument:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_document._tool_definition
-        assert defn.name == "create_document"
+        defn = google_docs_create_document._tool_definition
+        assert defn.name == "google_docs_create_document"
         assert defn.provider == "google_docs"
         assert "https://www.googleapis.com/auth/documents" in defn.scopes
 
@@ -124,7 +124,7 @@ class TestReadDocument:
             json=_load_json("read_document.json"),
         )
 
-        result = await read_document(
+        result = await google_docs_read_document(
             ReadDocumentParams(document_id=_DOCUMENT_ID),
             token=_TOKEN,
         )
@@ -138,7 +138,7 @@ class TestReadDocument:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await read_document(
+        result = await google_docs_read_document(
             ReadDocumentParams(document_id="bad_id"),
             token=_TOKEN,
         )
@@ -147,8 +147,8 @@ class TestReadDocument:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_document._tool_definition
-        assert defn.name == "read_document"
+        defn = google_docs_read_document._tool_definition
+        assert defn.name == "google_docs_read_document"
         assert defn.provider == "google_docs"
         assert "https://www.googleapis.com/auth/documents" in defn.scopes
 
@@ -165,7 +165,7 @@ class TestUpdateDocument:
             json=_load_json("update_document.json"),
         )
 
-        result = await update_document(
+        result = await google_docs_update_document(
             UpdateDocumentParams(
                 document_id=_DOCUMENT_ID,
                 requests=[
@@ -183,7 +183,7 @@ class TestUpdateDocument:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await update_document(
+        result = await google_docs_update_document(
             UpdateDocumentParams(
                 document_id="bad_id",
                 requests=[{"insertText": {"location": {"index": 1}, "text": "x"}}],
@@ -195,8 +195,8 @@ class TestUpdateDocument:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_document._tool_definition
-        assert defn.name == "update_document"
+        defn = google_docs_update_document._tool_definition
+        assert defn.name == "google_docs_update_document"
         assert defn.provider == "google_docs"
         assert "https://www.googleapis.com/auth/documents" in defn.scopes
 
@@ -217,7 +217,7 @@ class TestCopyDocument:
             json=_load_json("copy_document.json"),
         )
 
-        result = await copy_document(
+        result = await google_docs_copy_document(
             CopyDocumentParams(
                 document_id=_DOCUMENT_ID,
                 new_title="Copy of Meeting Notes",
@@ -234,7 +234,7 @@ class TestCopyDocument:
     async def test_meta_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await copy_document(
+        result = await google_docs_copy_document(
             CopyDocumentParams(document_id="bad_id", new_title="Copy"),
             token=_TOKEN,
         )
@@ -253,7 +253,7 @@ class TestCopyDocument:
             text="Forbidden",
         )
 
-        result = await copy_document(
+        result = await google_docs_copy_document(
             CopyDocumentParams(
                 document_id=_DOCUMENT_ID,
                 new_title="Copy",
@@ -265,7 +265,7 @@ class TestCopyDocument:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = copy_document._tool_definition
-        assert defn.name == "copy_document"
+        defn = google_docs_copy_document._tool_definition
+        assert defn.name == "google_docs_copy_document"
         assert defn.provider == "google_docs"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
