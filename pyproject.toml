@@ -18,6 +18,7 @@ all = [
     "apron-tools[linear]",
     "apron-tools[microsoft]",
     "apron-tools[notion]",
+    "apron-tools[powerpoint]",
     "apron-tools[salesforce]",
     "apron-tools[slack]",
     "apron-tools[typeform]",
@@ -29,6 +30,7 @@ google = ["google-api-python-client>=2.0"]
 linear = []
 microsoft = ["msgraph-sdk>=1.0"]
 notion = ["notion-client>=2.0"]
+powerpoint = ["python-pptx>=1.0"]
 salesforce = ["simple-salesforce>=1.0"]
 slack = ["slack_sdk[optional]>=3.0"]
 typeform = []

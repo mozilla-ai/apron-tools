@@ -1,0 +1,28 @@
+{
+  "value": [
+    {
+      "id": "pptx-003",
+      "name": "Team Update.pptx",
+      "webUrl": "https://onedrive.live.com/view/pptx-003",
+      "lastModifiedDateTime": "2025-02-01T14:00:00Z",
+      "size": 262144,
+      "file": {
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      }
+    },
+    {
+      "id": "folder-001",
+      "name": "Archive",
+      "folder": {
+        "childCount": 2
+      }
+    },
+    {
+      "id": "doc-001",
+      "name": "Notes.docx",
+      "file": {
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      }
+    }
+  ]
+}

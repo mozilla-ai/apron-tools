@@ -3,6 +3,7 @@
 API docs:
   - Excel: https://learn.microsoft.com/en-us/graph/api/resources/excel
   - Outlook: https://learn.microsoft.com/en-us/graph/api/resources/mail-api-overview
+  - PowerPoint: https://learn.microsoft.com/en-us/graph/api/resources/presentation
   - SharePoint: https://learn.microsoft.com/en-us/graph/api/resources/sharepoint
   - Teams: https://learn.microsoft.com/en-us/graph/api/resources/teams-api-overview
 """
@@ -70,3 +71,28 @@ __all__ = [
     "microsoft_teams_send_channel_message",
     "microsoft_teams_send_chat_message",
 ]
+
+try:
+    from .powerpoint import (
+        microsoft_powerpoint_add_slide,
+        microsoft_powerpoint_create_presentation,
+        microsoft_powerpoint_explore_presentations,
+        microsoft_powerpoint_read_presentation,
+        microsoft_powerpoint_update_slide_text,
+        microsoft_powerpoint_upload_to_onedrive,
+    )
+
+    __all__ += [
+        "microsoft_powerpoint_add_slide",
+        "microsoft_powerpoint_create_presentation",
+        "microsoft_powerpoint_explore_presentations",
+        "microsoft_powerpoint_read_presentation",
+        "microsoft_powerpoint_update_slide_text",
+        "microsoft_powerpoint_upload_to_onedrive",
+    ]
+except ImportError:
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug(
+        "PowerPoint tools unavailable — install apron-tools[powerpoint] for python-pptx support."
+    )
