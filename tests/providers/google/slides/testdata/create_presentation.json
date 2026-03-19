@@ -1,0 +1,23 @@
+{
+  "presentationId": "pres-001",
+  "title": "Q1 Review",
+  "pageSize": {
+    "width": {"magnitude": 9144000, "unit": "EMU"},
+    "height": {"magnitude": 6858000, "unit": "EMU"}
+  },
+  "slides": [
+    {
+      "objectId": "slide-001",
+      "pageElements": [],
+      "slideProperties": {"layoutObjectId": "layout-001"}
+    }
+  ],
+  "masters": [{"objectId": "master-001"}],
+  "layouts": [
+    {
+      "objectId": "layout-001",
+      "layoutProperties": {"name": "BLANK", "displayName": "Blank"}
+    }
+  ],
+  "revisionId": "rev-001"
+}
