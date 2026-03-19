@@ -666,3 +666,61 @@ class TestUpdateDatabaseSchema:
         assert defn.provider == "notion"
         assert defn.scopes == ["update_content"]
         assert defn.api_docs_url == "https://developers.notion.com/reference/update-a-database"
+
+
+class TestNotionEmbedExternalFile:
+    async def test_embed_image_auto(self, httpx_mock) -> None:
+        from any_tool.providers.notion.tools import notion_embed_external_file
+        from any_tool.providers.notion.types import EmbedExternalFileParams
+
+        httpx_mock.add_response(json={"results": [{"object": "block", "id": "block-001"}]})
+        result = await notion_embed_external_file(
+            EmbedExternalFileParams(page_id="page-001", url="https://example.com/photo.png"),
+            token="test-token",
+        )
+        assert result.success is True
+        assert result.block_type == "image"
+        assert result.page_id == "page-001"
+
+    async def test_embed_file_auto(self, httpx_mock) -> None:
+        from any_tool.providers.notion.tools import notion_embed_external_file
+        from any_tool.providers.notion.types import EmbedExternalFileParams
+
+        httpx_mock.add_response(json={"results": [{"object": "block", "id": "block-001"}]})
+        result = await notion_embed_external_file(
+            EmbedExternalFileParams(page_id="page-001", url="https://example.com/report.pdf"),
+            token="test-token",
+        )
+        assert result.success is True
+        assert result.block_type == "file"
+
+    async def test_embed_explicit_type(self, httpx_mock) -> None:
+        from any_tool.providers.notion.tools import notion_embed_external_file
+        from any_tool.providers.notion.types import EmbedExternalFileParams
+
+        httpx_mock.add_response(json={"results": [{"object": "block", "id": "block-001"}]})
+        result = await notion_embed_external_file(
+            EmbedExternalFileParams(page_id="page-001", url="https://example.com/data", file_type="image"),
+            token="test-token",
+        )
+        assert result.block_type == "image"
+
+    async def test_api_error(self, httpx_mock) -> None:
+        from any_tool.providers.notion.tools import notion_embed_external_file
+        from any_tool.providers.notion.types import EmbedExternalFileParams
+
+        httpx_mock.add_response(status_code=403, text="Forbidden")
+        result = await notion_embed_external_file(
+            EmbedExternalFileParams(page_id="page-001", url="https://example.com/img.png"),
+            token="bad-token",
+        )
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        from any_tool.providers.notion.tools import notion_embed_external_file
+
+        defn = notion_embed_external_file._tool_definition
+        assert defn.name == "notion_embed_external_file"
+        assert defn.provider == "notion"
+        assert defn.service == "notion"

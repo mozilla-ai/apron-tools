@@ -26,6 +26,7 @@ SCOPES: dict[str, list[NotionScope]] = {
     "notion_create_or_update_database_entry": [NotionScope.INSERT_CONTENT, NotionScope.UPDATE_CONTENT],
     "notion_create_database": [NotionScope.INSERT_CONTENT],
     "notion_update_database_schema": [NotionScope.UPDATE_CONTENT],
+    "notion_embed_external_file": [NotionScope.UPDATE_CONTENT],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

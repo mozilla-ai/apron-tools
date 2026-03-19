@@ -532,3 +532,33 @@ class UpdateDatabaseSchemaResult(ToolResult):
         if not self.success:
             return f"Error: {self.error}"
         return f"Database updated: {self.title_text} (id={self.id}, url={self.url})"
+
+
+# ---------------------------------------------------------------------------
+# notion_embed_external_file
+# ---------------------------------------------------------------------------
+
+
+class EmbedExternalFileParams(BaseModel):
+    """Parameters for embedding an external file or image on a Notion page."""
+
+    page_id: str
+    url: str
+    caption: str = ""
+    file_type: str = "auto"
+
+
+class EmbedExternalFileResult(ToolResult):
+    """Result of embedding an external file on a Notion page."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    block_type: str = ""
+    file_url: str = ""
+    page_id: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"File embedded as {self.block_type} block on page {self.page_id}.\nURL: {self.file_url}"
