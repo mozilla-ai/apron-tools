@@ -46,7 +46,8 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
 @tool(
     scopes=SCOPES["google_drive_list_files"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
-    provider="google_drive",
+    provider="google",
+    service="google_drive",
 )
 async def google_drive_list_files(
     params: ListFilesParams,
@@ -92,7 +93,8 @@ async def google_drive_list_files(
 @tool(
     scopes=SCOPES["google_drive_create_folder"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/create",
-    provider="google_drive",
+    provider="google",
+    service="google_drive",
 )
 async def google_drive_create_folder(
     params: CreateFolderParams,
@@ -131,7 +133,8 @@ async def google_drive_create_folder(
 @tool(
     scopes=SCOPES["google_drive_get_file_info"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/get",
-    provider="google_drive",
+    provider="google",
+    service="google_drive",
 )
 async def google_drive_get_file_info(
     params: GetFileInfoParams,
@@ -165,7 +168,8 @@ async def google_drive_get_file_info(
 @tool(
     scopes=SCOPES["google_drive_move_file"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/update",
-    provider="google_drive",
+    provider="google",
+    service="google_drive",
 )
 async def google_drive_move_file(
     params: MoveFileParams,
@@ -220,7 +224,8 @@ async def google_drive_move_file(
 @tool(
     scopes=SCOPES["google_drive_search"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
-    provider="google_drive",
+    provider="google",
+    service="google_drive",
 )
 async def google_drive_search(
     params: SearchParams,
@@ -262,7 +267,8 @@ async def google_drive_search(
 @tool(
     scopes=SCOPES["google_drive_share_file"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/permissions/create",
-    provider="google_drive",
+    provider="google",
+    service="google_drive",
 )
 async def google_drive_share_file(
     params: ShareFileParams,

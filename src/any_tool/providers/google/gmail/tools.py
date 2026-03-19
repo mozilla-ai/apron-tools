@@ -127,7 +127,8 @@ def _build_raw_message(
 @tool(
     scopes=SCOPES["gmail_list_emails"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_list_emails(
     params: ListEmailsParams,
@@ -195,7 +196,8 @@ async def gmail_list_emails(
 @tool(
     scopes=SCOPES["gmail_read_email"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/get",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_read_email(
     params: ReadEmailParams,
@@ -241,7 +243,8 @@ async def gmail_read_email(
 @tool(
     scopes=SCOPES["gmail_send_email"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/send",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_send_email(
     params: SendEmailParams,
@@ -285,7 +288,8 @@ async def gmail_send_email(
 @tool(
     scopes=SCOPES["gmail_create_draft"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.drafts/create",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_create_draft(
     params: CreateDraftParams,
@@ -324,7 +328,8 @@ async def gmail_create_draft(
 @tool(
     scopes=SCOPES["gmail_edit_draft"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.drafts/update",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_edit_draft(
     params: EditDraftParams,
@@ -386,7 +391,8 @@ async def gmail_edit_draft(
 @tool(
     scopes=SCOPES["gmail_reply_to_email"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/send",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_reply_to_email(
     params: ReplyToEmailParams,
@@ -465,7 +471,8 @@ async def gmail_reply_to_email(
 @tool(
     scopes=SCOPES["gmail_get_thread_replies"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.threads/get",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_get_thread_replies(
     params: GetThreadRepliesParams,
@@ -525,7 +532,8 @@ async def gmail_get_thread_replies(
 @tool(
     scopes=SCOPES["gmail_list_labels"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.labels/list",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_list_labels(
     params: ListLabelsParams,
@@ -557,7 +565,8 @@ async def gmail_list_labels(
 @tool(
     scopes=SCOPES["gmail_add_label_to_email"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/modify",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_add_label_to_email(
     params: AddLabelToEmailParams,
@@ -588,7 +597,8 @@ async def gmail_add_label_to_email(
 @tool(
     scopes=SCOPES["gmail_remove_label_from_email"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/modify",
-    provider="gmail",
+    provider="google",
+    service="gmail",
 )
 async def gmail_remove_label_from_email(
     params: RemoveLabelFromEmailParams,

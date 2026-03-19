@@ -89,6 +89,28 @@ class TestToolDecorator:
             ...
 
         assert my_tool._tool_definition.provider == "custom"
+        assert my_tool._tool_definition.service == "custom"
+        assert my_tool._tool_definition.integration == "custom"
+
+    def test_service_defaults_to_provider(self):
+        @tool(scopes=["read"], api_docs="https://example.com/docs", provider="slack")
+        async def my_tool(params: DummyParams, *, token: str) -> DummyResult:
+            """A tool."""
+            ...
+
+        assert my_tool._tool_definition.provider == "slack"
+        assert my_tool._tool_definition.service == "slack"
+        assert my_tool._tool_definition.integration == "slack"
+
+    def test_explicit_service(self):
+        @tool(scopes=["read"], api_docs="https://example.com/docs", provider="google", service="google_sheets")
+        async def my_tool(params: DummyParams, *, token: str) -> DummyResult:
+            """A tool."""
+            ...
+
+        assert my_tool._tool_definition.provider == "google"
+        assert my_tool._tool_definition.service == "google_sheets"
+        assert my_tool._tool_definition.integration == "google_sheets"
 
     def test_function_remains_callable(self):
         @tool(scopes=["read"], api_docs="https://example.com/docs")

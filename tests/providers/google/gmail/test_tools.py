@@ -106,7 +106,8 @@ class TestListEmails:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_list_emails._tool_definition
         assert defn.name == "gmail_list_emails"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
 
@@ -152,7 +153,8 @@ class TestReadEmail:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_read_email._tool_definition
         assert defn.name == "gmail_read_email"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
 
@@ -196,7 +198,8 @@ class TestSendEmail:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_send_email._tool_definition
         assert defn.name == "gmail_send_email"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
 
@@ -240,7 +243,8 @@ class TestCreateDraft:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_create_draft._tool_definition
         assert defn.name == "gmail_create_draft"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
 
@@ -284,7 +288,8 @@ class TestEditDraft:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_edit_draft._tool_definition
         assert defn.name == "gmail_edit_draft"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
 
@@ -328,7 +333,8 @@ class TestReplyToEmail:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_reply_to_email._tool_definition
         assert defn.name == "gmail_reply_to_email"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
 
@@ -371,7 +377,8 @@ class TestGetThreadReplies:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_get_thread_replies._tool_definition
         assert defn.name == "gmail_get_thread_replies"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
 
@@ -405,7 +412,8 @@ class TestListLabels:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_list_labels._tool_definition
         assert defn.name == "gmail_list_labels"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
 
@@ -445,7 +453,8 @@ class TestAddLabelToEmail:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_add_label_to_email._tool_definition
         assert defn.name == "gmail_add_label_to_email"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.modify" in defn.scopes
 
 
@@ -485,5 +494,6 @@ class TestRemoveLabelFromEmail:
     async def test_has_tool_definition(self) -> None:
         defn = gmail_remove_label_from_email._tool_definition
         assert defn.name == "gmail_remove_label_from_email"
-        assert defn.provider == "gmail"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.modify" in defn.scopes

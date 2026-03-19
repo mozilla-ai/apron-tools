@@ -50,7 +50,8 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
 @tool(
     scopes=SCOPES["microsoft_teams_explore_workspace"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/user-list-joinedteams",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_explore_workspace(
     params: ExploreWorkspaceParams,
@@ -112,7 +113,8 @@ async def microsoft_teams_explore_workspace(
 @tool(
     scopes=SCOPES["microsoft_teams_get_channel_info"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/channel-get",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_get_channel_info(
     params: GetChannelInfoParams,
@@ -143,7 +145,8 @@ async def microsoft_teams_get_channel_info(
 @tool(
     scopes=SCOPES["microsoft_teams_list_chats"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chat-list",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_list_chats(
     params: ListChatsParams,
@@ -176,7 +179,8 @@ async def microsoft_teams_list_chats(
 @tool(
     scopes=SCOPES["microsoft_teams_read_chat_messages"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chat-list-messages",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_read_chat_messages(
     params: ReadChatMessagesParams,
@@ -209,7 +213,8 @@ async def microsoft_teams_read_chat_messages(
 @tool(
     scopes=SCOPES["microsoft_teams_read_channel_messages"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/channel-list-messages",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_read_channel_messages(
     params: ReadChannelMessagesParams,
@@ -242,7 +247,8 @@ async def microsoft_teams_read_channel_messages(
 @tool(
     scopes=SCOPES["microsoft_teams_read_message_replies"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chatmessage-list-replies",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_read_message_replies(
     params: ReadMessageRepliesParams,
@@ -289,7 +295,8 @@ async def microsoft_teams_read_message_replies(
 @tool(
     scopes=SCOPES["microsoft_teams_send_chat_message"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chat-post-messages",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_send_chat_message(
     params: SendChatMessageParams,
@@ -322,7 +329,8 @@ async def microsoft_teams_send_chat_message(
 @tool(
     scopes=SCOPES["microsoft_teams_send_channel_message"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/channel-post-messages",
-    provider="microsoft_teams",
+    provider="microsoft",
+    service="microsoft_teams",
 )
 async def microsoft_teams_send_channel_message(
     params: SendChannelMessageParams,

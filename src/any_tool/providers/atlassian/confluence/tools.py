@@ -75,7 +75,8 @@ def _api_v1_url(cloud_id: str, path: str, *, base_url: str) -> str:
 @tool(
     scopes=SCOPES["atlassian_confluence_explore_spaces"],
     api_docs="https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-space/#api-wiki-api-v2-spaces-get",
-    provider="atlassian_confluence",
+    provider="atlassian",
+    service="atlassian_confluence",
 )
 async def atlassian_confluence_explore_spaces(
     params: ExploreSpacesParams,
@@ -115,7 +116,8 @@ async def atlassian_confluence_explore_spaces(
 @tool(
     scopes=SCOPES["atlassian_confluence_get_page_content"],
     api_docs="https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-page/#api-wiki-api-v2-pages-id-get",
-    provider="atlassian_confluence",
+    provider="atlassian",
+    service="atlassian_confluence",
 )
 async def atlassian_confluence_get_page_content(
     params: GetPageContentParams,
@@ -154,7 +156,8 @@ async def atlassian_confluence_get_page_content(
 @tool(
     scopes=SCOPES["atlassian_confluence_create_page"],
     api_docs="https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-page/#api-wiki-api-v2-pages-post",
-    provider="atlassian_confluence",
+    provider="atlassian",
+    service="atlassian_confluence",
 )
 async def atlassian_confluence_create_page(
     params: CreatePageParams,
@@ -205,7 +208,8 @@ async def atlassian_confluence_create_page(
 @tool(
     scopes=SCOPES["atlassian_confluence_update_page"],
     api_docs="https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-page/#api-wiki-api-v2-pages-id-get",
-    provider="atlassian_confluence",
+    provider="atlassian",
+    service="atlassian_confluence",
 )
 async def atlassian_confluence_update_page(
     params: UpdatePageParams,
@@ -282,7 +286,8 @@ async def atlassian_confluence_update_page(
 @tool(
     scopes=SCOPES["atlassian_confluence_search_content"],
     api_docs="https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-search/#api-wiki-rest-api-search-get",
-    provider="atlassian_confluence",
+    provider="atlassian",
+    service="atlassian_confluence",
 )
 async def atlassian_confluence_search_content(
     params: SearchContentParams,
@@ -327,7 +332,8 @@ async def atlassian_confluence_search_content(
 @tool(
     scopes=SCOPES["atlassian_confluence_get_child_pages"],
     api_docs="https://developer.atlassian.com/cloud/confluence/rest/v2/api-group-children/#api-pages-id-direct-children-get",
-    provider="atlassian_confluence",
+    provider="atlassian",
+    service="atlassian_confluence",
 )
 async def atlassian_confluence_get_child_pages(
     params: GetChildPagesParams,

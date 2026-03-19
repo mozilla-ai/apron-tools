@@ -78,7 +78,8 @@ class TestListFiles:
     async def test_has_tool_definition(self) -> None:
         defn = google_drive_list_files._tool_definition
         assert defn.name == "google_drive_list_files"
-        assert defn.provider == "google_drive"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -125,7 +126,8 @@ class TestCreateFolder:
     async def test_has_tool_definition(self) -> None:
         defn = google_drive_create_folder._tool_definition
         assert defn.name == "google_drive_create_folder"
-        assert defn.provider == "google_drive"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -166,7 +168,8 @@ class TestGetFileInfo:
     async def test_has_tool_definition(self) -> None:
         defn = google_drive_get_file_info._tool_definition
         assert defn.name == "google_drive_get_file_info"
-        assert defn.provider == "google_drive"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -218,7 +221,8 @@ class TestMoveFile:
     async def test_has_tool_definition(self) -> None:
         defn = google_drive_move_file._tool_definition
         assert defn.name == "google_drive_move_file"
-        assert defn.provider == "google_drive"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -255,7 +259,8 @@ class TestSearch:
     async def test_has_tool_definition(self) -> None:
         defn = google_drive_search._tool_definition
         assert defn.name == "google_drive_search"
-        assert defn.provider == "google_drive"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
 
@@ -298,5 +303,6 @@ class TestShareFile:
     async def test_has_tool_definition(self) -> None:
         defn = google_drive_share_file._tool_definition
         assert defn.name == "google_drive_share_file"
-        assert defn.provider == "google_drive"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes

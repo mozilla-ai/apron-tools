@@ -97,7 +97,8 @@ class TestExploreWorkspace:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_explore_workspace._tool_definition
         assert defn.name == "microsoft_teams_explore_workspace"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "Team.ReadBasic.All" in defn.scopes
 
 
@@ -138,7 +139,8 @@ class TestGetChannelInfo:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_get_channel_info._tool_definition
         assert defn.name == "microsoft_teams_get_channel_info"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "Channel.ReadBasic.All" in defn.scopes
 
 
@@ -173,7 +175,8 @@ class TestListChats:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_list_chats._tool_definition
         assert defn.name == "microsoft_teams_list_chats"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "Chat.Read" in defn.scopes
 
 
@@ -213,7 +216,8 @@ class TestReadChatMessages:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_read_chat_messages._tool_definition
         assert defn.name == "microsoft_teams_read_chat_messages"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "Chat.Read" in defn.scopes
 
 
@@ -255,7 +259,8 @@ class TestReadChannelMessages:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_read_channel_messages._tool_definition
         assert defn.name == "microsoft_teams_read_channel_messages"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "ChannelMessage.Read.All" in defn.scopes
 
 
@@ -334,7 +339,8 @@ class TestReadMessageReplies:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_read_message_replies._tool_definition
         assert defn.name == "microsoft_teams_read_message_replies"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "ChannelMessage.Read.All" in defn.scopes
 
 
@@ -373,7 +379,8 @@ class TestSendChatMessage:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_send_chat_message._tool_definition
         assert defn.name == "microsoft_teams_send_chat_message"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "Chat.ReadWrite" in defn.scopes
 
 
@@ -420,5 +427,6 @@ class TestSendChannelMessage:
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_teams_send_channel_message._tool_definition
         assert defn.name == "microsoft_teams_send_channel_message"
-        assert defn.provider == "microsoft_teams"
+        assert defn.provider == "microsoft"
+        assert defn.service == "microsoft_teams"
         assert "ChannelMessage.Send" in defn.scopes

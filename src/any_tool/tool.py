@@ -14,6 +14,7 @@ def tool(
     scopes: Sequence[str],
     api_docs: str,
     provider: str = "",
+    service: str = "",
 ) -> Any:
     """Decorate a tool function to attach a ToolDefinition.
 
@@ -25,8 +26,9 @@ def tool(
     Args:
         scopes: OAuth scopes required to call this tool.
         api_docs: URL to the provider API documentation for this endpoint.
-        provider: Provider name override. Defaults to empty string
-            (set later by the registry from the package path).
+        provider: OAuth provider / company name (e.g. ``google``, ``slack``).
+        service: Specific product name (e.g. ``google_sheets``). Defaults
+            to ``provider`` for standalone providers.
     """
 
     def decorator(func: Any) -> Any:
@@ -44,9 +46,13 @@ def tool(
 
         description = (func.__doc__ or "").strip().split("\n")[0]
 
+        resolved_service = service or provider
+
         func._tool_definition = ToolDefinition(
             name=func.__name__,
             provider=provider,
+            service=resolved_service,
+            integration=resolved_service,
             description=description,
             input_schema=input_schema,
             output_schema=output_schema,

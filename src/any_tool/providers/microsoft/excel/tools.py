@@ -79,7 +79,8 @@ def _last_row_from_address(address: str) -> int:
 @tool(
     scopes=SCOPES["microsoft_excel_list_workbooks"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/driveitem-search",
-    provider="microsoft_excel",
+    provider="microsoft",
+    service="microsoft_excel",
 )
 async def microsoft_excel_list_workbooks(
     params: ListWorkbooksParams,
@@ -113,7 +114,8 @@ async def microsoft_excel_list_workbooks(
 @tool(
     scopes=SCOPES["microsoft_excel_get_workbook_info"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/workbook-list-worksheets",
-    provider="microsoft_excel",
+    provider="microsoft",
+    service="microsoft_excel",
 )
 async def microsoft_excel_get_workbook_info(
     params: GetWorkbookInfoParams,
@@ -158,7 +160,8 @@ async def microsoft_excel_get_workbook_info(
 @tool(
     scopes=SCOPES["microsoft_excel_read_worksheet"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/range-usedrange",
-    provider="microsoft_excel",
+    provider="microsoft",
+    service="microsoft_excel",
 )
 async def microsoft_excel_read_worksheet(
     params: ReadWorksheetParams,
@@ -190,7 +193,8 @@ async def microsoft_excel_read_worksheet(
 @tool(
     scopes=SCOPES["microsoft_excel_update_worksheet"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/range-update",
-    provider="microsoft_excel",
+    provider="microsoft",
+    service="microsoft_excel",
 )
 async def microsoft_excel_update_worksheet(
     params: UpdateWorksheetParams,
@@ -228,7 +232,8 @@ async def microsoft_excel_update_worksheet(
 @tool(
     scopes=SCOPES["microsoft_excel_append_row"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/range-update",
-    provider="microsoft_excel",
+    provider="microsoft",
+    service="microsoft_excel",
 )
 async def microsoft_excel_append_row(
     params: AppendRowParams,
@@ -320,7 +325,8 @@ async def microsoft_excel_append_row(
 @tool(
     scopes=SCOPES["microsoft_excel_create_workbook"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/driveitem-list-children",
-    provider="microsoft_excel",
+    provider="microsoft",
+    service="microsoft_excel",
 )
 async def microsoft_excel_create_workbook(
     params: CreateWorkbookParams,
@@ -373,7 +379,8 @@ async def microsoft_excel_create_workbook(
 @tool(
     scopes=SCOPES["microsoft_excel_add_worksheet"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/worksheetcollection-add",
-    provider="microsoft_excel",
+    provider="microsoft",
+    service="microsoft_excel",
 )
 async def microsoft_excel_add_worksheet(
     params: AddWorksheetParams,

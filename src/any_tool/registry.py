@@ -29,9 +29,18 @@ def discover_tools() -> list[ToolDefinition]:
 
 
 def get_tools_for_provider(provider: str) -> list[ToolDefinition]:
-    """Get tool definitions for a specific provider.
+    """Get all tools for an OAuth provider (e.g. 'google' returns Sheets + Gmail + Drive + ...).
 
     Args:
-        provider: Provider name to filter by.
+        provider: OAuth provider / company name to filter by.
     """
     return [td for td in discover_tools() if td.provider == provider]
+
+
+def get_tools_for_service(service: str) -> list[ToolDefinition]:
+    """Get tools for a specific service (e.g. 'google_sheets' returns just Sheets tools).
+
+    Args:
+        service: Service name to filter by.
+    """
+    return [td for td in discover_tools() if td.service == service]

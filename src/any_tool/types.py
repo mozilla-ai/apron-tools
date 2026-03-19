@@ -36,7 +36,13 @@ class ToolDefinition:
     """Tool name, e.g. ``typeform_list_forms``."""
 
     provider: str
-    """Provider name, e.g. ``typeform``."""
+    """OAuth provider / company, e.g. ``google``, ``atlassian``, ``slack``."""
+
+    service: str
+    """Specific product, e.g. ``google_sheets``, ``atlassian_jira``, ``slack``."""
+
+    integration: str
+    """Same as service. Kept for Octonous compatibility."""
 
     description: str
     """Human-readable description of what the tool does."""

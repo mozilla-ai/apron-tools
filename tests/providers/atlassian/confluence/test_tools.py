@@ -94,7 +94,8 @@ class TestExploreSpaces:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_confluence_explore_spaces._tool_definition
         assert defn.name == "atlassian_confluence_explore_spaces"
-        assert defn.provider == "atlassian_confluence"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
 
 
@@ -152,7 +153,8 @@ class TestGetPageContent:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_confluence_get_page_content._tool_definition
         assert defn.name == "atlassian_confluence_get_page_content"
-        assert defn.provider == "atlassian_confluence"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
 
 
@@ -204,7 +206,8 @@ class TestCreatePage:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_confluence_create_page._tool_definition
         assert defn.name == "atlassian_confluence_create_page"
-        assert defn.provider == "atlassian_confluence"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_confluence"
         assert "write:confluence-content" in defn.scopes
 
 
@@ -295,7 +298,8 @@ class TestUpdatePage:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_confluence_update_page._tool_definition
         assert defn.name == "atlassian_confluence_update_page"
-        assert defn.provider == "atlassian_confluence"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
         assert "write:confluence-content" in defn.scopes
 
@@ -353,7 +357,8 @@ class TestSearchContent:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_confluence_search_content._tool_definition
         assert defn.name == "atlassian_confluence_search_content"
-        assert defn.provider == "atlassian_confluence"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_confluence"
         assert "search:confluence" in defn.scopes
 
 
@@ -410,5 +415,6 @@ class TestGetChildPages:
     async def test_has_tool_definition(self) -> None:
         defn = atlassian_confluence_get_child_pages._tool_definition
         assert defn.name == "atlassian_confluence_get_child_pages"
-        assert defn.provider == "atlassian_confluence"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
