@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.salesforce.tools import (
+from apron_tools.providers.salesforce.tools import (
     _instance_url_cache,
     salesforce_create_record,
     salesforce_explore_org,
@@ -17,7 +17,7 @@ from any_tool.providers.salesforce.tools import (
     salesforce_search_records,
     salesforce_update_record,
 )
-from any_tool.providers.salesforce.types import (
+from apron_tools.providers.salesforce.types import (
     CreateRecordParams,
     CreateRecordResult,
     ExploreOrgParams,

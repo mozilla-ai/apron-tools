@@ -1,5 +1,5 @@
 [project]
-name = "any-tool"
+name = "apron-tools"
 dynamic = ["version"]
 description = "Agent-ready provider API wrappers with typed schemas, OAuth scope mappings, and LLM function-calling definitions."
 readme = "README.md"
@@ -12,15 +12,15 @@ dependencies = [
 
 [project.optional-dependencies]
 all = [
-    "any-tool[atlassian]",
-    "any-tool[github]",
-    "any-tool[google]",
-    "any-tool[linear]",
-    "any-tool[microsoft]",
-    "any-tool[notion]",
-    "any-tool[salesforce]",
-    "any-tool[slack]",
-    "any-tool[typeform]",
+    "apron-tools[atlassian]",
+    "apron-tools[github]",
+    "apron-tools[google]",
+    "apron-tools[linear]",
+    "apron-tools[microsoft]",
+    "apron-tools[notion]",
+    "apron-tools[salesforce]",
+    "apron-tools[slack]",
+    "apron-tools[typeform]",
 ]
 
 atlassian = ["atlassian-python-api>=3.0"]

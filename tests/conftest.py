@@ -1,4 +1,4 @@
-"""Shared test fixtures for any-tool."""
+"""Shared test fixtures for apron-tools."""
 
 from __future__ import annotations
 

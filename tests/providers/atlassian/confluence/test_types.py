@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from any_tool.providers.atlassian.confluence.types import (
+from apron_tools.providers.atlassian.confluence.types import (
     ChildPageSummary,
     CreatePageParams,
     CreatePageResult,

@@ -1,6 +1,6 @@
 """Tests to enforce the tool naming convention across all providers."""
 
-from any_tool import discover_tools
+from apron_tools import discover_tools
 
 
 class TestToolNamingConvention:

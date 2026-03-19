@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from any_tool.providers.github.tools import (
+from apron_tools.providers.github.tools import (
     github_add_issue_comment,
     github_create_issue,
     github_explore_releases,
@@ -21,7 +21,7 @@ from any_tool.providers.github.tools import (
     github_list_pull_requests,
     github_list_repositories,
 )
-from any_tool.providers.github.types import (
+from apron_tools.providers.github.types import (
     AddIssueCommentParams,
     AddIssueCommentResult,
     CreateIssueParams,
@@ -274,7 +274,7 @@ class TestListRepositories:
         data = _load_json("list_repositories.json")
         mock_repos = [_mock_repo_obj(r) for r in data]
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_user.return_value.get_repos.return_value.__getitem__ = lambda self, s: (
@@ -292,7 +292,7 @@ class TestListRepositories:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_user.side_effect = GithubException(401, {"message": "Bad credentials"}, None)
@@ -320,7 +320,7 @@ class TestGetRepository:
         data = _load_json("get_repository.json")
         mock_repo = _mock_repo_obj(data)
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_repo.return_value = mock_repo
@@ -339,7 +339,7 @@ class TestGetRepository:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
@@ -368,7 +368,7 @@ class TestListIssues:
         data = _load_json("list_issues.json")
         mock_issues = [_mock_issue(i) for i in data]
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -391,7 +391,7 @@ class TestListIssues:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_repo.side_effect = GithubException(403, {"message": "Forbidden"}, None)
@@ -423,7 +423,7 @@ class TestGetIssue:
         mock_comment = _mock_comment(comment_data)
         mock_issue.get_comments.return_value = [mock_comment]
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -445,7 +445,7 @@ class TestGetIssue:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -476,7 +476,7 @@ class TestCreateIssue:
         data = _load_json("create_issue.json")
         mock_issue = _mock_issue(data)
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -501,7 +501,7 @@ class TestCreateIssue:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -532,7 +532,7 @@ class TestAddIssueComment:
         data = _load_json("add_issue_comment.json")
         mock_comment = _mock_comment(data)
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -559,7 +559,7 @@ class TestAddIssueComment:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -595,7 +595,7 @@ class TestListPullRequests:
         data = _load_json("list_pull_requests.json")
         mock_prs = [_mock_pull_request(pr) for pr in data]
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -618,7 +618,7 @@ class TestListPullRequests:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
@@ -647,7 +647,7 @@ class TestGetPullRequest:
         data = _load_json("get_pull_request.json")
         mock_pr = _mock_pull_request(data)
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -670,7 +670,7 @@ class TestGetPullRequest:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -713,7 +713,7 @@ class TestListMilestones:
             for ms in data
         ]
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -734,7 +734,7 @@ class TestListMilestones:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
@@ -763,7 +763,7 @@ class TestGetFileContent:
         data = _load_json("get_file_content.json")
         mock_cf = _mock_content_file(data)
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -790,7 +790,7 @@ class TestGetFileContent:
             {"name": "utils", "path": "src/utils", "type": "dir", "size": 0, "sha": "def", "html_url": ""}
         )
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -809,7 +809,7 @@ class TestGetFileContent:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -840,7 +840,7 @@ class TestListBranches:
         data = _load_json("list_branches.json")
         mock_branches = [_mock_branch(b) for b in data]
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -861,7 +861,7 @@ class TestListBranches:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
@@ -890,7 +890,7 @@ class TestExploreReleases:
         data = _load_json("list_releases.json")
         mock_releases = [_mock_release(r) for r in data]
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -913,7 +913,7 @@ class TestExploreReleases:
         data = _load_json("get_release_by_tag.json")
         mock_release = _mock_release(data)
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
@@ -932,7 +932,7 @@ class TestExploreReleases:
     async def test_error(self) -> None:
         from github import GithubException
 
-        with patch("any_tool.providers.github.tools._build_client") as mock_build:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)

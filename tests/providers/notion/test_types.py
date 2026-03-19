@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from any_tool.providers.notion.types import (
+from apron_tools.providers.notion.types import (
     BlockObject,
     CreateDatabaseParams,
     CreateDatabaseResult,
@@ -481,14 +481,14 @@ class TestUpdateDatabaseSchemaResult:
 
 class TestEmbedExternalFileTypes:
     def test_params_defaults(self):
-        from any_tool.providers.notion.types import EmbedExternalFileParams
+        from apron_tools.providers.notion.types import EmbedExternalFileParams
 
         params = EmbedExternalFileParams(page_id="page-001", url="https://example.com/image.png")
         assert params.caption == ""
         assert params.file_type == "auto"
 
     def test_params_custom(self):
-        from any_tool.providers.notion.types import EmbedExternalFileParams
+        from apron_tools.providers.notion.types import EmbedExternalFileParams
 
         params = EmbedExternalFileParams(
             page_id="page-001", url="https://example.com/doc.pdf", caption="My file", file_type="file"
@@ -497,7 +497,7 @@ class TestEmbedExternalFileTypes:
         assert params.caption == "My file"
 
     def test_result_success(self):
-        from any_tool.providers.notion.types import EmbedExternalFileResult
+        from apron_tools.providers.notion.types import EmbedExternalFileResult
 
         result = EmbedExternalFileResult(
             success=True, block_type="image", file_url="https://example.com/img.png", page_id="page-001"
@@ -507,7 +507,7 @@ class TestEmbedExternalFileTypes:
         assert "page-001" in str(result)
 
     def test_result_error(self):
-        from any_tool.providers.notion.types import EmbedExternalFileResult
+        from apron_tools.providers.notion.types import EmbedExternalFileResult
 
         result = EmbedExternalFileResult(success=False, error="Forbidden")
         assert str(result) == "Error: Forbidden"

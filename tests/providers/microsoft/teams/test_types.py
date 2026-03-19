@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from any_tool.providers.microsoft.teams.types import (
+from apron_tools.providers.microsoft.teams.types import (
     ChannelInfo,
     ChatInfo,
     ExploreWorkspaceParams,

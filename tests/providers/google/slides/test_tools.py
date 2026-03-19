@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.google.slides.tools import (
+from apron_tools.providers.google.slides.tools import (
     google_slides_add_slide,
     google_slides_copy_presentation,
     google_slides_create_presentation,
@@ -20,7 +20,7 @@ from any_tool.providers.google.slides.tools import (
     google_slides_update_slide_text,
     google_slides_update_table_cell,
 )
-from any_tool.providers.google.slides.types import (
+from apron_tools.providers.google.slides.types import (
     AddSlideParams,
     AddSlideResult,
     CopyPresentationParams,
@@ -319,7 +319,7 @@ class TestUpdateSlideText:
             json=_load_json("batch_update_generic.json"),
         )
 
-        with patch("any_tool.providers.google.slides.tools.uuid.uuid4") as mock_uuid:
+        with patch("apron_tools.providers.google.slides.tools.uuid.uuid4") as mock_uuid:
             mock_uuid.return_value.hex = "aabbccdd11223344"
             result = await google_slides_update_slide_text(
                 UpdateSlideTextParams(

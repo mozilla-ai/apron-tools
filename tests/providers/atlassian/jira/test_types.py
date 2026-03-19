@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from any_tool.providers.atlassian.jira.types import (
+from apron_tools.providers.atlassian.jira.types import (
     AddCommentParams,
     AddCommentResult,
     AssignIssueParams,
@@ -332,7 +332,7 @@ class TestAddCommentResult:
 class TestListVersionsResult:
     def test_parse_versions(self):
         data = _load_json("list_versions.json")
-        from any_tool.providers.atlassian.jira.types import VersionSummary
+        from apron_tools.providers.atlassian.jira.types import VersionSummary
 
         versions = [VersionSummary.model_validate(v) for v in data["values"]]
         result = ListVersionsResult(success=True, versions=versions)
@@ -342,7 +342,7 @@ class TestListVersionsResult:
 
     def test_version_fields(self):
         data = _load_json("list_versions.json")
-        from any_tool.providers.atlassian.jira.types import VersionSummary
+        from apron_tools.providers.atlassian.jira.types import VersionSummary
 
         version = VersionSummary.model_validate(data["values"][0])
 
@@ -355,7 +355,7 @@ class TestListVersionsResult:
 
     def test_overdue_version(self):
         data = _load_json("list_versions.json")
-        from any_tool.providers.atlassian.jira.types import VersionSummary
+        from apron_tools.providers.atlassian.jira.types import VersionSummary
 
         version = VersionSummary.model_validate(data["values"][1])
 
@@ -364,7 +364,7 @@ class TestListVersionsResult:
 
     def test_str_output(self):
         data = _load_json("list_versions.json")
-        from any_tool.providers.atlassian.jira.types import VersionSummary
+        from apron_tools.providers.atlassian.jira.types import VersionSummary
 
         versions = [VersionSummary.model_validate(v) for v in data["values"]]
         result = ListVersionsResult(success=True, versions=versions)
@@ -392,7 +392,7 @@ class TestListVersionsResult:
 class TestListBoardsResult:
     def test_parse_boards(self):
         data = _load_json("list_boards.json")
-        from any_tool.providers.atlassian.jira.types import BoardSummary
+        from apron_tools.providers.atlassian.jira.types import BoardSummary
 
         boards = [BoardSummary.model_validate(b) for b in data["values"]]
         result = ListBoardsResult(success=True, boards=boards)
@@ -402,7 +402,7 @@ class TestListBoardsResult:
 
     def test_board_fields(self):
         data = _load_json("list_boards.json")
-        from any_tool.providers.atlassian.jira.types import BoardSummary
+        from apron_tools.providers.atlassian.jira.types import BoardSummary
 
         board = BoardSummary.model_validate(data["values"][0])
 
@@ -412,7 +412,7 @@ class TestListBoardsResult:
 
     def test_str_output(self):
         data = _load_json("list_boards.json")
-        from any_tool.providers.atlassian.jira.types import BoardSummary
+        from apron_tools.providers.atlassian.jira.types import BoardSummary
 
         boards = [BoardSummary.model_validate(b) for b in data["values"]]
         result = ListBoardsResult(success=True, boards=boards)
@@ -440,7 +440,7 @@ class TestListBoardsResult:
 class TestListSprintsResult:
     def test_parse_sprints(self):
         data = _load_json("list_sprints.json")
-        from any_tool.providers.atlassian.jira.types import SprintSummary
+        from apron_tools.providers.atlassian.jira.types import SprintSummary
 
         sprints = [SprintSummary.model_validate(s) for s in data["values"]]
         result = ListSprintsResult(success=True, sprints=sprints)
@@ -450,7 +450,7 @@ class TestListSprintsResult:
 
     def test_sprint_fields(self):
         data = _load_json("list_sprints.json")
-        from any_tool.providers.atlassian.jira.types import SprintSummary
+        from apron_tools.providers.atlassian.jira.types import SprintSummary
 
         sprint = SprintSummary.model_validate(data["values"][0])
 
@@ -464,7 +464,7 @@ class TestListSprintsResult:
 
     def test_active_sprint(self):
         data = _load_json("list_sprints.json")
-        from any_tool.providers.atlassian.jira.types import SprintSummary
+        from apron_tools.providers.atlassian.jira.types import SprintSummary
 
         sprint = SprintSummary.model_validate(data["values"][1])
 
@@ -474,7 +474,7 @@ class TestListSprintsResult:
 
     def test_str_output(self):
         data = _load_json("list_sprints.json")
-        from any_tool.providers.atlassian.jira.types import SprintSummary
+        from apron_tools.providers.atlassian.jira.types import SprintSummary
 
         sprints = [SprintSummary.model_validate(s) for s in data["values"]]
         result = ListSprintsResult(success=True, sprints=sprints)

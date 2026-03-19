@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from any_tool.providers.github.types import (
+from apron_tools.providers.github.types import (
     AddIssueCommentParams,
     AddIssueCommentResult,
     CreateIssueParams,
@@ -359,7 +359,7 @@ class TestAddIssueCommentResult:
 class TestListPullRequestsResult:
     def test_parse_api_response(self):
         data = _load_json("list_pull_requests.json")
-        from any_tool.providers.github.types import PullRequestSummary
+        from apron_tools.providers.github.types import PullRequestSummary
 
         prs = [PullRequestSummary.model_validate(pr) for pr in data]
         result = ListPullRequestsResult(success=True, pull_requests=prs)
@@ -371,7 +371,7 @@ class TestListPullRequestsResult:
 
     def test_head_base_refs(self):
         data = _load_json("list_pull_requests.json")
-        from any_tool.providers.github.types import PullRequestSummary
+        from apron_tools.providers.github.types import PullRequestSummary
 
         prs = [PullRequestSummary.model_validate(pr) for pr in data]
         pr = prs[0]
@@ -382,7 +382,7 @@ class TestListPullRequestsResult:
 
     def test_str_output(self):
         data = _load_json("list_pull_requests.json")
-        from any_tool.providers.github.types import PullRequestSummary
+        from apron_tools.providers.github.types import PullRequestSummary
 
         prs = [PullRequestSummary.model_validate(pr) for pr in data]
         result = ListPullRequestsResult(success=True, pull_requests=prs)
@@ -441,7 +441,7 @@ class TestGetPullRequestResult:
 class TestListMilestonesResult:
     def test_parse_api_response(self):
         data = _load_json("list_milestones.json")
-        from any_tool.providers.github.types import MilestoneSummary
+        from apron_tools.providers.github.types import MilestoneSummary
 
         milestones = [MilestoneSummary.model_validate(ms) for ms in data]
         result = ListMilestonesResult(success=True, milestones=milestones)
@@ -455,7 +455,7 @@ class TestListMilestonesResult:
 
     def test_str_output(self):
         data = _load_json("list_milestones.json")
-        from any_tool.providers.github.types import MilestoneSummary
+        from apron_tools.providers.github.types import MilestoneSummary
 
         milestones = [MilestoneSummary.model_validate(ms) for ms in data]
         result = ListMilestonesResult(success=True, milestones=milestones)
@@ -478,7 +478,7 @@ class TestListMilestonesResult:
 class TestGetFileContentResult:
     def test_parse_file_response(self):
         data = _load_json("get_file_content.json")
-        from any_tool.providers.github.types import FileContentEntry
+        from apron_tools.providers.github.types import FileContentEntry
 
         entry = FileContentEntry.model_validate(data)
         result = GetFileContentResult(
@@ -495,7 +495,7 @@ class TestGetFileContentResult:
 
     def test_str_output_file(self):
         data = _load_json("get_file_content.json")
-        from any_tool.providers.github.types import FileContentEntry
+        from apron_tools.providers.github.types import FileContentEntry
 
         entry = FileContentEntry.model_validate(data)
         result = GetFileContentResult(
@@ -509,7 +509,7 @@ class TestGetFileContentResult:
         assert "Hello World!" in text
 
     def test_str_output_directory(self):
-        from any_tool.providers.github.types import FileContentEntry
+        from apron_tools.providers.github.types import FileContentEntry
 
         dir_entry = FileContentEntry(name="src", path="src", type="dir")
         entries = [
@@ -541,7 +541,7 @@ class TestGetFileContentResult:
 class TestListBranchesResult:
     def test_parse_api_response(self):
         data = _load_json("list_branches.json")
-        from any_tool.providers.github.types import BranchSummary
+        from apron_tools.providers.github.types import BranchSummary
 
         branches = [BranchSummary.model_validate(b) for b in data]
         result = ListBranchesResult(success=True, branches=branches)
@@ -555,7 +555,7 @@ class TestListBranchesResult:
 
     def test_str_output(self):
         data = _load_json("list_branches.json")
-        from any_tool.providers.github.types import BranchSummary
+        from apron_tools.providers.github.types import BranchSummary
 
         branches = [BranchSummary.model_validate(b) for b in data]
         result = ListBranchesResult(success=True, branches=branches)

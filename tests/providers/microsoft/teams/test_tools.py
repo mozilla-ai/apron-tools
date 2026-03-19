@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.microsoft.teams.tools import (
+from apron_tools.providers.microsoft.teams.tools import (
     microsoft_teams_explore_workspace,
     microsoft_teams_get_channel_info,
     microsoft_teams_list_chats,
@@ -17,7 +17,7 @@ from any_tool.providers.microsoft.teams.tools import (
     microsoft_teams_send_channel_message,
     microsoft_teams_send_chat_message,
 )
-from any_tool.providers.microsoft.teams.types import (
+from apron_tools.providers.microsoft.teams.types import (
     ExploreWorkspaceParams,
     ExploreWorkspaceResult,
     GetChannelInfoParams,

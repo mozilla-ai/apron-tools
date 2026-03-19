@@ -7,14 +7,14 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.microsoft.outlook.tools import (
+from apron_tools.providers.microsoft.outlook.tools import (
     microsoft_outlook_create_draft,
     microsoft_outlook_list_emails,
     microsoft_outlook_read_email,
     microsoft_outlook_send_draft,
     microsoft_outlook_send_email,
 )
-from any_tool.providers.microsoft.outlook.types import (
+from apron_tools.providers.microsoft.outlook.types import (
     CreateDraftParams,
     CreateDraftResult,
     ListEmailsParams,

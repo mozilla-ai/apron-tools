@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.notion.tools import (
+from apron_tools.providers.notion.tools import (
     notion_create_database,
     notion_create_or_update_database_entry,
     notion_create_page,
@@ -19,7 +19,7 @@ from any_tool.providers.notion.tools import (
     notion_update_database_schema,
     notion_update_page,
 )
-from any_tool.providers.notion.types import (
+from apron_tools.providers.notion.types import (
     CreateDatabaseParams,
     CreateDatabaseResult,
     CreateOrUpdateDatabaseEntryParams,
@@ -670,8 +670,8 @@ class TestUpdateDatabaseSchema:
 
 class TestNotionEmbedExternalFile:
     async def test_embed_image_auto(self, httpx_mock) -> None:
-        from any_tool.providers.notion.tools import notion_embed_external_file
-        from any_tool.providers.notion.types import EmbedExternalFileParams
+        from apron_tools.providers.notion.tools import notion_embed_external_file
+        from apron_tools.providers.notion.types import EmbedExternalFileParams
 
         httpx_mock.add_response(json={"results": [{"object": "block", "id": "block-001"}]})
         result = await notion_embed_external_file(
@@ -683,8 +683,8 @@ class TestNotionEmbedExternalFile:
         assert result.page_id == "page-001"
 
     async def test_embed_file_auto(self, httpx_mock) -> None:
-        from any_tool.providers.notion.tools import notion_embed_external_file
-        from any_tool.providers.notion.types import EmbedExternalFileParams
+        from apron_tools.providers.notion.tools import notion_embed_external_file
+        from apron_tools.providers.notion.types import EmbedExternalFileParams
 
         httpx_mock.add_response(json={"results": [{"object": "block", "id": "block-001"}]})
         result = await notion_embed_external_file(
@@ -695,8 +695,8 @@ class TestNotionEmbedExternalFile:
         assert result.block_type == "file"
 
     async def test_embed_explicit_type(self, httpx_mock) -> None:
-        from any_tool.providers.notion.tools import notion_embed_external_file
-        from any_tool.providers.notion.types import EmbedExternalFileParams
+        from apron_tools.providers.notion.tools import notion_embed_external_file
+        from apron_tools.providers.notion.types import EmbedExternalFileParams
 
         httpx_mock.add_response(json={"results": [{"object": "block", "id": "block-001"}]})
         result = await notion_embed_external_file(
@@ -706,8 +706,8 @@ class TestNotionEmbedExternalFile:
         assert result.block_type == "image"
 
     async def test_api_error(self, httpx_mock) -> None:
-        from any_tool.providers.notion.tools import notion_embed_external_file
-        from any_tool.providers.notion.types import EmbedExternalFileParams
+        from apron_tools.providers.notion.tools import notion_embed_external_file
+        from apron_tools.providers.notion.types import EmbedExternalFileParams
 
         httpx_mock.add_response(status_code=403, text="Forbidden")
         result = await notion_embed_external_file(
@@ -718,7 +718,7 @@ class TestNotionEmbedExternalFile:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        from any_tool.providers.notion.tools import notion_embed_external_file
+        from apron_tools.providers.notion.tools import notion_embed_external_file
 
         defn = notion_embed_external_file._tool_definition
         assert defn.name == "notion_embed_external_file"

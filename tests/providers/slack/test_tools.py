@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
-from any_tool.providers.slack.tools import (
+from apron_tools.providers.slack.tools import (
     slack_add_reaction,
     slack_download_file,
     slack_edit_message,
@@ -24,7 +24,7 @@ from any_tool.providers.slack.tools import (
     slack_send_channel_message,
     slack_send_user_message,
 )
-from any_tool.providers.slack.types import (
+from apron_tools.providers.slack.types import (
     AddReactionParams,
     AddReactionResult,
     DownloadFileParams,
@@ -87,7 +87,7 @@ def _slack_api_error(error: str) -> SlackApiError:
 
 
 class TestSlackExploreWorkspace:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -105,7 +105,7 @@ class TestSlackExploreWorkspace:
         assert len(result.users) == 2
         assert result.users[0].name == "spengler"
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_team_info_error_still_succeeds(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -132,7 +132,7 @@ class TestSlackExploreWorkspace:
 
 
 class TestSlackSendChannelMessage:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -150,7 +150,7 @@ class TestSlackSendChannelMessage:
         assert result.ts == "1503435956.000247"
         client.chat_postMessage.assert_called_once_with(channel="C012AB3CD", text="Hello")
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_with_thread(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -166,7 +166,7 @@ class TestSlackSendChannelMessage:
             channel="C012AB3CD", text="Reply", thread_ts="1503435956.000247"
         )
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -194,7 +194,7 @@ class TestSlackSendChannelMessage:
 
 
 class TestSlackSendUserMessage:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -211,7 +211,7 @@ class TestSlackSendUserMessage:
         assert result.success is True
         client.conversations_open.assert_called_once_with(users="U012A3CDE")
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_open_conversation_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -238,7 +238,7 @@ class TestSlackSendUserMessage:
 
 
 class TestSlackReadChannelMessages:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -257,7 +257,7 @@ class TestSlackReadChannelMessages:
         assert result.has_more is True
         assert "W012A3CDE" in result.user_map
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_messages_reversed(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -273,7 +273,7 @@ class TestSlackReadChannelMessages:
         assert result.messages[0].ts == "1512085950.000100"
         assert result.messages[1].ts == "1512085950.000216"
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_limit_capped(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -289,7 +289,7 @@ class TestSlackReadChannelMessages:
         call_kwargs = client.conversations_history.call_args[1]
         assert call_kwargs["limit"] == 100
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -316,7 +316,7 @@ class TestSlackReadChannelMessages:
 
 
 class TestSlackGetChannelInfo:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -336,7 +336,7 @@ class TestSlackGetChannelInfo:
         assert result.topic == "Company-wide announcements and work-based matters"
         assert "team-wide communication" in result.purpose
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -363,7 +363,7 @@ class TestSlackGetChannelInfo:
 
 
 class TestSlackReadThread:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -382,7 +382,7 @@ class TestSlackReadThread:
         assert result.messages[0].text == "I find you punny and would like to smell your daisy."
         assert result.messages[1].text == "Haha that's a good one!"
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -409,7 +409,7 @@ class TestSlackReadThread:
 
 
 class TestSlackJoinChannel:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -426,7 +426,7 @@ class TestSlackJoinChannel:
         assert result.channel_name == "general"
         assert result.channel_id == "C012AB3CD"
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -453,7 +453,7 @@ class TestSlackJoinChannel:
 
 
 class TestSlackEditMessage:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -471,7 +471,7 @@ class TestSlackEditMessage:
         assert result.ts == "1503435956.000247"
         client.chat_update.assert_called_once_with(channel="C012AB3CD", ts="1503435956.000247", text="Updated text")
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -498,7 +498,7 @@ class TestSlackEditMessage:
 
 
 class TestSlackGetPermalink:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -514,7 +514,7 @@ class TestSlackGetPermalink:
         assert result.success is True
         assert "ghostbusters.slack.com" in result.permalink
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -541,7 +541,7 @@ class TestSlackGetPermalink:
 
 
 class TestSlackGetFileInfo:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -561,7 +561,7 @@ class TestSlackGetFileInfo:
         assert result.file.mimetype == "image/gif"
         assert result.file.size == 137531
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -588,7 +588,7 @@ class TestSlackGetFileInfo:
 
 
 class TestSlackDownloadFile:
-    @patch("any_tool.providers.slack.tools.httpx.AsyncClient")
+    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
     async def test_text_file(self, mock_cls: AsyncMock) -> None:
         mock_client = AsyncMock()
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -612,7 +612,7 @@ class TestSlackDownloadFile:
         assert result.content == "Hello, world!"
         assert result.mime_type == "text/plain"
 
-    @patch("any_tool.providers.slack.tools.httpx.AsyncClient")
+    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
     async def test_binary_file(self, mock_cls: AsyncMock) -> None:
         mock_client = AsyncMock()
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -634,7 +634,7 @@ class TestSlackDownloadFile:
         assert result.mime_type == "image/png"
         assert len(result.content) > 0
 
-    @patch("any_tool.providers.slack.tools.httpx.AsyncClient")
+    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
     async def test_file_too_large(self, mock_cls: AsyncMock) -> None:
         mock_client = AsyncMock()
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -655,7 +655,7 @@ class TestSlackDownloadFile:
         assert result.success is False
         assert "too large" in result.error
 
-    @patch("any_tool.providers.slack.tools.httpx.AsyncClient")
+    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
     async def test_http_error(self, mock_cls: AsyncMock) -> None:
         mock_client = AsyncMock()
         mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -687,7 +687,7 @@ class TestSlackDownloadFile:
 
 
 class TestSlackGetReactions:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success_message(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -716,7 +716,7 @@ class TestSlackGetReactions:
         assert result.success is False
         assert "Must provide" in result.error
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -743,7 +743,7 @@ class TestSlackGetReactions:
 
 
 class TestSlackAddReaction:
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -762,7 +762,7 @@ class TestSlackAddReaction:
             channel="C012AB3CD", timestamp="1512085950.000216", name="thumbsup"
         )
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_strips_colons(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -797,7 +797,7 @@ class TestSlackAddReaction:
         assert result.success is False
         assert "invalid" in result.error
 
-    @patch("any_tool.providers.slack.tools.AsyncWebClient")
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_api_error(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
