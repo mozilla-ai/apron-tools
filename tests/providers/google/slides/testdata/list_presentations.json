@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "id": "pres-001",
+      "name": "Q1 Review",
+      "createdTime": "2024-01-15T10:00:00Z",
+      "modifiedTime": "2024-03-10T14:22:00Z"
+    },
+    {
+      "id": "pres-002",
+      "name": "Team Kickoff",
+      "createdTime": "2024-02-01T09:00:00Z",
+      "modifiedTime": "2024-03-12T16:45:00Z"
+    }
+  ]
+}

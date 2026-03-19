@@ -1,0 +1,76 @@
+{
+  "presentationId": "pres-001",
+  "title": "Q1 Review",
+  "pageSize": {
+    "width": {"magnitude": 9144000, "unit": "EMU"},
+    "height": {"magnitude": 6858000, "unit": "EMU"}
+  },
+  "slides": [
+    {
+      "objectId": "slide-001",
+      "pageElements": [
+        {
+          "objectId": "elem-001",
+          "size": {
+            "width": {"magnitude": 3000000, "unit": "EMU"},
+            "height": {"magnitude": 1000000, "unit": "EMU"}
+          },
+          "transform": {},
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "text": {
+              "textElements": [
+                {
+                  "startIndex": 0,
+                  "endIndex": 10,
+                  "textRun": {
+                    "content": "Q1 Review\n",
+                    "style": {}
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "slideProperties": {"layoutObjectId": "layout-001"}
+    },
+    {
+      "objectId": "slide-002",
+      "pageElements": [
+        {
+          "objectId": "elem-002",
+          "size": {
+            "width": {"magnitude": 3000000, "unit": "EMU"},
+            "height": {"magnitude": 1000000, "unit": "EMU"}
+          },
+          "transform": {},
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "text": {
+              "textElements": [
+                {
+                  "startIndex": 0,
+                  "endIndex": 8,
+                  "textRun": {
+                    "content": "Summary\n",
+                    "style": {}
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "slideProperties": {"layoutObjectId": "layout-001"}
+    }
+  ],
+  "masters": [{"objectId": "master-001"}],
+  "layouts": [
+    {
+      "objectId": "layout-001",
+      "layoutProperties": {"name": "BLANK", "displayName": "Blank"}
+    }
+  ],
+  "revisionId": "rev-001"
+}

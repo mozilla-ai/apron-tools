@@ -6,6 +6,7 @@ API docs:
   - Drive: https://developers.google.com/drive/api/reference/rest/v3
   - Gmail: https://developers.google.com/workspace/gmail/api/reference/rest
   - Sheets: https://developers.google.com/workspace/sheets/api/reference/rest
+  - Slides: https://developers.google.com/workspace/slides/api/reference/rest
 """
 
 from .calendar import (
@@ -52,33 +53,53 @@ from .sheets import (
     read_spreadsheet,
     update_spreadsheet,
 )
+from .slides import (
+    add_slide,
+    copy_presentation,
+    create_presentation,
+    duplicate_slide,
+    format_text,
+    insert_element,
+    list_presentations,
+    read_presentation,
+    update_slide_text,
+    update_table_cell,
+)
 
 __all__ = [
     "add_label_to_email",
     "add_sheet",
+    "add_slide",
     "append_row",
     "copy_document",
+    "copy_presentation",
     "copy_spreadsheet",
     "create_document",
     "create_draft",
     "create_event",
     "create_folder",
+    "create_presentation",
     "create_spreadsheet",
+    "duplicate_slide",
     "edit_draft",
     "find_row",
+    "format_text",
     "get_event",
     "get_file_info",
     "get_thread_replies",
+    "insert_element",
     "list_calendars",
     "list_documents",
     "list_emails",
     "list_events",
     "list_files",
     "list_labels",
+    "list_presentations",
     "list_spreadsheets",
     "move_file",
     "read_document",
     "read_email",
+    "read_presentation",
     "read_spreadsheet",
     "remove_label_from_email",
     "reply_to_email",
@@ -87,5 +108,7 @@ __all__ = [
     "share_file",
     "update_document",
     "update_event",
+    "update_slide_text",
     "update_spreadsheet",
+    "update_table_cell",
 ]
