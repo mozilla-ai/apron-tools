@@ -1,0 +1,13 @@
+{
+  "value": [
+    {
+      "id": "item-002",
+      "name": "budget.xlsx",
+      "file": {"mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+      "webUrl": "https://contoso.sharepoint.com/sites/siteA/Documents/budget.xlsx",
+      "size": 12345,
+      "lastModifiedDateTime": "2024-03-12T16:45:00Z",
+      "parentReference": {"id": "root-001", "path": "/drives/drive-001/root:/Documents"}
+    }
+  ]
+}
