@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ToolResult(BaseModel):
@@ -76,3 +76,54 @@ class CapabilityGroup:
 
     scopes: list[str]
     """Union of all OAuth scopes required by this provider's tools."""
+
+
+# ---------------------------------------------------------------------------
+# File input types for upload tools
+# ---------------------------------------------------------------------------
+
+
+class FileFromBytes(BaseModel):
+    """File provided as raw bytes.
+
+    For programmatic callers that already have file data in memory.
+    """
+
+    type: Literal["bytes"] = "bytes"
+    data: bytes
+    """Raw file content."""
+
+    filename: str
+    """Filename for the uploaded file."""
+
+    mime_type: str
+    """MIME type of the file content."""
+
+
+class FileFromUrl(BaseModel):
+    """File to be fetched from a URL.
+
+    The tool function downloads the file before uploading to the provider.
+    Filename and MIME type are inferred from the HTTP response when not provided.
+    """
+
+    type: Literal["url"] = "url"
+    url: str
+    """URL to fetch the file from."""
+
+    filename: str | None = None
+    """Override filename. Inferred from the URL or Content-Disposition header if not provided."""
+
+    mime_type: str | None = None
+    """Override MIME type. Inferred from the Content-Type header if not provided."""
+
+
+FileInput = Annotated[
+    FileFromBytes | FileFromUrl,
+    Field(discriminator="type"),
+]
+"""File input for upload tools.
+
+A discriminated union: provide either a URL to fetch from or raw bytes.
+LLM callers typically use ``FileFromUrl``; programmatic callers may use either.
+"""
