@@ -1,4 +1,13 @@
-from any_tool.types import CapabilityGroup, ToolDefinition, ToolResult
+from pydantic import TypeAdapter
+
+from any_tool.types import (
+    CapabilityGroup,
+    FileFromBytes,
+    FileFromUrl,
+    FileInput,
+    ToolDefinition,
+    ToolResult,
+)
 
 
 class TestToolResult:
@@ -100,3 +109,51 @@ class TestCapabilityGroup:
             raise AssertionError("Expected FrozenInstanceError")
         except AttributeError:
             pass
+
+
+class TestFileFromBytes:
+    def test_fields(self):
+        f = FileFromBytes(data=b"hello", filename="test.txt", mime_type="text/plain")
+        assert f.type == "bytes"
+        assert f.data == b"hello"
+        assert f.filename == "test.txt"
+        assert f.mime_type == "text/plain"
+
+    def test_type_literal(self):
+        f = FileFromBytes(data=b"x", filename="x.bin", mime_type="application/octet-stream")
+        assert f.type == "bytes"
+
+
+class TestFileFromUrl:
+    def test_fields(self):
+        f = FileFromUrl(url="https://example.com/report.pdf")
+        assert f.type == "url"
+        assert f.url == "https://example.com/report.pdf"
+        assert f.filename is None
+        assert f.mime_type is None
+
+    def test_with_overrides(self):
+        f = FileFromUrl(url="https://example.com/file", filename="report.pdf", mime_type="application/pdf")
+        assert f.filename == "report.pdf"
+        assert f.mime_type == "application/pdf"
+
+
+class TestFileInput:
+    def test_discriminated_union_url(self):
+        adapter = TypeAdapter(FileInput)
+        result = adapter.validate_python({"type": "url", "url": "https://example.com/img.png"})
+        assert isinstance(result, FileFromUrl)
+        assert result.url == "https://example.com/img.png"
+
+    def test_discriminated_union_bytes(self):
+        adapter = TypeAdapter(FileInput)
+        result = adapter.validate_python(
+            {"type": "bytes", "data": b"raw", "filename": "f.bin", "mime_type": "application/octet-stream"}
+        )
+        assert isinstance(result, FileFromBytes)
+        assert result.data == b"raw"
+
+    def test_json_schema_has_discriminator(self):
+        adapter = TypeAdapter(FileInput)
+        schema = adapter.json_schema()
+        assert "anyOf" in schema or "oneOf" in schema or "discriminator" in schema
