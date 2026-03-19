@@ -2,6 +2,7 @@
 
 API docs:
   - Excel: https://learn.microsoft.com/en-us/graph/api/resources/excel
+  - SharePoint: https://learn.microsoft.com/en-us/graph/api/resources/sharepoint
   - Teams: https://learn.microsoft.com/en-us/graph/api/resources/teams-api-overview
 """
 
@@ -13,6 +14,14 @@ from .excel import (
     microsoft_excel_list_workbooks,
     microsoft_excel_read_worksheet,
     microsoft_excel_update_worksheet,
+)
+from .sharepoint import (
+    microsoft_sharepoint_create_folder,
+    microsoft_sharepoint_explore_drive,
+    microsoft_sharepoint_list_drives,
+    microsoft_sharepoint_list_sites,
+    microsoft_sharepoint_move_file,
+    microsoft_sharepoint_search,
 )
 from .teams import (
     microsoft_teams_explore_workspace,
@@ -33,6 +42,12 @@ __all__ = [
     "microsoft_excel_list_workbooks",
     "microsoft_excel_read_worksheet",
     "microsoft_excel_update_worksheet",
+    "microsoft_sharepoint_create_folder",
+    "microsoft_sharepoint_explore_drive",
+    "microsoft_sharepoint_list_drives",
+    "microsoft_sharepoint_list_sites",
+    "microsoft_sharepoint_move_file",
+    "microsoft_sharepoint_search",
     "microsoft_teams_explore_workspace",
     "microsoft_teams_get_channel_info",
     "microsoft_teams_list_chats",

@@ -1,0 +1,22 @@
+{
+  "value": [
+    {
+      "id": "item-001",
+      "name": "Reports",
+      "folder": {"childCount": 5},
+      "webUrl": "https://contoso.sharepoint.com/sites/siteA/Documents/Reports",
+      "size": 0,
+      "lastModifiedDateTime": "2024-03-10T14:22:00Z",
+      "lastModifiedBy": {"user": {"displayName": "Alice Smith"}}
+    },
+    {
+      "id": "item-002",
+      "name": "budget.xlsx",
+      "file": {"mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+      "webUrl": "https://contoso.sharepoint.com/sites/siteA/Documents/budget.xlsx",
+      "size": 12345,
+      "lastModifiedDateTime": "2024-03-12T16:45:00Z",
+      "lastModifiedBy": {"user": {"displayName": "Bob Jones"}}
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "id": "item-002",
+  "name": "budget.xlsx",
+  "parentReference": {"id": "item-003", "path": "/drives/drive-001/root:/New Folder"},
+  "webUrl": "https://contoso.sharepoint.com/sites/siteA/Documents/New%20Folder/budget.xlsx"
+}

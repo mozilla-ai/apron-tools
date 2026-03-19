@@ -1,0 +1,26 @@
+{
+  "value": [
+    {
+      "id": "contoso.sharepoint.com,site-001,web-001",
+      "name": "Contoso USA",
+      "webUrl": "https://contoso.sharepoint.com",
+      "isPersonalSite": false,
+      "root": {},
+      "siteCollection": {
+        "hostname": "contoso.sharepoint.com",
+        "dataLocationCode": "NAM",
+        "root": {}
+      }
+    },
+    {
+      "id": "contoso.sharepoint.com,site-002,web-002",
+      "name": "Site A",
+      "webUrl": "https://contoso.sharepoint.com/sites/siteA",
+      "isPersonalSite": false,
+      "root": {},
+      "siteCollection": {
+        "hostname": "contoso.sharepoint.com"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "value": [
+    {
+      "id": "drive-001",
+      "name": "Documents",
+      "driveType": "documentLibrary",
+      "webUrl": "https://contoso.sharepoint.com/sites/siteA/Documents",
+      "owner": {"group": {"displayName": "Site A Members"}},
+      "quota": {"total": 27487790694400, "used": 1234567890}
+    },
+    {
+      "id": "drive-002",
+      "name": "Project Files",
+      "driveType": "documentLibrary",
+      "webUrl": "https://contoso.sharepoint.com/sites/siteA/ProjectFiles",
+      "owner": {"group": {"displayName": "Site A Owners"}},
+      "quota": {"total": 27487790694400, "used": 0}
+    }
+  ]
+}
