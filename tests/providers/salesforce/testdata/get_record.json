@@ -1,0 +1,11 @@
+{
+  "attributes": {
+    "type": "Account",
+    "url": "/services/data/v62.0/sobjects/Account/001-001"
+  },
+  "AccountNumber": "CD656092",
+  "BillingPostalCode": "27215",
+  "Id": "001-001",
+  "Name": "Acme Corp",
+  "Industry": "Technology"
+}

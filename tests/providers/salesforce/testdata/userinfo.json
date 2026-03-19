@@ -1,0 +1,6 @@
+{
+  "sub": "https://login.salesforce.com/id/org-001/user-001",
+  "urls": {
+    "custom_domain": "https://mycompany.my.salesforce.com"
+  }
+}
