@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "id": "ws-001",
+      "position": 0,
+      "name": "Sheet1",
+      "visibility": "Visible"
+    },
+    {
+      "id": "ws-002",
+      "position": 1,
+      "name": "Data",
+      "visibility": "Visible"
+    }
+  ]
+}
