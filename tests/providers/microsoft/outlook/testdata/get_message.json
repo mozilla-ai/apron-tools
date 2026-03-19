@@ -1,0 +1,31 @@
+{
+  "id": "msg-001",
+  "subject": "You have late tasks!",
+  "bodyPreview": "You have tasks that are past due...",
+  "body": {
+    "contentType": "html",
+    "content": "<html><body><p>You have tasks that are past due.</p></body></html>"
+  },
+  "importance": "normal",
+  "isRead": false,
+  "isDraft": false,
+  "hasAttachments": false,
+  "receivedDateTime": "2024-03-15T10:00:00Z",
+  "sentDateTime": "2024-03-15T09:59:00Z",
+  "from": {
+    "emailAddress": {
+      "name": "Microsoft Planner",
+      "address": "noreply@planner.office365.com"
+    }
+  },
+  "toRecipients": [
+    {
+      "emailAddress": {
+        "name": "Alice Smith",
+        "address": "alice@contoso.com"
+      }
+    }
+  ],
+  "ccRecipients": [],
+  "replyTo": []
+}
