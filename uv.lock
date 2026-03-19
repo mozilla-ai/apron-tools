@@ -213,6 +213,7 @@ requires-dist = [
     { name = "any-tool", extras = ["atlassian"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["github"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["google"], marker = "extra == 'all'" },
+    { name = "any-tool", extras = ["linear"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["notion"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["slack"], marker = "extra == 'all'" },
     { name = "any-tool", extras = ["typeform"], marker = "extra == 'all'" },
@@ -224,7 +225,7 @@ requires-dist = [
     { name = "pygithub", marker = "extra == 'github'", specifier = ">=2.0" },
     { name = "slack-sdk", extras = ["optional"], marker = "extra == 'slack'", specifier = ">=3.0" },
 ]
-provides-extras = ["all", "atlassian", "github", "google", "notion", "slack", "typeform"]
+provides-extras = ["all", "atlassian", "github", "google", "linear", "notion", "slack", "typeform"]
 
 [package.metadata.requires-dev]
 dev = [

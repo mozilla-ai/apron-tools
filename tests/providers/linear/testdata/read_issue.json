@@ -1,0 +1,57 @@
+{
+  "data": {
+    "issue": {
+      "id": "issue-001",
+      "identifier": "ENG-123",
+      "title": "Fix login bug",
+      "description": "Users can't login with SSO",
+      "priority": 1,
+      "priorityLabel": "Urgent",
+      "estimate": 3,
+      "state": {
+        "id": "state-001",
+        "name": "In Progress",
+        "type": "started"
+      },
+      "assignee": {
+        "id": "user-001",
+        "name": "Alice Smith"
+      },
+      "team": {
+        "id": "team-001",
+        "name": "Engineering"
+      },
+      "labels": {
+        "nodes": [
+          {
+            "id": "label-001",
+            "name": "bug"
+          }
+        ]
+      },
+      "project": {
+        "id": "project-001",
+        "name": "Q1 Sprint"
+      },
+      "cycle": {
+        "id": "cycle-001",
+        "name": "Sprint 5"
+      },
+      "comments": {
+        "nodes": [
+          {
+            "body": "I'll take a look at this today",
+            "user": {
+              "id": "user-001",
+              "name": "Alice Smith"
+            },
+            "createdAt": "2024-03-11T09:00:00Z"
+          }
+        ]
+      },
+      "createdAt": "2024-03-10T10:00:00Z",
+      "updatedAt": "2024-03-12T14:30:00Z",
+      "url": "https://linear.app/team/issue/ENG-123"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "issue-001",
+          "identifier": "ENG-123",
+          "title": "Fix login bug",
+          "description": "Users can't login with SSO",
+          "priority": 1,
+          "state": {
+            "id": "state-001",
+            "name": "In Progress",
+            "type": "started"
+          },
+          "assignee": {
+            "id": "user-001",
+            "name": "Alice Smith"
+          },
+          "team": {
+            "id": "team-001",
+            "name": "Engineering"
+          },
+          "createdAt": "2024-03-10T10:00:00Z",
+          "updatedAt": "2024-03-12T14:30:00Z"
+        }
+      ]
+    }
+  }
+}

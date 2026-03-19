@@ -1,0 +1,27 @@
+{
+  "data": {
+    "projects": {
+      "nodes": [
+        {
+          "id": "project-001",
+          "name": "Q1 Sprint",
+          "description": "Q1 goals",
+          "state": "started",
+          "progress": 0.45,
+          "startDate": "2024-01-01",
+          "targetDate": "2024-03-31",
+          "teams": {
+            "nodes": [
+              {
+                "id": "team-001",
+                "name": "Engineering"
+              }
+            ]
+          },
+          "createdAt": "2024-01-01T00:00:00Z",
+          "updatedAt": "2024-03-12T14:30:00Z"
+        }
+      ]
+    }
+  }
+}

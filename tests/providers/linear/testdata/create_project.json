@@ -1,0 +1,12 @@
+{
+  "data": {
+    "projectCreate": {
+      "success": true,
+      "project": {
+        "id": "project-002",
+        "name": "New Project",
+        "url": "https://linear.app/team/project/new-project"
+      }
+    }
+  }
+}
