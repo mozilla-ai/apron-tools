@@ -1,0 +1,22 @@
+{
+  "totalSize": 2,
+  "done": true,
+  "records": [
+    {
+      "attributes": {
+        "type": "Contact",
+        "url": "/services/data/v62.0/sobjects/Contact/003-001"
+      },
+      "Id": "003-001",
+      "Name": "John Smith"
+    },
+    {
+      "attributes": {
+        "type": "Contact",
+        "url": "/services/data/v62.0/sobjects/Contact/003-002"
+      },
+      "Id": "003-002",
+      "Name": "Jane Doe"
+    }
+  ]
+}

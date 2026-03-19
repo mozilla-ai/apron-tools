@@ -1,0 +1,62 @@
+{
+  "encoding": "UTF-8",
+  "maxBatchSize": 200,
+  "sobjects": [
+    {
+      "activateable": false,
+      "custom": false,
+      "customSetting": false,
+      "createable": true,
+      "deletable": true,
+      "deprecatedAndHidden": false,
+      "feedEnabled": true,
+      "keyPrefix": "001",
+      "label": "Account",
+      "labelPlural": "Accounts",
+      "layoutable": true,
+      "mergeable": true,
+      "mruEnabled": true,
+      "name": "Account",
+      "queryable": true,
+      "replicateable": true,
+      "retrieveable": true,
+      "searchable": true,
+      "triggerable": true,
+      "undeletable": true,
+      "updateable": true,
+      "urls": {
+        "sobject": "/services/data/v62.0/sobjects/Account",
+        "describe": "/services/data/v62.0/sobjects/Account/describe",
+        "rowTemplate": "/services/data/v62.0/sobjects/Account/{ID}"
+      }
+    },
+    {
+      "activateable": false,
+      "custom": true,
+      "customSetting": false,
+      "createable": true,
+      "deletable": true,
+      "deprecatedAndHidden": false,
+      "feedEnabled": false,
+      "keyPrefix": "a00",
+      "label": "Invoice",
+      "labelPlural": "Invoices",
+      "layoutable": true,
+      "mergeable": false,
+      "mruEnabled": false,
+      "name": "Invoice__c",
+      "queryable": true,
+      "replicateable": true,
+      "retrieveable": true,
+      "searchable": true,
+      "triggerable": true,
+      "undeletable": true,
+      "updateable": true,
+      "urls": {
+        "sobject": "/services/data/v62.0/sobjects/Invoice__c",
+        "describe": "/services/data/v62.0/sobjects/Invoice__c/describe",
+        "rowTemplate": "/services/data/v62.0/sobjects/Invoice__c/{ID}"
+      }
+    }
+  ]
+}

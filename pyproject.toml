@@ -18,6 +18,7 @@ all = [
     "any-tool[linear]",
     "any-tool[microsoft]",
     "any-tool[notion]",
+    "any-tool[salesforce]",
     "any-tool[slack]",
     "any-tool[typeform]",
 ]
@@ -28,6 +29,7 @@ google = ["google-api-python-client>=2.0"]
 linear = []
 microsoft = ["msgraph-sdk>=1.0"]
 notion = ["notion-client>=2.0"]
+salesforce = ["simple-salesforce>=1.0"]
 slack = ["slack_sdk[optional]>=3.0"]
 typeform = []
 
