@@ -16,9 +16,9 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
     To run integration tests::
 
-        TYPEFORM_TOKEN=xxx uv run pytest -m integration
+        APRON_TOOLS_INTEGRATION_TESTS=1 GOOGLE_TOKEN=... uv run pytest -m integration
     """
-    skip_integration = pytest.mark.skip(reason="integration tests require credentials (set provider token env vars)")
+    skip_integration = pytest.mark.skip(reason="set APRON_TOOLS_INTEGRATION_TESTS=1 and provider credentials to run")
     for item in items:
-        if "integration" in item.keywords and not os.environ.get("ANY_TOOL_INTEGRATION_TESTS"):
+        if "integration" in item.keywords and not os.environ.get("APRON_TOOLS_INTEGRATION_TESTS"):
             item.add_marker(skip_integration)
