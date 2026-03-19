@@ -1,0 +1,16 @@
+{
+  "id": "msg-003",
+  "createdDateTime": "2024-03-15T11:00:00Z",
+  "messageType": "message",
+  "body": {
+    "contentType": "text",
+    "content": "Hello everyone!"
+  },
+  "from": {
+    "user": {
+      "id": "user-001",
+      "displayName": "Alice Smith"
+    }
+  },
+  "importance": "normal"
+}

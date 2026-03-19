@@ -1,0 +1,18 @@
+{
+  "value": [
+    {
+      "id": "chat-001",
+      "chatType": "oneOnOne",
+      "createdDateTime": "2024-03-10T09:00:00Z",
+      "lastUpdatedDateTime": "2024-03-15T10:30:00Z",
+      "topic": null
+    },
+    {
+      "id": "chat-002",
+      "chatType": "group",
+      "createdDateTime": "2024-03-12T14:00:00Z",
+      "lastUpdatedDateTime": "2024-03-15T11:00:00Z",
+      "topic": "Project Planning"
+    }
+  ]
+}
