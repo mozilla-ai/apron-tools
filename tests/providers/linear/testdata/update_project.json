@@ -1,0 +1,11 @@
+{
+  "data": {
+    "projectUpdate": {
+      "success": true,
+      "project": {
+        "id": "project-001",
+        "name": "Q1 Sprint (updated)"
+      }
+    }
+  }
+}

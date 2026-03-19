@@ -1,0 +1,12 @@
+{
+  "data": {
+    "issueUpdate": {
+      "success": true,
+      "issue": {
+        "id": "issue-001",
+        "identifier": "ENG-123",
+        "title": "Fix login bug (updated)"
+      }
+    }
+  }
+}

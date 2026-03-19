@@ -1,0 +1,13 @@
+{
+  "data": {
+    "issueCreate": {
+      "success": true,
+      "issue": {
+        "id": "issue-002",
+        "identifier": "ENG-124",
+        "title": "New issue",
+        "url": "https://linear.app/team/issue/ENG-124"
+      }
+    }
+  }
+}

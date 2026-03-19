@@ -1,0 +1,20 @@
+{
+  "data": {
+    "teams": {
+      "nodes": [
+        {
+          "id": "team-001",
+          "name": "Engineering",
+          "key": "ENG",
+          "description": "Engineering team"
+        },
+        {
+          "id": "team-002",
+          "name": "Design",
+          "key": "DES",
+          "description": "Design team"
+        }
+      ]
+    }
+  }
+}
