@@ -1,0 +1,65 @@
+{
+  "value": [
+    {
+      "id": "msg-001",
+      "subject": "You have late tasks!",
+      "bodyPreview": "You have tasks that are past due...",
+      "importance": "normal",
+      "isRead": false,
+      "isDraft": false,
+      "hasAttachments": false,
+      "receivedDateTime": "2024-03-15T10:00:00Z",
+      "sentDateTime": "2024-03-15T09:59:00Z",
+      "from": {
+        "emailAddress": {
+          "name": "Microsoft Planner",
+          "address": "noreply@planner.office365.com"
+        }
+      },
+      "toRecipients": [
+        {
+          "emailAddress": {
+            "name": "Alice Smith",
+            "address": "alice@contoso.com"
+          }
+        }
+      ],
+      "ccRecipients": [],
+      "replyTo": []
+    },
+    {
+      "id": "msg-002",
+      "subject": "Weekly sync notes",
+      "bodyPreview": "Here are the notes from today's sync...",
+      "importance": "normal",
+      "isRead": true,
+      "isDraft": false,
+      "hasAttachments": true,
+      "receivedDateTime": "2024-03-14T15:30:00Z",
+      "sentDateTime": "2024-03-14T15:29:00Z",
+      "from": {
+        "emailAddress": {
+          "name": "Bob Jones",
+          "address": "bob@contoso.com"
+        }
+      },
+      "toRecipients": [
+        {
+          "emailAddress": {
+            "name": "Alice Smith",
+            "address": "alice@contoso.com"
+          }
+        }
+      ],
+      "ccRecipients": [
+        {
+          "emailAddress": {
+            "name": "Carol White",
+            "address": "carol@contoso.com"
+          }
+        }
+      ],
+      "replyTo": []
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "msg-draft-001",
+  "subject": "Draft email",
+  "body": {
+    "contentType": "text",
+    "content": "Draft content here"
+  },
+  "importance": "normal",
+  "isRead": true,
+  "isDraft": true,
+  "hasAttachments": false,
+  "receivedDateTime": null,
+  "sentDateTime": null,
+  "from": null,
+  "toRecipients": [
+    {
+      "emailAddress": {
+        "name": "Bob Jones",
+        "address": "bob@contoso.com"
+      }
+    }
+  ],
+  "ccRecipients": [],
+  "replyTo": []
+}
