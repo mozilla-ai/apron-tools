@@ -63,11 +63,11 @@ def _extract_slide_text(slide: dict) -> list[str]:
 
 
 @tool(
-    scopes=SCOPES["list_presentations"],
+    scopes=SCOPES["google_slides_list_presentations"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
     provider="google_slides",
 )
-async def list_presentations(
+async def google_slides_list_presentations(
     params: ListPresentationsParams,
     *,
     token: str,
@@ -106,11 +106,11 @@ async def list_presentations(
 
 
 @tool(
-    scopes=SCOPES["create_presentation"],
+    scopes=SCOPES["google_slides_create_presentation"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/create",
     provider="google_slides",
 )
-async def create_presentation(
+async def google_slides_create_presentation(
     params: CreatePresentationParams,
     *,
     token: str,
@@ -139,11 +139,11 @@ async def create_presentation(
 
 
 @tool(
-    scopes=SCOPES["copy_presentation"],
+    scopes=SCOPES["google_slides_copy_presentation"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/copy",
     provider="google_slides",
 )
-async def copy_presentation(
+async def google_slides_copy_presentation(
     params: CopyPresentationParams,
     *,
     token: str,
@@ -191,11 +191,11 @@ async def copy_presentation(
 
 
 @tool(
-    scopes=SCOPES["read_presentation"],
+    scopes=SCOPES["google_slides_read_presentation"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/get",
     provider="google_slides",
 )
-async def read_presentation(
+async def google_slides_read_presentation(
     params: ReadPresentationParams,
     *,
     token: str,
@@ -243,11 +243,11 @@ async def read_presentation(
 
 
 @tool(
-    scopes=SCOPES["add_slide"],
+    scopes=SCOPES["google_slides_add_slide"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
     provider="google_slides",
 )
-async def add_slide(
+async def google_slides_add_slide(
     params: AddSlideParams,
     *,
     token: str,
@@ -286,11 +286,11 @@ async def add_slide(
 
 
 @tool(
-    scopes=SCOPES["update_slide_text"],
+    scopes=SCOPES["google_slides_update_slide_text"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
     provider="google_slides",
 )
-async def update_slide_text(
+async def google_slides_update_slide_text(
     params: UpdateSlideTextParams,
     *,
     token: str,
@@ -373,11 +373,11 @@ async def update_slide_text(
 
 
 @tool(
-    scopes=SCOPES["duplicate_slide"],
+    scopes=SCOPES["google_slides_duplicate_slide"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
     provider="google_slides",
 )
-async def duplicate_slide(
+async def google_slides_duplicate_slide(
     params: DuplicateSlideParams,
     *,
     token: str,
@@ -408,11 +408,11 @@ async def duplicate_slide(
 
 
 @tool(
-    scopes=SCOPES["insert_element"],
+    scopes=SCOPES["google_slides_insert_element"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
     provider="google_slides",
 )
-async def insert_element(
+async def google_slides_insert_element(
     params: InsertElementParams,
     *,
     token: str,
@@ -480,11 +480,11 @@ async def insert_element(
 
 
 @tool(
-    scopes=SCOPES["update_table_cell"],
+    scopes=SCOPES["google_slides_update_table_cell"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
     provider="google_slides",
 )
-async def update_table_cell(
+async def google_slides_update_table_cell(
     params: UpdateTableCellParams,
     *,
     token: str,
@@ -542,11 +542,11 @@ async def update_table_cell(
 
 
 @tool(
-    scopes=SCOPES["format_text"],
+    scopes=SCOPES["google_slides_format_text"],
     api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
     provider="google_slides",
 )
-async def format_text(
+async def google_slides_format_text(
     params: FormatTextParams,
     *,
     token: str,

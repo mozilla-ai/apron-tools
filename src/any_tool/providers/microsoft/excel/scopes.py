@@ -15,13 +15,13 @@ class MicrosoftExcelScope(StrEnum):
 
 
 SCOPES: dict[str, list[MicrosoftExcelScope]] = {
-    "list_workbooks": [MicrosoftExcelScope.FILES_READ],
-    "get_workbook_info": [MicrosoftExcelScope.FILES_READ],
-    "read_worksheet": [MicrosoftExcelScope.FILES_READ],
-    "update_worksheet": [MicrosoftExcelScope.FILES_READ_WRITE],
-    "append_row": [MicrosoftExcelScope.FILES_READ_WRITE],
-    "create_workbook": [MicrosoftExcelScope.FILES_READ_WRITE],
-    "add_worksheet": [MicrosoftExcelScope.FILES_READ_WRITE],
+    "microsoft_excel_list_workbooks": [MicrosoftExcelScope.FILES_READ],
+    "microsoft_excel_get_workbook_info": [MicrosoftExcelScope.FILES_READ],
+    "microsoft_excel_read_worksheet": [MicrosoftExcelScope.FILES_READ],
+    "microsoft_excel_update_worksheet": [MicrosoftExcelScope.FILES_READ_WRITE],
+    "microsoft_excel_append_row": [MicrosoftExcelScope.FILES_READ_WRITE],
+    "microsoft_excel_create_workbook": [MicrosoftExcelScope.FILES_READ_WRITE],
+    "microsoft_excel_add_worksheet": [MicrosoftExcelScope.FILES_READ_WRITE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

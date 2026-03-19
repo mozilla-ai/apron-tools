@@ -16,16 +16,16 @@ class GmailScope(StrEnum):
 
 
 SCOPES: dict[str, list[GmailScope]] = {
-    "list_emails": [GmailScope.READONLY],
-    "read_email": [GmailScope.READONLY],
-    "send_email": [GmailScope.COMPOSE],
-    "create_draft": [GmailScope.COMPOSE],
-    "edit_draft": [GmailScope.COMPOSE],
-    "reply_to_email": [GmailScope.COMPOSE],
-    "get_thread_replies": [GmailScope.READONLY],
-    "list_labels": [GmailScope.READONLY],
-    "add_label_to_email": [GmailScope.MODIFY],
-    "remove_label_from_email": [GmailScope.MODIFY],
+    "gmail_list_emails": [GmailScope.READONLY],
+    "gmail_read_email": [GmailScope.READONLY],
+    "gmail_send_email": [GmailScope.COMPOSE],
+    "gmail_create_draft": [GmailScope.COMPOSE],
+    "gmail_edit_draft": [GmailScope.COMPOSE],
+    "gmail_reply_to_email": [GmailScope.COMPOSE],
+    "gmail_get_thread_replies": [GmailScope.READONLY],
+    "gmail_list_labels": [GmailScope.READONLY],
+    "gmail_add_label_to_email": [GmailScope.MODIFY],
+    "gmail_remove_label_from_email": [GmailScope.MODIFY],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

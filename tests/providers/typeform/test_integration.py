@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-from any_tool.providers.typeform.tools import get_form, get_responses, list_forms
+from any_tool.providers.typeform.tools import typeform_get_form, typeform_get_responses, typeform_list_forms
 from any_tool.providers.typeform.types import (
     GetFormParams,
     GetFormResult,
@@ -35,25 +35,25 @@ def typeform_token() -> str:
 
 class TestListFormsIntegration:
     async def test_returns_valid_result(self, typeform_token: str):
-        result = await list_forms(ListFormsParams(page_size=5), token=typeform_token)
+        result = await typeform_list_forms(ListFormsParams(page_size=5), token=typeform_token)
         assert isinstance(result, ListFormsResult)
         assert result.success is True
         assert result.total_items >= 0
 
     async def test_str_output(self, typeform_token: str):
-        result = await list_forms(ListFormsParams(page_size=5), token=typeform_token)
+        result = await typeform_list_forms(ListFormsParams(page_size=5), token=typeform_token)
         text = str(result)
         assert "form" in text.lower()
 
 
 class TestGetFormIntegration:
     async def test_returns_valid_result(self, typeform_token: str):
-        forms = await list_forms(ListFormsParams(page_size=1), token=typeform_token)
+        forms = await typeform_list_forms(ListFormsParams(page_size=1), token=typeform_token)
         if not forms.items:
             pytest.skip("No forms available in account")
         form_id = forms.items[0].id
 
-        result = await get_form(GetFormParams(form_id=form_id), token=typeform_token)
+        result = await typeform_get_form(GetFormParams(form_id=form_id), token=typeform_token)
         assert isinstance(result, GetFormResult)
         assert result.success is True
         assert result.id == form_id
@@ -61,12 +61,12 @@ class TestGetFormIntegration:
 
 class TestGetResponsesIntegration:
     async def test_returns_valid_result(self, typeform_token: str):
-        forms = await list_forms(ListFormsParams(page_size=1), token=typeform_token)
+        forms = await typeform_list_forms(ListFormsParams(page_size=1), token=typeform_token)
         if not forms.items:
             pytest.skip("No forms available in account")
         form_id = forms.items[0].id
 
-        result = await get_responses(
+        result = await typeform_get_responses(
             GetResponsesParams(form_id=form_id, page_size=5),
             token=typeform_token,
         )

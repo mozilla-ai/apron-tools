@@ -9,16 +9,16 @@ from unittest.mock import patch
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.google.slides.tools import (
-    add_slide,
-    copy_presentation,
-    create_presentation,
-    duplicate_slide,
-    format_text,
-    insert_element,
-    list_presentations,
-    read_presentation,
-    update_slide_text,
-    update_table_cell,
+    google_slides_add_slide,
+    google_slides_copy_presentation,
+    google_slides_create_presentation,
+    google_slides_duplicate_slide,
+    google_slides_format_text,
+    google_slides_insert_element,
+    google_slides_list_presentations,
+    google_slides_read_presentation,
+    google_slides_update_slide_text,
+    google_slides_update_table_cell,
 )
 from any_tool.providers.google.slides.types import (
     AddSlideParams,
@@ -66,7 +66,7 @@ class TestListPresentations:
             json=_load_json("list_presentations.json"),
         )
 
-        result = await list_presentations(ListPresentationsParams(), token=_TOKEN)
+        result = await google_slides_list_presentations(ListPresentationsParams(), token=_TOKEN)
 
         assert isinstance(result, ListPresentationsResult)
         assert result.success is True
@@ -76,14 +76,14 @@ class TestListPresentations:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_presentations(ListPresentationsParams(), token=_TOKEN)
+        result = await google_slides_list_presentations(ListPresentationsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_presentations._tool_definition
-        assert defn.name == "list_presentations"
+        defn = google_slides_list_presentations._tool_definition
+        assert defn.name == "google_slides_list_presentations"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -100,7 +100,7 @@ class TestCreatePresentation:
             json=_load_json("create_presentation.json"),
         )
 
-        result = await create_presentation(
+        result = await google_slides_create_presentation(
             CreatePresentationParams(title="Q1 Review"),
             token=_TOKEN,
         )
@@ -114,7 +114,7 @@ class TestCreatePresentation:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await create_presentation(
+        result = await google_slides_create_presentation(
             CreatePresentationParams(title="Test"),
             token=_TOKEN,
         )
@@ -123,8 +123,8 @@ class TestCreatePresentation:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_presentation._tool_definition
-        assert defn.name == "create_presentation"
+        defn = google_slides_create_presentation._tool_definition
+        assert defn.name == "google_slides_create_presentation"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
@@ -145,7 +145,7 @@ class TestCopyPresentation:
             json=_load_json("copy_presentation.json"),
         )
 
-        result = await copy_presentation(
+        result = await google_slides_copy_presentation(
             CopyPresentationParams(
                 presentation_id=_PRES_ID,
                 new_title="Copy of Q1 Review",
@@ -162,7 +162,7 @@ class TestCopyPresentation:
     async def test_meta_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await copy_presentation(
+        result = await google_slides_copy_presentation(
             CopyPresentationParams(presentation_id="bad_id", new_title="Copy"),
             token=_TOKEN,
         )
@@ -181,7 +181,7 @@ class TestCopyPresentation:
             text="Forbidden",
         )
 
-        result = await copy_presentation(
+        result = await google_slides_copy_presentation(
             CopyPresentationParams(
                 presentation_id=_PRES_ID,
                 new_title="Copy",
@@ -193,8 +193,8 @@ class TestCopyPresentation:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = copy_presentation._tool_definition
-        assert defn.name == "copy_presentation"
+        defn = google_slides_copy_presentation._tool_definition
+        assert defn.name == "google_slides_copy_presentation"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -211,7 +211,7 @@ class TestReadPresentation:
             json=_load_json("read_presentation.json"),
         )
 
-        result = await read_presentation(
+        result = await google_slides_read_presentation(
             ReadPresentationParams(presentation_id=_PRES_ID),
             token=_TOKEN,
         )
@@ -227,7 +227,7 @@ class TestReadPresentation:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await read_presentation(
+        result = await google_slides_read_presentation(
             ReadPresentationParams(presentation_id="bad_id"),
             token=_TOKEN,
         )
@@ -236,8 +236,8 @@ class TestReadPresentation:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_presentation._tool_definition
-        assert defn.name == "read_presentation"
+        defn = google_slides_read_presentation._tool_definition
+        assert defn.name == "google_slides_read_presentation"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
@@ -254,7 +254,7 @@ class TestAddSlide:
             json=_load_json("batch_update_add_slide.json"),
         )
 
-        result = await add_slide(
+        result = await google_slides_add_slide(
             AddSlideParams(presentation_id=_PRES_ID),
             token=_TOKEN,
         )
@@ -267,7 +267,7 @@ class TestAddSlide:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await add_slide(
+        result = await google_slides_add_slide(
             AddSlideParams(presentation_id="bad_id"),
             token=_TOKEN,
         )
@@ -276,8 +276,8 @@ class TestAddSlide:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = add_slide._tool_definition
-        assert defn.name == "add_slide"
+        defn = google_slides_add_slide._tool_definition
+        assert defn.name == "google_slides_add_slide"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
@@ -294,7 +294,7 @@ class TestUpdateSlideText:
             json=_load_json("batch_update_generic.json"),
         )
 
-        result = await update_slide_text(
+        result = await google_slides_update_slide_text(
             UpdateSlideTextParams(
                 presentation_id=_PRES_ID,
                 slide_id="slide-001",
@@ -316,7 +316,7 @@ class TestUpdateSlideText:
 
         with patch("any_tool.providers.google.slides.tools.uuid.uuid4") as mock_uuid:
             mock_uuid.return_value.hex = "aabbccdd11223344"
-            result = await update_slide_text(
+            result = await google_slides_update_slide_text(
                 UpdateSlideTextParams(
                     presentation_id=_PRES_ID,
                     slide_id="slide-001",
@@ -331,7 +331,7 @@ class TestUpdateSlideText:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await update_slide_text(
+        result = await google_slides_update_slide_text(
             UpdateSlideTextParams(
                 presentation_id="bad_id",
                 slide_id="slide-001",
@@ -345,8 +345,8 @@ class TestUpdateSlideText:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_slide_text._tool_definition
-        assert defn.name == "update_slide_text"
+        defn = google_slides_update_slide_text._tool_definition
+        assert defn.name == "google_slides_update_slide_text"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
@@ -363,7 +363,7 @@ class TestDuplicateSlide:
             json=_load_json("batch_update_duplicate.json"),
         )
 
-        result = await duplicate_slide(
+        result = await google_slides_duplicate_slide(
             DuplicateSlideParams(
                 presentation_id=_PRES_ID,
                 slide_id="slide-001",
@@ -379,7 +379,7 @@ class TestDuplicateSlide:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await duplicate_slide(
+        result = await google_slides_duplicate_slide(
             DuplicateSlideParams(
                 presentation_id="bad_id",
                 slide_id="slide-001",
@@ -391,8 +391,8 @@ class TestDuplicateSlide:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = duplicate_slide._tool_definition
-        assert defn.name == "duplicate_slide"
+        defn = google_slides_duplicate_slide._tool_definition
+        assert defn.name == "google_slides_duplicate_slide"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
@@ -409,7 +409,7 @@ class TestInsertElement:
             json=_load_json("batch_update_generic.json"),
         )
 
-        result = await insert_element(
+        result = await google_slides_insert_element(
             InsertElementParams(
                 presentation_id=_PRES_ID,
                 slide_id="slide-001",
@@ -429,7 +429,7 @@ class TestInsertElement:
             json=_load_json("batch_update_generic.json"),
         )
 
-        result = await insert_element(
+        result = await google_slides_insert_element(
             InsertElementParams(
                 presentation_id=_PRES_ID,
                 slide_id="slide-001",
@@ -442,7 +442,7 @@ class TestInsertElement:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await insert_element(
+        result = await google_slides_insert_element(
             InsertElementParams(
                 presentation_id="bad_id",
                 slide_id="slide-001",
@@ -454,8 +454,8 @@ class TestInsertElement:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = insert_element._tool_definition
-        assert defn.name == "insert_element"
+        defn = google_slides_insert_element._tool_definition
+        assert defn.name == "google_slides_insert_element"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
@@ -472,7 +472,7 @@ class TestUpdateTableCell:
             json=_load_json("batch_update_generic.json"),
         )
 
-        result = await update_table_cell(
+        result = await google_slides_update_table_cell(
             UpdateTableCellParams(
                 presentation_id=_PRES_ID,
                 table_id="table-001",
@@ -492,7 +492,7 @@ class TestUpdateTableCell:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await update_table_cell(
+        result = await google_slides_update_table_cell(
             UpdateTableCellParams(
                 presentation_id="bad_id",
                 table_id="table-001",
@@ -507,8 +507,8 @@ class TestUpdateTableCell:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = update_table_cell._tool_definition
-        assert defn.name == "update_table_cell"
+        defn = google_slides_update_table_cell._tool_definition
+        assert defn.name == "google_slides_update_table_cell"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
 
@@ -525,7 +525,7 @@ class TestFormatText:
             json=_load_json("batch_update_generic.json"),
         )
 
-        result = await format_text(
+        result = await google_slides_format_text(
             FormatTextParams(
                 presentation_id=_PRES_ID,
                 object_id="elem-001",
@@ -544,7 +544,7 @@ class TestFormatText:
             json=_load_json("batch_update_generic.json"),
         )
 
-        result = await format_text(
+        result = await google_slides_format_text(
             FormatTextParams(
                 presentation_id=_PRES_ID,
                 object_id="elem-001",
@@ -561,7 +561,7 @@ class TestFormatText:
         assert result.success is True
 
     async def test_no_options_returns_error(self) -> None:
-        result = await format_text(
+        result = await google_slides_format_text(
             FormatTextParams(
                 presentation_id=_PRES_ID,
                 object_id="elem-001",
@@ -575,7 +575,7 @@ class TestFormatText:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await format_text(
+        result = await google_slides_format_text(
             FormatTextParams(
                 presentation_id="bad_id",
                 object_id="elem-001",
@@ -588,7 +588,7 @@ class TestFormatText:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = format_text._tool_definition
-        assert defn.name == "format_text"
+        defn = google_slides_format_text._tool_definition
+        assert defn.name == "google_slides_format_text"
         assert defn.provider == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes

@@ -15,14 +15,14 @@ class GoogleSheetsScope(StrEnum):
 
 
 SCOPES: dict[str, list[GoogleSheetsScope]] = {
-    "list_spreadsheets": [GoogleSheetsScope.DRIVE],
-    "create_spreadsheet": [GoogleSheetsScope.SPREADSHEETS],
-    "copy_spreadsheet": [GoogleSheetsScope.DRIVE],
-    "read_spreadsheet": [GoogleSheetsScope.SPREADSHEETS],
-    "update_spreadsheet": [GoogleSheetsScope.SPREADSHEETS],
-    "append_row": [GoogleSheetsScope.SPREADSHEETS],
-    "add_sheet": [GoogleSheetsScope.SPREADSHEETS],
-    "find_row": [GoogleSheetsScope.SPREADSHEETS],
+    "google_sheets_list_spreadsheets": [GoogleSheetsScope.DRIVE],
+    "google_sheets_create_spreadsheet": [GoogleSheetsScope.SPREADSHEETS],
+    "google_sheets_copy_spreadsheet": [GoogleSheetsScope.DRIVE],
+    "google_sheets_read_spreadsheet": [GoogleSheetsScope.SPREADSHEETS],
+    "google_sheets_update_spreadsheet": [GoogleSheetsScope.SPREADSHEETS],
+    "google_sheets_append_row": [GoogleSheetsScope.SPREADSHEETS],
+    "google_sheets_add_sheet": [GoogleSheetsScope.SPREADSHEETS],
+    "google_sheets_find_row": [GoogleSheetsScope.SPREADSHEETS],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

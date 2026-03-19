@@ -16,15 +16,15 @@ class ConfluenceScope(StrEnum):
 
 
 SCOPES: dict[str, list[ConfluenceScope]] = {
-    "explore_spaces": [ConfluenceScope.READ_CONFLUENCE_CONTENT],
-    "get_page_content": [ConfluenceScope.READ_CONFLUENCE_CONTENT],
-    "create_page": [ConfluenceScope.WRITE_CONFLUENCE_CONTENT],
-    "update_page": [
+    "atlassian_confluence_explore_spaces": [ConfluenceScope.READ_CONFLUENCE_CONTENT],
+    "atlassian_confluence_get_page_content": [ConfluenceScope.READ_CONFLUENCE_CONTENT],
+    "atlassian_confluence_create_page": [ConfluenceScope.WRITE_CONFLUENCE_CONTENT],
+    "atlassian_confluence_update_page": [
         ConfluenceScope.READ_CONFLUENCE_CONTENT,
         ConfluenceScope.WRITE_CONFLUENCE_CONTENT,
     ],
-    "search_content": [ConfluenceScope.SEARCH_CONFLUENCE],
-    "get_child_pages": [ConfluenceScope.READ_CONFLUENCE_CONTENT],
+    "atlassian_confluence_search_content": [ConfluenceScope.SEARCH_CONFLUENCE],
+    "atlassian_confluence_get_child_pages": [ConfluenceScope.READ_CONFLUENCE_CONTENT],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

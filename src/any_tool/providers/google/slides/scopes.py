@@ -15,16 +15,16 @@ class GoogleSlidesScope(StrEnum):
 
 
 SCOPES: dict[str, list[GoogleSlidesScope]] = {
-    "list_presentations": [GoogleSlidesScope.DRIVE],
-    "create_presentation": [GoogleSlidesScope.PRESENTATIONS],
-    "copy_presentation": [GoogleSlidesScope.DRIVE],
-    "read_presentation": [GoogleSlidesScope.PRESENTATIONS],
-    "add_slide": [GoogleSlidesScope.PRESENTATIONS],
-    "update_slide_text": [GoogleSlidesScope.PRESENTATIONS],
-    "duplicate_slide": [GoogleSlidesScope.PRESENTATIONS],
-    "insert_element": [GoogleSlidesScope.PRESENTATIONS],
-    "update_table_cell": [GoogleSlidesScope.PRESENTATIONS],
-    "format_text": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_list_presentations": [GoogleSlidesScope.DRIVE],
+    "google_slides_create_presentation": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_copy_presentation": [GoogleSlidesScope.DRIVE],
+    "google_slides_read_presentation": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_add_slide": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_update_slide_text": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_duplicate_slide": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_insert_element": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_update_table_cell": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_format_text": [GoogleSlidesScope.PRESENTATIONS],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

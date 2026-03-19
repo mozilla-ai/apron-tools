@@ -14,12 +14,12 @@ class GoogleDriveScope(StrEnum):
 
 
 SCOPES: dict[str, list[GoogleDriveScope]] = {
-    "list_files": [GoogleDriveScope.DRIVE],
-    "create_folder": [GoogleDriveScope.DRIVE],
-    "get_file_info": [GoogleDriveScope.DRIVE],
-    "move_file": [GoogleDriveScope.DRIVE],
-    "search": [GoogleDriveScope.DRIVE],
-    "share_file": [GoogleDriveScope.DRIVE],
+    "google_drive_list_files": [GoogleDriveScope.DRIVE],
+    "google_drive_create_folder": [GoogleDriveScope.DRIVE],
+    "google_drive_get_file_info": [GoogleDriveScope.DRIVE],
+    "google_drive_move_file": [GoogleDriveScope.DRIVE],
+    "google_drive_search": [GoogleDriveScope.DRIVE],
+    "google_drive_share_file": [GoogleDriveScope.DRIVE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

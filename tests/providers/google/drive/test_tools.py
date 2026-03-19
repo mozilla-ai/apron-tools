@@ -8,12 +8,12 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.google.drive.tools import (
-    create_folder,
-    get_file_info,
-    list_files,
-    move_file,
-    search,
-    share_file,
+    google_drive_create_folder,
+    google_drive_get_file_info,
+    google_drive_list_files,
+    google_drive_move_file,
+    google_drive_search,
+    google_drive_share_file,
 )
 from any_tool.providers.google.drive.types import (
     CreateFolderParams,
@@ -49,7 +49,7 @@ class TestListFiles:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("list_files.json"))
 
-        result = await list_files(ListFilesParams(), token=_TOKEN)
+        result = await google_drive_list_files(ListFilesParams(), token=_TOKEN)
 
         assert isinstance(result, ListFilesResult)
         assert result.success is True
@@ -59,7 +59,7 @@ class TestListFiles:
     async def test_success_with_folder(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("list_files.json"))
 
-        result = await list_files(
+        result = await google_drive_list_files(
             ListFilesParams(folder_id="folder-001"),
             token=_TOKEN,
         )
@@ -70,14 +70,14 @@ class TestListFiles:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_files(ListFilesParams(), token=_TOKEN)
+        result = await google_drive_list_files(ListFilesParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_files._tool_definition
-        assert defn.name == "list_files"
+        defn = google_drive_list_files._tool_definition
+        assert defn.name == "google_drive_list_files"
         assert defn.provider == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -91,7 +91,7 @@ class TestCreateFolder:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("create_folder.json"))
 
-        result = await create_folder(
+        result = await google_drive_create_folder(
             CreateFolderParams(name="New Folder"),
             token=_TOKEN,
         )
@@ -104,7 +104,7 @@ class TestCreateFolder:
     async def test_with_parent(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("create_folder.json"))
 
-        result = await create_folder(
+        result = await google_drive_create_folder(
             CreateFolderParams(name="New Folder", parent_id="folder-001"),
             token=_TOKEN,
         )
@@ -114,7 +114,7 @@ class TestCreateFolder:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await create_folder(
+        result = await google_drive_create_folder(
             CreateFolderParams(name="Test"),
             token=_TOKEN,
         )
@@ -123,8 +123,8 @@ class TestCreateFolder:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_folder._tool_definition
-        assert defn.name == "create_folder"
+        defn = google_drive_create_folder._tool_definition
+        assert defn.name == "google_drive_create_folder"
         assert defn.provider == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -138,7 +138,7 @@ class TestGetFileInfo:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("get_file_info.json"))
 
-        result = await get_file_info(
+        result = await google_drive_get_file_info(
             GetFileInfoParams(file_id=_FILE_ID),
             token=_TOKEN,
         )
@@ -155,7 +155,7 @@ class TestGetFileInfo:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await get_file_info(
+        result = await google_drive_get_file_info(
             GetFileInfoParams(file_id="bad-id"),
             token=_TOKEN,
         )
@@ -164,8 +164,8 @@ class TestGetFileInfo:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_file_info._tool_definition
-        assert defn.name == "get_file_info"
+        defn = google_drive_get_file_info._tool_definition
+        assert defn.name == "google_drive_get_file_info"
         assert defn.provider == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -182,7 +182,7 @@ class TestMoveFile:
         # Second request: update parents.
         httpx_mock.add_response(json=_load_json("move_file.json"))
 
-        result = await move_file(
+        result = await google_drive_move_file(
             MoveFileParams(file_id=_FILE_ID, destination_folder_id="folder-002"),
             token=_TOKEN,
         )
@@ -195,7 +195,7 @@ class TestMoveFile:
     async def test_meta_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await move_file(
+        result = await google_drive_move_file(
             MoveFileParams(file_id="bad-id", destination_folder_id="folder-002"),
             token=_TOKEN,
         )
@@ -207,7 +207,7 @@ class TestMoveFile:
         httpx_mock.add_response(json=_load_json("move_file_meta.json"))
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await move_file(
+        result = await google_drive_move_file(
             MoveFileParams(file_id=_FILE_ID, destination_folder_id="folder-002"),
             token=_TOKEN,
         )
@@ -216,8 +216,8 @@ class TestMoveFile:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = move_file._tool_definition
-        assert defn.name == "move_file"
+        defn = google_drive_move_file._tool_definition
+        assert defn.name == "google_drive_move_file"
         assert defn.provider == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -231,7 +231,7 @@ class TestSearch:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("search.json"))
 
-        result = await search(
+        result = await google_drive_search(
             SearchParams(query="Project"),
             token=_TOKEN,
         )
@@ -244,7 +244,7 @@ class TestSearch:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=500, text="Internal Server Error")
 
-        result = await search(
+        result = await google_drive_search(
             SearchParams(query="test"),
             token=_TOKEN,
         )
@@ -253,8 +253,8 @@ class TestSearch:
         assert "500" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = search._tool_definition
-        assert defn.name == "search"
+        defn = google_drive_search._tool_definition
+        assert defn.name == "google_drive_search"
         assert defn.provider == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
 
@@ -268,7 +268,7 @@ class TestShareFile:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("share_file.json"))
 
-        result = await share_file(
+        result = await google_drive_share_file(
             ShareFileParams(
                 file_id=_FILE_ID,
                 email="bob@example.com",
@@ -287,7 +287,7 @@ class TestShareFile:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await share_file(
+        result = await google_drive_share_file(
             ShareFileParams(file_id="bad-id", email="nobody@example.com"),
             token=_TOKEN,
         )
@@ -296,7 +296,7 @@ class TestShareFile:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = share_file._tool_definition
-        assert defn.name == "share_file"
+        defn = google_drive_share_file._tool_definition
+        assert defn.name == "google_drive_share_file"
         assert defn.provider == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes

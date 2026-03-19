@@ -228,11 +228,11 @@ def _parse_markdown_to_blocks(content: str) -> list[dict[str, object]]:
 
 
 @tool(
-    scopes=SCOPES["explore_teamspace"],
+    scopes=SCOPES["notion_explore_teamspace"],
     api_docs="https://developers.notion.com/reference/post-search",
     provider="notion",
 )
-async def explore_teamspace(
+async def notion_explore_teamspace(
     params: ExploreTeamspaceParams,
     *,
     token: str,
@@ -281,11 +281,11 @@ async def explore_teamspace(
 
 
 @tool(
-    scopes=SCOPES["create_page"],
+    scopes=SCOPES["notion_create_page"],
     api_docs="https://developers.notion.com/reference/post-page",
     provider="notion",
 )
-async def create_page(
+async def notion_create_page(
     params: CreatePageParams,
     *,
     token: str,
@@ -338,11 +338,11 @@ async def create_page(
 
 
 @tool(
-    scopes=SCOPES["update_page"],
+    scopes=SCOPES["notion_update_page"],
     api_docs="https://developers.notion.com/reference/patch-block-children",
     provider="notion",
 )
-async def update_page(
+async def notion_update_page(
     params: UpdatePageParams,
     *,
     token: str,
@@ -376,11 +376,11 @@ async def update_page(
 
 
 @tool(
-    scopes=SCOPES["read_page"],
+    scopes=SCOPES["notion_read_page"],
     api_docs="https://developers.notion.com/reference/retrieve-a-page",
     provider="notion",
 )
-async def read_page(
+async def notion_read_page(
     params: ReadPageParams,
     *,
     token: str,
@@ -424,11 +424,11 @@ async def read_page(
 
 
 @tool(
-    scopes=SCOPES["get_database_schema"],
+    scopes=SCOPES["notion_get_database_schema"],
     api_docs="https://developers.notion.com/reference/retrieve-database",
     provider="notion",
 )
-async def get_database_schema(
+async def notion_get_database_schema(
     params: GetDatabaseSchemaParams,
     *,
     token: str,
@@ -455,11 +455,11 @@ async def get_database_schema(
 
 
 @tool(
-    scopes=SCOPES["query_database"],
+    scopes=SCOPES["notion_query_database"],
     api_docs="https://developers.notion.com/reference/query-a-data-source",
     provider="notion",
 )
-async def query_database(
+async def notion_query_database(
     params: QueryDatabaseParams,
     *,
     token: str,
@@ -502,11 +502,11 @@ async def query_database(
 
 
 @tool(
-    scopes=SCOPES["get_database_entry"],
+    scopes=SCOPES["notion_get_database_entry"],
     api_docs="https://developers.notion.com/reference/retrieve-a-page",
     provider="notion",
 )
-async def get_database_entry(
+async def notion_get_database_entry(
     params: GetDatabaseEntryParams,
     *,
     token: str,
@@ -550,11 +550,11 @@ async def get_database_entry(
 
 
 @tool(
-    scopes=SCOPES["create_or_update_database_entry"],
+    scopes=SCOPES["notion_create_or_update_database_entry"],
     api_docs="https://developers.notion.com/reference/post-page",
     provider="notion",
 )
-async def create_or_update_database_entry(
+async def notion_create_or_update_database_entry(
     params: CreateOrUpdateDatabaseEntryParams,
     *,
     token: str,
@@ -593,11 +593,11 @@ async def create_or_update_database_entry(
 
 
 @tool(
-    scopes=SCOPES["create_database"],
+    scopes=SCOPES["notion_create_database"],
     api_docs="https://developers.notion.com/reference/create-a-database",
     provider="notion",
 )
-async def create_database(
+async def notion_create_database(
     params: CreateDatabaseParams,
     *,
     token: str,
@@ -634,11 +634,11 @@ async def create_database(
 
 
 @tool(
-    scopes=SCOPES["update_database_schema"],
+    scopes=SCOPES["notion_update_database_schema"],
     api_docs="https://developers.notion.com/reference/update-a-database",
     provider="notion",
 )
-async def update_database_schema(
+async def notion_update_database_schema(
     params: UpdateDatabaseSchemaParams,
     *,
     token: str,

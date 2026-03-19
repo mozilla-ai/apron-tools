@@ -8,16 +8,16 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from any_tool.providers.google.gmail.tools import (
-    add_label_to_email,
-    create_draft,
-    edit_draft,
-    get_thread_replies,
-    list_emails,
-    list_labels,
-    read_email,
-    remove_label_from_email,
-    reply_to_email,
-    send_email,
+    gmail_add_label_to_email,
+    gmail_create_draft,
+    gmail_edit_draft,
+    gmail_get_thread_replies,
+    gmail_list_emails,
+    gmail_list_labels,
+    gmail_read_email,
+    gmail_remove_label_from_email,
+    gmail_reply_to_email,
+    gmail_send_email,
 )
 from any_tool.providers.google.gmail.types import (
     AddLabelToEmailParams,
@@ -70,7 +70,7 @@ class TestListEmails:
             json=_load_json("get_message_meta_2.json"),
         )
 
-        result = await list_emails(
+        result = await gmail_list_emails(
             ListEmailsParams(query="from:alice@example.com"),
             token=_TOKEN,
         )
@@ -87,7 +87,7 @@ class TestListEmails:
             json={"resultSizeEstimate": 0},
         )
 
-        result = await list_emails(
+        result = await gmail_list_emails(
             ListEmailsParams(query="from:nobody@example.com"),
             token=_TOKEN,
         )
@@ -98,14 +98,14 @@ class TestListEmails:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_emails(ListEmailsParams(), token=_TOKEN)
+        result = await gmail_list_emails(ListEmailsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_emails._tool_definition
-        assert defn.name == "list_emails"
+        defn = gmail_list_emails._tool_definition
+        assert defn.name == "gmail_list_emails"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
@@ -122,7 +122,7 @@ class TestReadEmail:
             json=_load_json("get_message_full.json"),
         )
 
-        result = await read_email(
+        result = await gmail_read_email(
             ReadEmailParams(message_id="msg-001"),
             token=_TOKEN,
         )
@@ -141,7 +141,7 @@ class TestReadEmail:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await read_email(
+        result = await gmail_read_email(
             ReadEmailParams(message_id="bad-id"),
             token=_TOKEN,
         )
@@ -150,8 +150,8 @@ class TestReadEmail:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = read_email._tool_definition
-        assert defn.name == "read_email"
+        defn = gmail_read_email._tool_definition
+        assert defn.name == "gmail_read_email"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
@@ -168,7 +168,7 @@ class TestSendEmail:
             json=_load_json("send_message.json"),
         )
 
-        result = await send_email(
+        result = await gmail_send_email(
             SendEmailParams(
                 to="bob@example.com",
                 subject="Hello",
@@ -185,7 +185,7 @@ class TestSendEmail:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await send_email(
+        result = await gmail_send_email(
             SendEmailParams(to="bad", subject="Test", body="Body"),
             token=_TOKEN,
         )
@@ -194,8 +194,8 @@ class TestSendEmail:
         assert "400" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = send_email._tool_definition
-        assert defn.name == "send_email"
+        defn = gmail_send_email._tool_definition
+        assert defn.name == "gmail_send_email"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
@@ -212,7 +212,7 @@ class TestCreateDraft:
             json=_load_json("create_draft.json"),
         )
 
-        result = await create_draft(
+        result = await gmail_create_draft(
             CreateDraftParams(
                 to="bob@example.com",
                 subject="Draft Subject",
@@ -229,7 +229,7 @@ class TestCreateDraft:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=500, text="Internal Server Error")
 
-        result = await create_draft(
+        result = await gmail_create_draft(
             CreateDraftParams(to="bob@example.com", subject="Test", body="Body"),
             token=_TOKEN,
         )
@@ -238,8 +238,8 @@ class TestCreateDraft:
         assert "500" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = create_draft._tool_definition
-        assert defn.name == "create_draft"
+        defn = gmail_create_draft._tool_definition
+        assert defn.name == "gmail_create_draft"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
@@ -260,7 +260,7 @@ class TestEditDraft:
             json=_load_json("edit_draft.json"),
         )
 
-        result = await edit_draft(
+        result = await gmail_edit_draft(
             EditDraftParams(draft_id="draft-001", subject="Updated Subject"),
             token=_TOKEN,
         )
@@ -273,7 +273,7 @@ class TestEditDraft:
     async def test_fetch_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await edit_draft(
+        result = await gmail_edit_draft(
             EditDraftParams(draft_id="bad-id", subject="Test"),
             token=_TOKEN,
         )
@@ -282,8 +282,8 @@ class TestEditDraft:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = edit_draft._tool_definition
-        assert defn.name == "edit_draft"
+        defn = gmail_edit_draft._tool_definition
+        assert defn.name == "gmail_edit_draft"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
@@ -304,7 +304,7 @@ class TestReplyToEmail:
             json=_load_json("send_reply.json"),
         )
 
-        result = await reply_to_email(
+        result = await gmail_reply_to_email(
             ReplyToEmailParams(message_id="msg-001", body="Thanks for the update!"),
             token=_TOKEN,
         )
@@ -317,7 +317,7 @@ class TestReplyToEmail:
     async def test_fetch_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await reply_to_email(
+        result = await gmail_reply_to_email(
             ReplyToEmailParams(message_id="bad-id", body="Reply"),
             token=_TOKEN,
         )
@@ -326,8 +326,8 @@ class TestReplyToEmail:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = reply_to_email._tool_definition
-        assert defn.name == "reply_to_email"
+        defn = gmail_reply_to_email._tool_definition
+        assert defn.name == "gmail_reply_to_email"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
 
@@ -344,7 +344,7 @@ class TestGetThreadReplies:
             json=_load_json("get_thread.json"),
         )
 
-        result = await get_thread_replies(
+        result = await gmail_get_thread_replies(
             GetThreadRepliesParams(thread_id="thread-001"),
             token=_TOKEN,
         )
@@ -360,7 +360,7 @@ class TestGetThreadReplies:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await get_thread_replies(
+        result = await gmail_get_thread_replies(
             GetThreadRepliesParams(thread_id="bad-id"),
             token=_TOKEN,
         )
@@ -369,8 +369,8 @@ class TestGetThreadReplies:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_thread_replies._tool_definition
-        assert defn.name == "get_thread_replies"
+        defn = gmail_get_thread_replies._tool_definition
+        assert defn.name == "gmail_get_thread_replies"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
@@ -387,7 +387,7 @@ class TestListLabels:
             json=_load_json("list_labels.json"),
         )
 
-        result = await list_labels(ListLabelsParams(), token=_TOKEN)
+        result = await gmail_list_labels(ListLabelsParams(), token=_TOKEN)
 
         assert isinstance(result, ListLabelsResult)
         assert result.success is True
@@ -397,14 +397,14 @@ class TestListLabels:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=401, text="Unauthorized")
 
-        result = await list_labels(ListLabelsParams(), token=_TOKEN)
+        result = await gmail_list_labels(ListLabelsParams(), token=_TOKEN)
 
         assert result.success is False
         assert "401" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_labels._tool_definition
-        assert defn.name == "list_labels"
+        defn = gmail_list_labels._tool_definition
+        assert defn.name == "gmail_list_labels"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes
 
@@ -421,7 +421,7 @@ class TestAddLabelToEmail:
             json=_load_json("modify_add_label.json"),
         )
 
-        result = await add_label_to_email(
+        result = await gmail_add_label_to_email(
             AddLabelToEmailParams(message_id="msg-001", label_id="label-001"),
             token=_TOKEN,
         )
@@ -434,7 +434,7 @@ class TestAddLabelToEmail:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await add_label_to_email(
+        result = await gmail_add_label_to_email(
             AddLabelToEmailParams(message_id="bad-id", label_id="label-001"),
             token=_TOKEN,
         )
@@ -443,8 +443,8 @@ class TestAddLabelToEmail:
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = add_label_to_email._tool_definition
-        assert defn.name == "add_label_to_email"
+        defn = gmail_add_label_to_email._tool_definition
+        assert defn.name == "gmail_add_label_to_email"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.modify" in defn.scopes
 
@@ -461,7 +461,7 @@ class TestRemoveLabelFromEmail:
             json=_load_json("modify_remove_label.json"),
         )
 
-        result = await remove_label_from_email(
+        result = await gmail_remove_label_from_email(
             RemoveLabelFromEmailParams(message_id="msg-001", label_id="label-001"),
             token=_TOKEN,
         )
@@ -474,7 +474,7 @@ class TestRemoveLabelFromEmail:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await remove_label_from_email(
+        result = await gmail_remove_label_from_email(
             RemoveLabelFromEmailParams(message_id="bad-id", label_id="label-001"),
             token=_TOKEN,
         )
@@ -483,7 +483,7 @@ class TestRemoveLabelFromEmail:
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = remove_label_from_email._tool_definition
-        assert defn.name == "remove_label_from_email"
+        defn = gmail_remove_label_from_email._tool_definition
+        assert defn.name == "gmail_remove_label_from_email"
         assert defn.provider == "gmail"
         assert "https://www.googleapis.com/auth/gmail.modify" in defn.scopes

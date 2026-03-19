@@ -48,11 +48,11 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
 
 
 @tool(
-    scopes=SCOPES["explore_workspace"],
+    scopes=SCOPES["microsoft_teams_explore_workspace"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/user-list-joinedteams",
     provider="microsoft_teams",
 )
-async def explore_workspace(
+async def microsoft_teams_explore_workspace(
     params: ExploreWorkspaceParams,
     *,
     token: str,
@@ -110,11 +110,11 @@ async def explore_workspace(
 
 
 @tool(
-    scopes=SCOPES["get_channel_info"],
+    scopes=SCOPES["microsoft_teams_get_channel_info"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/channel-get",
     provider="microsoft_teams",
 )
-async def get_channel_info(
+async def microsoft_teams_get_channel_info(
     params: GetChannelInfoParams,
     *,
     token: str,
@@ -141,11 +141,11 @@ async def get_channel_info(
 
 
 @tool(
-    scopes=SCOPES["list_chats"],
+    scopes=SCOPES["microsoft_teams_list_chats"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chat-list",
     provider="microsoft_teams",
 )
-async def list_chats(
+async def microsoft_teams_list_chats(
     params: ListChatsParams,
     *,
     token: str,
@@ -174,11 +174,11 @@ async def list_chats(
 
 
 @tool(
-    scopes=SCOPES["read_chat_messages"],
+    scopes=SCOPES["microsoft_teams_read_chat_messages"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chat-list-messages",
     provider="microsoft_teams",
 )
-async def read_chat_messages(
+async def microsoft_teams_read_chat_messages(
     params: ReadChatMessagesParams,
     *,
     token: str,
@@ -207,11 +207,11 @@ async def read_chat_messages(
 
 
 @tool(
-    scopes=SCOPES["read_channel_messages"],
+    scopes=SCOPES["microsoft_teams_read_channel_messages"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/channel-list-messages",
     provider="microsoft_teams",
 )
-async def read_channel_messages(
+async def microsoft_teams_read_channel_messages(
     params: ReadChannelMessagesParams,
     *,
     token: str,
@@ -240,11 +240,11 @@ async def read_channel_messages(
 
 
 @tool(
-    scopes=SCOPES["read_message_replies"],
+    scopes=SCOPES["microsoft_teams_read_message_replies"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chatmessage-list-replies",
     provider="microsoft_teams",
 )
-async def read_message_replies(
+async def microsoft_teams_read_message_replies(
     params: ReadMessageRepliesParams,
     *,
     token: str,
@@ -287,11 +287,11 @@ async def read_message_replies(
 
 
 @tool(
-    scopes=SCOPES["send_chat_message"],
+    scopes=SCOPES["microsoft_teams_send_chat_message"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/chat-post-messages",
     provider="microsoft_teams",
 )
-async def send_chat_message(
+async def microsoft_teams_send_chat_message(
     params: SendChatMessageParams,
     *,
     token: str,
@@ -320,11 +320,11 @@ async def send_chat_message(
 
 
 @tool(
-    scopes=SCOPES["send_channel_message"],
+    scopes=SCOPES["microsoft_teams_send_channel_message"],
     api_docs="https://learn.microsoft.com/en-us/graph/api/channel-post-messages",
     provider="microsoft_teams",
 )
-async def send_channel_message(
+async def microsoft_teams_send_channel_message(
     params: SendChannelMessageParams,
     *,
     token: str,

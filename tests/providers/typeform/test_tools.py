@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pytest_httpx import HTTPXMock
 
-from any_tool.providers.typeform.tools import get_form, get_responses, list_forms
+from any_tool.providers.typeform.tools import typeform_get_form, typeform_get_responses, typeform_list_forms
 from any_tool.providers.typeform.types import (
     GetFormParams,
     GetFormResult,
@@ -35,7 +35,7 @@ class TestListForms:
         data = _load_json("list_forms.json")
         httpx_mock.add_response(json=data, url="https://api.typeform.com/forms?page=1&page_size=10")
 
-        result = await list_forms(ListFormsParams(), token=_TOKEN)
+        result = await typeform_list_forms(ListFormsParams(), token=_TOKEN)
 
         assert isinstance(result, ListFormsResult)
         assert result.success is True
@@ -47,7 +47,7 @@ class TestListForms:
     async def test_auth_header(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("list_forms.json"))
 
-        await list_forms(ListFormsParams(), token=_TOKEN)
+        await typeform_list_forms(ListFormsParams(), token=_TOKEN)
 
         request = httpx_mock.get_request()
         assert request is not None
@@ -56,15 +56,15 @@ class TestListForms:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await list_forms(ListFormsParams(), token=_TOKEN)
+        result = await typeform_list_forms(ListFormsParams(), token=_TOKEN)
 
         assert result.success is False
         assert result.error is not None
         assert "403" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = list_forms._tool_definition
-        assert defn.name == "list_forms"
+        defn = typeform_list_forms._tool_definition
+        assert defn.name == "typeform_list_forms"
         assert defn.provider == "typeform"
         assert defn.scopes == ["forms:read"]
         assert defn.api_docs_url == "https://www.typeform.com/developers/create/reference/retrieve-forms/"
@@ -80,7 +80,7 @@ class TestGetForm:
         data = _load_json("get_form.json")
         httpx_mock.add_response(json=data, url="https://api.typeform.com/forms/abc123")
 
-        result = await get_form(GetFormParams(form_id="abc123"), token=_TOKEN)
+        result = await typeform_get_form(GetFormParams(form_id="abc123"), token=_TOKEN)
 
         assert isinstance(result, GetFormResult)
         assert result.success is True
@@ -91,7 +91,7 @@ class TestGetForm:
     async def test_auth_header(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("get_form.json"))
 
-        await get_form(GetFormParams(form_id="abc123"), token=_TOKEN)
+        await typeform_get_form(GetFormParams(form_id="abc123"), token=_TOKEN)
 
         request = httpx_mock.get_request()
         assert request is not None
@@ -100,7 +100,7 @@ class TestGetForm:
     async def test_form_id_in_url(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("get_form.json"))
 
-        await get_form(GetFormParams(form_id="my_form_99"), token=_TOKEN)
+        await typeform_get_form(GetFormParams(form_id="my_form_99"), token=_TOKEN)
 
         request = httpx_mock.get_request()
         assert request is not None
@@ -109,15 +109,15 @@ class TestGetForm:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await get_form(GetFormParams(form_id="missing"), token=_TOKEN)
+        result = await typeform_get_form(GetFormParams(form_id="missing"), token=_TOKEN)
 
         assert result.success is False
         assert result.error is not None
         assert "404" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_form._tool_definition
-        assert defn.name == "get_form"
+        defn = typeform_get_form._tool_definition
+        assert defn.name == "typeform_get_form"
         assert defn.provider == "typeform"
         assert defn.scopes == ["forms:read"]
         assert defn.api_docs_url == "https://www.typeform.com/developers/create/reference/retrieve-form/"
@@ -136,7 +136,7 @@ class TestGetResponses:
             url="https://api.typeform.com/forms/abc123/responses?page_size=25",
         )
 
-        result = await get_responses(GetResponsesParams(form_id="abc123"), token=_TOKEN)
+        result = await typeform_get_responses(GetResponsesParams(form_id="abc123"), token=_TOKEN)
 
         assert isinstance(result, GetResponsesResult)
         assert result.success is True
@@ -147,7 +147,7 @@ class TestGetResponses:
     async def test_auth_header(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("get_responses.json"))
 
-        await get_responses(GetResponsesParams(form_id="abc123"), token=_TOKEN)
+        await typeform_get_responses(GetResponsesParams(form_id="abc123"), token=_TOKEN)
 
         request = httpx_mock.get_request()
         assert request is not None
@@ -156,15 +156,15 @@ class TestGetResponses:
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=500, text="Internal Server Error")
 
-        result = await get_responses(GetResponsesParams(form_id="abc123"), token=_TOKEN)
+        result = await typeform_get_responses(GetResponsesParams(form_id="abc123"), token=_TOKEN)
 
         assert result.success is False
         assert result.error is not None
         assert "500" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = get_responses._tool_definition
-        assert defn.name == "get_responses"
+        defn = typeform_get_responses._tool_definition
+        assert defn.name == "typeform_get_responses"
         assert defn.provider == "typeform"
         assert defn.scopes == ["responses:read"]
         assert defn.api_docs_url == "https://www.typeform.com/developers/responses/reference/retrieve-responses/"

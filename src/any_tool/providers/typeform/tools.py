@@ -26,11 +26,11 @@ def _headers(token: str) -> dict[str, str]:
 
 
 @tool(
-    scopes=SCOPES["list_forms"],
+    scopes=SCOPES["typeform_list_forms"],
     api_docs="https://www.typeform.com/developers/create/reference/retrieve-forms/",
     provider="typeform",
 )
-async def list_forms(params: ListFormsParams, *, token: str, base_url: str = _BASE_URL) -> ListFormsResult:
+async def typeform_list_forms(params: ListFormsParams, *, token: str, base_url: str = _BASE_URL) -> ListFormsResult:
     """List forms in the authenticated Typeform account."""
     query: dict[str, str | int] = {
         "page": params.page,
@@ -61,11 +61,11 @@ async def list_forms(params: ListFormsParams, *, token: str, base_url: str = _BA
 
 
 @tool(
-    scopes=SCOPES["get_form"],
+    scopes=SCOPES["typeform_get_form"],
     api_docs="https://www.typeform.com/developers/create/reference/retrieve-form/",
     provider="typeform",
 )
-async def get_form(params: GetFormParams, *, token: str, base_url: str = _BASE_URL) -> GetFormResult:
+async def typeform_get_form(params: GetFormParams, *, token: str, base_url: str = _BASE_URL) -> GetFormResult:
     """Retrieve a single Typeform form by its ID."""
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -86,11 +86,13 @@ async def get_form(params: GetFormParams, *, token: str, base_url: str = _BASE_U
 
 
 @tool(
-    scopes=SCOPES["get_responses"],
+    scopes=SCOPES["typeform_get_responses"],
     api_docs="https://www.typeform.com/developers/responses/reference/retrieve-responses/",
     provider="typeform",
 )
-async def get_responses(params: GetResponsesParams, *, token: str, base_url: str = _BASE_URL) -> GetResponsesResult:
+async def typeform_get_responses(
+    params: GetResponsesParams, *, token: str, base_url: str = _BASE_URL
+) -> GetResponsesResult:
     """Retrieve responses for a Typeform form."""
     query: dict[str, str | int | bool] = {
         "page_size": params.page_size,

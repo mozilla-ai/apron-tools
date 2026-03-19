@@ -16,16 +16,16 @@ class NotionScope(StrEnum):
 
 
 SCOPES: dict[str, list[NotionScope]] = {
-    "explore_teamspace": [NotionScope.READ_CONTENT],
-    "create_page": [NotionScope.INSERT_CONTENT],
-    "update_page": [NotionScope.UPDATE_CONTENT],
-    "read_page": [NotionScope.READ_CONTENT],
-    "get_database_schema": [NotionScope.READ_CONTENT],
-    "query_database": [NotionScope.READ_CONTENT],
-    "get_database_entry": [NotionScope.READ_CONTENT],
-    "create_or_update_database_entry": [NotionScope.INSERT_CONTENT, NotionScope.UPDATE_CONTENT],
-    "create_database": [NotionScope.INSERT_CONTENT],
-    "update_database_schema": [NotionScope.UPDATE_CONTENT],
+    "notion_explore_teamspace": [NotionScope.READ_CONTENT],
+    "notion_create_page": [NotionScope.INSERT_CONTENT],
+    "notion_update_page": [NotionScope.UPDATE_CONTENT],
+    "notion_read_page": [NotionScope.READ_CONTENT],
+    "notion_get_database_schema": [NotionScope.READ_CONTENT],
+    "notion_query_database": [NotionScope.READ_CONTENT],
+    "notion_get_database_entry": [NotionScope.READ_CONTENT],
+    "notion_create_or_update_database_entry": [NotionScope.INSERT_CONTENT, NotionScope.UPDATE_CONTENT],
+    "notion_create_database": [NotionScope.INSERT_CONTENT],
+    "notion_update_database_schema": [NotionScope.UPDATE_CONTENT],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

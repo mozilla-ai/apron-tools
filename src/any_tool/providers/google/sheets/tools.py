@@ -46,11 +46,11 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
 
 
 @tool(
-    scopes=SCOPES["list_spreadsheets"],
+    scopes=SCOPES["google_sheets_list_spreadsheets"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
     provider="google_sheets",
 )
-async def list_spreadsheets(
+async def google_sheets_list_spreadsheets(
     params: ListSpreadsheetsParams,
     *,
     token: str,
@@ -89,11 +89,11 @@ async def list_spreadsheets(
 
 
 @tool(
-    scopes=SCOPES["create_spreadsheet"],
+    scopes=SCOPES["google_sheets_create_spreadsheet"],
     api_docs="https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/create",
     provider="google_sheets",
 )
-async def create_spreadsheet(
+async def google_sheets_create_spreadsheet(
     params: CreateSpreadsheetParams,
     *,
     token: str,
@@ -124,11 +124,11 @@ async def create_spreadsheet(
 
 
 @tool(
-    scopes=SCOPES["copy_spreadsheet"],
+    scopes=SCOPES["google_sheets_copy_spreadsheet"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/copy",
     provider="google_sheets",
 )
-async def copy_spreadsheet(
+async def google_sheets_copy_spreadsheet(
     params: CopySpreadsheetParams,
     *,
     token: str,
@@ -176,11 +176,11 @@ async def copy_spreadsheet(
 
 
 @tool(
-    scopes=SCOPES["read_spreadsheet"],
+    scopes=SCOPES["google_sheets_read_spreadsheet"],
     api_docs="https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/get",
     provider="google_sheets",
 )
-async def read_spreadsheet(
+async def google_sheets_read_spreadsheet(
     params: ReadSpreadsheetParams,
     *,
     token: str,
@@ -238,11 +238,11 @@ async def read_spreadsheet(
 
 
 @tool(
-    scopes=SCOPES["update_spreadsheet"],
+    scopes=SCOPES["google_sheets_update_spreadsheet"],
     api_docs="https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/update",
     provider="google_sheets",
 )
-async def update_spreadsheet(
+async def google_sheets_update_spreadsheet(
     params: UpdateSpreadsheetParams,
     *,
     token: str,
@@ -273,11 +273,11 @@ async def update_spreadsheet(
 
 
 @tool(
-    scopes=SCOPES["append_row"],
+    scopes=SCOPES["google_sheets_append_row"],
     api_docs="https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/append",
     provider="google_sheets",
 )
-async def append_row(
+async def google_sheets_append_row(
     params: AppendRowParams,
     *,
     token: str,
@@ -311,11 +311,11 @@ async def append_row(
 
 
 @tool(
-    scopes=SCOPES["add_sheet"],
+    scopes=SCOPES["google_sheets_add_sheet"],
     api_docs="https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets/batchUpdate",
     provider="google_sheets",
 )
-async def add_sheet(
+async def google_sheets_add_sheet(
     params: AddSheetParams,
     *,
     token: str,
@@ -346,11 +346,11 @@ async def add_sheet(
 
 
 @tool(
-    scopes=SCOPES["find_row"],
+    scopes=SCOPES["google_sheets_find_row"],
     api_docs="https://developers.google.com/workspace/sheets/api/reference/rest/v4/spreadsheets.values/get",
     provider="google_sheets",
 )
-async def find_row(
+async def google_sheets_find_row(
     params: FindRowParams,
     *,
     token: str,

@@ -40,11 +40,11 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
 
 
 @tool(
-    scopes=SCOPES["list_calendars"],
+    scopes=SCOPES["google_calendar_list_calendars"],
     api_docs="https://developers.google.com/workspace/calendar/api/v3/reference/calendarList/list",
     provider="google_calendar",
 )
-async def list_calendars(
+async def google_calendar_list_calendars(
     params: ListCalendarsParams,
     *,
     token: str,
@@ -77,11 +77,11 @@ async def list_calendars(
 
 
 @tool(
-    scopes=SCOPES["list_events"],
+    scopes=SCOPES["google_calendar_list_events"],
     api_docs="https://developers.google.com/workspace/calendar/api/v3/reference/events/list",
     provider="google_calendar",
 )
-async def list_events(
+async def google_calendar_list_events(
     params: ListEventsParams,
     *,
     token: str,
@@ -124,11 +124,11 @@ async def list_events(
 
 
 @tool(
-    scopes=SCOPES["get_event"],
+    scopes=SCOPES["google_calendar_get_event"],
     api_docs="https://developers.google.com/workspace/calendar/api/v3/reference/events/get",
     provider="google_calendar",
 )
-async def get_event(
+async def google_calendar_get_event(
     params: GetEventParams,
     *,
     token: str,
@@ -158,11 +158,11 @@ async def get_event(
 
 
 @tool(
-    scopes=SCOPES["create_event"],
+    scopes=SCOPES["google_calendar_create_event"],
     api_docs="https://developers.google.com/workspace/calendar/api/v3/reference/events/insert",
     provider="google_calendar",
 )
-async def create_event(
+async def google_calendar_create_event(
     params: CreateEventParams,
     *,
     token: str,
@@ -204,11 +204,11 @@ async def create_event(
 
 
 @tool(
-    scopes=SCOPES["update_event"],
+    scopes=SCOPES["google_calendar_update_event"],
     api_docs="https://developers.google.com/workspace/calendar/api/v3/reference/events/update",
     provider="google_calendar",
 )
-async def update_event(
+async def google_calendar_update_event(
     params: UpdateEventParams,
     *,
     token: str,
