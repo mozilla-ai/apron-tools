@@ -1,0 +1,10 @@
+{
+  "data": {
+    "viewer": {
+      "id": "user-001",
+      "name": "Alice Smith",
+      "email": "alice@example.com",
+      "displayName": "Alice"
+    }
+  }
+}

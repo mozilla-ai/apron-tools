@@ -1,0 +1,17 @@
+{
+  "data": {
+    "cycles": {
+      "nodes": [
+        {
+          "id": "cycle-001",
+          "name": "Sprint 5",
+          "number": 5,
+          "startsAt": "2024-03-11T00:00:00Z",
+          "endsAt": "2024-03-25T00:00:00Z",
+          "progress": 0.3,
+          "completedAt": null
+        }
+      ]
+    }
+  }
+}
