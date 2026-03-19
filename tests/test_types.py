@@ -112,15 +112,30 @@ class TestCapabilityGroup:
 
 
 class TestFileFromBytes:
-    def test_fields(self):
-        f = FileFromBytes(data=b"hello", filename="test.txt", mime_type="text/plain")
+    def test_from_base64_string(self):
+        import base64
+
+        b64 = base64.b64encode(b"hello").decode()
+        f = FileFromBytes(data=b64, filename="test.txt", mime_type="text/plain")
         assert f.type == "bytes"
         assert f.data == b"hello"
         assert f.filename == "test.txt"
         assert f.mime_type == "text/plain"
 
+    def test_json_roundtrip(self):
+        import base64
+
+        b64 = base64.b64encode(b"binary content").decode()
+        original = FileFromBytes(data=b64, filename="file.bin", mime_type="application/octet-stream")
+        json_str = original.model_dump_json()
+        restored = FileFromBytes.model_validate_json(json_str)
+        assert restored.data == b"binary content"
+
     def test_type_literal(self):
-        f = FileFromBytes(data=b"x", filename="x.bin", mime_type="application/octet-stream")
+        import base64
+
+        b64 = base64.b64encode(b"x").decode()
+        f = FileFromBytes(data=b64, filename="x.bin", mime_type="application/octet-stream")
         assert f.type == "bytes"
 
 
@@ -128,7 +143,7 @@ class TestFileFromUrl:
     def test_fields(self):
         f = FileFromUrl(url="https://example.com/report.pdf")
         assert f.type == "url"
-        assert f.url == "https://example.com/report.pdf"
+        assert str(f.url) == "https://example.com/report.pdf"
         assert f.filename is None
         assert f.mime_type is None
 
@@ -137,18 +152,33 @@ class TestFileFromUrl:
         assert f.filename == "report.pdf"
         assert f.mime_type == "application/pdf"
 
+    def test_rejects_non_http_url(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            FileFromUrl(url="ftp://example.com/file")
+
+    def test_rejects_plain_string(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            FileFromUrl(url="not-a-url")
+
 
 class TestFileInput:
     def test_discriminated_union_url(self):
         adapter = TypeAdapter(FileInput)
         result = adapter.validate_python({"type": "url", "url": "https://example.com/img.png"})
         assert isinstance(result, FileFromUrl)
-        assert result.url == "https://example.com/img.png"
+        assert str(result.url) == "https://example.com/img.png"
 
     def test_discriminated_union_bytes(self):
+        import base64
+
         adapter = TypeAdapter(FileInput)
+        b64 = base64.b64encode(b"raw").decode()
         result = adapter.validate_python(
-            {"type": "bytes", "data": b"raw", "filename": "f.bin", "mime_type": "application/octet-stream"}
+            {"type": "bytes", "data": b64, "filename": "f.bin", "mime_type": "application/octet-stream"}
         )
         assert isinstance(result, FileFromBytes)
         assert result.data == b"raw"
@@ -156,4 +186,5 @@ class TestFileInput:
     def test_json_schema_has_discriminator(self):
         adapter = TypeAdapter(FileInput)
         schema = adapter.json_schema()
-        assert "anyOf" in schema or "oneOf" in schema or "discriminator" in schema
+        assert "discriminator" in schema
+        assert schema["discriminator"]["propertyName"] == "type"
