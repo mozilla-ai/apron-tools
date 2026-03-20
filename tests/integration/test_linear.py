@@ -13,8 +13,10 @@ import os
 
 import pytest
 
-from apron_tools.providers.linear import linear_list_teams, linear_whoami
+from apron_tools.providers.linear import linear_list_issues, linear_list_teams, linear_whoami
 from apron_tools.providers.linear.types import (
+    ListIssuesParams,
+    ListIssuesResult,
     ListTeamsParams,
     ListTeamsResult,
     WhoamiParams,
@@ -52,4 +54,15 @@ class TestLinearListTeams:
 
     async def test_str_output(self, linear_token: str) -> None:
         result = await linear_list_teams(ListTeamsParams(), token=linear_token)
+        assert str(result)
+
+
+class TestLinearListIssues:
+    async def test_returns_valid_result(self, linear_token: str) -> None:
+        result = await linear_list_issues(ListIssuesParams(limit=5), token=linear_token)
+        assert isinstance(result, ListIssuesResult)
+        assert result.success is True
+
+    async def test_str_output(self, linear_token: str) -> None:
+        result = await linear_list_issues(ListIssuesParams(limit=5), token=linear_token)
         assert str(result)

@@ -13,8 +13,13 @@ import os
 
 import pytest
 
-from apron_tools.providers.slack import slack_explore_workspace
-from apron_tools.providers.slack.types import ExploreWorkspaceParams, ExploreWorkspaceResult
+from apron_tools.providers.slack import slack_explore_workspace, slack_get_file_info
+from apron_tools.providers.slack.types import (
+    ExploreWorkspaceParams,
+    ExploreWorkspaceResult,
+    GetFileInfoParams,
+    GetFileInfoResult,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -33,7 +38,17 @@ class TestSlackExploreWorkspace:
         result = await slack_explore_workspace(ExploreWorkspaceParams(), token=slack_token)
         assert isinstance(result, ExploreWorkspaceResult)
         assert result.success is True
+        assert result.workspace_name
 
     async def test_str_output(self, slack_token: str) -> None:
         result = await slack_explore_workspace(ExploreWorkspaceParams(), token=slack_token)
-        assert str(result)
+        text = str(result)
+        assert text
+        assert "Channels" in text or "Users" in text or result.workspace_name in text
+
+
+class TestSlackGetFileInfo:
+    async def test_invalid_file_returns_error(self, slack_token: str) -> None:
+        result = await slack_get_file_info(GetFileInfoParams(file_id="F_NONEXISTENT"), token=slack_token)
+        assert isinstance(result, GetFileInfoResult)
+        assert result.success is False

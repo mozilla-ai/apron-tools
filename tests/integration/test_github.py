@@ -13,8 +13,13 @@ import os
 
 import pytest
 
-from apron_tools.providers.github import github_list_repositories
-from apron_tools.providers.github.types import ListRepositoriesParams, ListRepositoriesResult
+from apron_tools.providers.github import github_list_issues, github_list_repositories
+from apron_tools.providers.github.types import (
+    ListIssuesParams,
+    ListIssuesResult,
+    ListRepositoriesParams,
+    ListRepositoriesResult,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -36,4 +41,21 @@ class TestGitHubListRepositories:
 
     async def test_str_output(self, github_token: str) -> None:
         result = await github_list_repositories(ListRepositoriesParams(limit=5), token=github_token)
+        assert str(result)
+
+
+class TestGitHubListIssues:
+    async def test_returns_valid_result(self, github_token: str) -> None:
+        result = await github_list_issues(
+            ListIssuesParams(owner="mozilla-ai", repo="apron-tools", limit=5),
+            token=github_token,
+        )
+        assert isinstance(result, ListIssuesResult)
+        assert result.success is True
+
+    async def test_str_output(self, github_token: str) -> None:
+        result = await github_list_issues(
+            ListIssuesParams(owner="mozilla-ai", repo="apron-tools", limit=5),
+            token=github_token,
+        )
         assert str(result)
