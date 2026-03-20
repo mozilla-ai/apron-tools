@@ -306,3 +306,73 @@ class TestShareFile:
         assert defn.provider == "google"
         assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
+
+
+class TestGoogleDriveUploadFile:
+    async def test_upload_from_bytes(self, httpx_mock) -> None:
+        import base64
+
+        from apron_tools.providers.google.drive.tools import google_drive_upload_file
+        from apron_tools.providers.google.drive.types import UploadFileParams
+        from apron_tools.types import FileFromBytes
+
+        httpx_mock.add_response(
+            json={"id": "file-001", "name": "report.pdf", "webViewLink": "https://drive.google.com/file-001"},
+        )
+        b64 = base64.b64encode(b"pdf content").decode()
+        result = await google_drive_upload_file(
+            UploadFileParams(file=FileFromBytes(data=b64, filename="report.pdf", mime_type="application/pdf")),
+            token="test-token",
+            base_url="https://test.googleapis.com/upload/drive/v3/files",
+        )
+        assert result.success is True
+        assert result.id == "file-001"
+        assert result.name == "report.pdf"
+
+    async def test_upload_with_folder(self, httpx_mock) -> None:
+        import base64
+
+        from apron_tools.providers.google.drive.tools import google_drive_upload_file
+        from apron_tools.providers.google.drive.types import UploadFileParams
+        from apron_tools.types import FileFromBytes
+
+        httpx_mock.add_response(
+            json={"id": "file-002", "name": "doc.txt", "webViewLink": "https://drive.google.com/file-002"},
+        )
+        b64 = base64.b64encode(b"text").decode()
+        result = await google_drive_upload_file(
+            UploadFileParams(
+                file=FileFromBytes(data=b64, filename="doc.txt", mime_type="text/plain"),
+                folder_id="folder-001",
+            ),
+            token="test-token",
+            base_url="https://test.googleapis.com/upload/drive/v3/files",
+        )
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert b"folder-001" in request.content
+
+    async def test_upload_api_error(self, httpx_mock) -> None:
+        import base64
+
+        from apron_tools.providers.google.drive.tools import google_drive_upload_file
+        from apron_tools.providers.google.drive.types import UploadFileParams
+        from apron_tools.types import FileFromBytes
+
+        httpx_mock.add_response(status_code=403, text="Forbidden")
+        b64 = base64.b64encode(b"data").decode()
+        result = await google_drive_upload_file(
+            UploadFileParams(file=FileFromBytes(data=b64, filename="f.bin", mime_type="application/octet-stream")),
+            token="bad-token",
+            base_url="https://test.googleapis.com/upload/drive/v3/files",
+        )
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        from apron_tools.providers.google.drive.tools import google_drive_upload_file
+
+        defn = google_drive_upload_file._tool_definition
+        assert defn.name == "google_drive_upload_file"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"

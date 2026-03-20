@@ -31,6 +31,7 @@ from .drive import (
     google_drive_move_file,
     google_drive_search,
     google_drive_share_file,
+    google_drive_upload_file,
 )
 from .gmail import (
     gmail_add_label_to_email,
@@ -95,6 +96,7 @@ __all__ = [
     "google_drive_move_file",
     "google_drive_search",
     "google_drive_share_file",
+    "google_drive_upload_file",
     "google_sheets_add_sheet",
     "google_sheets_append_row",
     "google_sheets_copy_spreadsheet",

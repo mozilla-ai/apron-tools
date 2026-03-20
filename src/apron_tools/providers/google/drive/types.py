@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from apron_tools.types import ToolResult
+from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -252,3 +252,46 @@ class ShareFileResult(ToolResult):
         if not self.success:
             return f"Error: {self.error}"
         return f"Shared with {self.display_name} ({self.email_address}) as {self.role}."
+
+
+# ---------------------------------------------------------------------------
+# google_drive_upload_file
+# ---------------------------------------------------------------------------
+
+
+class UploadFileParams(BaseModel):
+    """Parameters for uploading a file to Google Drive."""
+
+    file: FileInput
+    """File to upload — either a URL to fetch or raw bytes."""
+
+    name: str | None = None
+    """Filename override. Uses the inferred filename if not provided."""
+
+    folder_id: str | None = None
+    """Optional parent folder ID. Uploads to root if not provided."""
+
+
+class UploadFileResult(ToolResult):
+    """Result of uploading a file to Google Drive."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    name: str = ""
+    web_view_link: str = Field(default="", alias="webViewLink")
+    mime_type: str = Field(default="", alias="mimeType")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _set_success(cls, data: Any) -> Any:
+        """Set success=True when parsing raw API JSON."""
+        if isinstance(data, dict) and "success" not in data:
+            data["success"] = True
+        return data
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the upload result."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"File uploaded: {self.name} (id={self.id})\nURL: {self.web_view_link}"

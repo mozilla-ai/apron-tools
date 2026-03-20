@@ -20,6 +20,7 @@ SCOPES: dict[str, list[GoogleDriveScope]] = {
     "google_drive_move_file": [GoogleDriveScope.DRIVE],
     "google_drive_search": [GoogleDriveScope.DRIVE],
     "google_drive_share_file": [GoogleDriveScope.DRIVE],
+    "google_drive_upload_file": [GoogleDriveScope.DRIVE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

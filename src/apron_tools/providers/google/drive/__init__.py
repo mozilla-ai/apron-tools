@@ -11,6 +11,7 @@ from .tools import (
     google_drive_move_file,
     google_drive_search,
     google_drive_share_file,
+    google_drive_upload_file,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "google_drive_move_file",
     "google_drive_search",
     "google_drive_share_file",
+    "google_drive_upload_file",
 ]
