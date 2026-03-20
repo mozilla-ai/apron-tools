@@ -13,8 +13,8 @@ import os
 
 import pytest
 
-from apron_tools.providers.typeform import typeform_list_forms
-from apron_tools.providers.typeform.types import ListFormsParams, ListFormsResult
+from apron_tools.providers.typeform import typeform_explore_workspace
+from apron_tools.providers.typeform.types import ExploreWorkspaceParams, ExploreWorkspaceResult
 
 pytestmark = pytest.mark.integration
 
@@ -28,12 +28,12 @@ def typeform_token() -> str:
     return token
 
 
-class TestTypeformListForms:
+class TestTypeformExploreWorkspace:
     async def test_returns_valid_result(self, typeform_token: str) -> None:
-        result = await typeform_list_forms(ListFormsParams(page_size=5), token=typeform_token)
-        assert isinstance(result, ListFormsResult)
+        result = await typeform_explore_workspace(ExploreWorkspaceParams(page_size=5), token=typeform_token)
+        assert isinstance(result, ExploreWorkspaceResult)
         assert result.success is True
 
     async def test_str_output(self, typeform_token: str) -> None:
-        result = await typeform_list_forms(ListFormsParams(page_size=5), token=typeform_token)
+        result = await typeform_explore_workspace(ExploreWorkspaceParams(page_size=5), token=typeform_token)
         assert str(result)

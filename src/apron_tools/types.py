@@ -33,7 +33,7 @@ class ToolDefinition:
     """Metadata for a single tool, used by any-identity's registry."""
 
     name: str
-    """Tool name, e.g. ``typeform_list_forms``."""
+    """Tool name, e.g. ``typeform_explore_workspace``."""
 
     provider: str
     """OAuth provider / company, e.g. ``google``, ``atlassian``, ``slack``."""

@@ -1,0 +1,10 @@
+{
+  "id": "new-form-001",
+  "title": "Customer Survey",
+  "fields": [
+    {"id": "field-001", "ref": "q1", "title": "Your name?", "type": "short_text"}
+  ],
+  "_links": {
+    "display": "https://example.typeform.com/to/new-form-001"
+  }
+}
