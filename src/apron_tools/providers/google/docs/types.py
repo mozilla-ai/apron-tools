@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from apron_tools.types import ToolResult
+from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -45,6 +45,20 @@ class CopyDocumentParams(BaseModel):
 
     document_id: str
     new_title: str
+
+
+class InsertImageParams(BaseModel):
+    """Parameters for inserting an image into a Google Doc.
+
+    Width and height are in points and control the rendered size. If the
+    aspect ratio does not match the source image, the image will be stretched.
+    """
+
+    document_id: str
+    file: FileInput
+    location_index: int = Field(default=1, ge=1)
+    width_pt: float = Field(default=300, gt=0)
+    height_pt: float = Field(default=200, gt=0)
 
 
 # ---------------------------------------------------------------------------
@@ -304,3 +318,20 @@ class ReplaceTextResult(ToolResult):
         if not self.success:
             return f"Error: {self.error}"
         return f"Replaced {self.occurrences_changed} occurrence(s) in document '{self.title}'."
+
+
+class InsertImageResult(ToolResult):
+    """Result of inserting an image into a Google Doc."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    document_id: str = ""
+    filename: str = ""
+    drive_file_id: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the inserted image."""
+        if not self.success:
+            return f"Error: {self.error}"
+        url = f"https://docs.google.com/document/d/{self.document_id}/edit"
+        return f"Image '{self.filename}' inserted into document.\nDocument URL: {url}"

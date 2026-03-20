@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 
 import httpx
 
+from apron_tools.providers.google._images import delete_drive_file, upload_image_to_drive
 from apron_tools.providers.google.slides.types import (
     AddSlideParams,
     AddSlideResult,
@@ -19,6 +21,8 @@ from apron_tools.providers.google.slides.types import (
     FormatTextResult,
     InsertElementParams,
     InsertElementResult,
+    InsertImageParams,
+    InsertImageResult,
     ListPresentationsParams,
     ListPresentationsResult,
     PresentationFile,
@@ -640,3 +644,84 @@ async def google_slides_format_text(
         presentation_id=params.presentation_id,
         object_id=params.object_id,
     )
+
+
+@tool(
+    scopes=SCOPES["google_slides_insert_image"],
+    api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
+    provider="google",
+    service="google_slides",
+)
+async def google_slides_insert_image(
+    params: InsertImageParams,
+    *,
+    token: str,
+    base_url: str = _SLIDES_BASE_URL,
+) -> InsertImageResult:
+    """Insert an image onto a slide in a Google Slides presentation."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            drive_file_id, public_url, filename = await upload_image_to_drive(params.file, token, client=client)
+
+            image_id = f"image_{uuid.uuid4().hex[:8]}"
+            batch_body = {
+                "requests": [
+                    {
+                        "createImage": {
+                            "objectId": image_id,
+                            "url": public_url,
+                            "elementProperties": {
+                                "pageObjectId": params.slide_id,
+                                "size": {
+                                    "width": {"magnitude": params.width, "unit": "PT"},
+                                    "height": {"magnitude": params.height, "unit": "PT"},
+                                },
+                                "transform": {
+                                    "scaleX": 1,
+                                    "scaleY": 1,
+                                    "translateX": params.x,
+                                    "translateY": params.y,
+                                    "unit": "PT",
+                                },
+                            },
+                        }
+                    }
+                ]
+            }
+
+            resp = await client.post(
+                f"{base_url}/{params.presentation_id}:batchUpdate",
+                headers=_headers(token, content_type=True),
+                json=batch_body,
+            )
+
+            if not resp.is_success:
+                await _cleanup_drive_file(drive_file_id, token, client)
+                return InsertImageResult(
+                    success=False,
+                    error=f"Slides API error {resp.status_code}: {resp.text}",
+                    drive_file_id=drive_file_id,
+                )
+    except ValueError as exc:
+        return InsertImageResult(success=False, error=str(exc))
+    except httpx.HTTPStatusError as exc:
+        return InsertImageResult(
+            success=False,
+            error=f"Drive API error {exc.response.status_code}: {exc.response.text}",
+        )
+    except httpx.HTTPError as exc:
+        return InsertImageResult(success=False, error=str(exc))
+
+    return InsertImageResult(
+        success=True,
+        presentation_id=params.presentation_id,
+        image_id=image_id,
+        filename=filename,
+        drive_file_id=drive_file_id,
+    )
+
+
+async def _cleanup_drive_file(file_id: str, token: str, client: httpx.AsyncClient) -> None:
+    """Best-effort cleanup of an uploaded Drive file after insert failure."""
+    with contextlib.suppress(httpx.HTTPError):
+        await delete_drive_file(file_id, token, client=client)

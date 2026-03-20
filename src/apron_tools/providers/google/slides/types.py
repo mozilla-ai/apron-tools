@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from apron_tools.types import ToolResult
+from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -85,6 +85,22 @@ class UpdateTableCellParams(BaseModel):
     row: int
     column: int
     text: str
+
+
+class InsertImageParams(BaseModel):
+    """Parameters for inserting an image onto a slide.
+
+    Width and height are in points and control the rendered size. If the
+    aspect ratio does not match the source image, the image will be stretched.
+    """
+
+    presentation_id: str
+    slide_id: str
+    file: FileInput
+    x: float = 100
+    y: float = 100
+    width: float = Field(default=300, gt=0)
+    height: float = Field(default=200, gt=0)
 
 
 class FormatTextParams(BaseModel):
@@ -385,3 +401,21 @@ class FormatTextResult(ToolResult):
         if not self.success:
             return f"Error: {self.error}"
         return f"Text formatted in object {self.object_id}."
+
+
+class InsertImageResult(ToolResult):
+    """Result of inserting an image onto a slide."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    presentation_id: str = ""
+    image_id: str = ""
+    filename: str = ""
+    drive_file_id: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the inserted image."""
+        if not self.success:
+            return f"Error: {self.error}"
+        url = f"https://docs.google.com/presentation/d/{self.presentation_id}/edit"
+        return f"Image '{self.filename}' inserted (id={self.image_id}).\nPresentation URL: {url}"

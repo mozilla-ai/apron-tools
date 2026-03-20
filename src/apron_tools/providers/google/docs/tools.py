@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import httpx
 
+from apron_tools.providers.google._images import delete_drive_file, upload_image_to_drive
 from apron_tools.providers.google.docs.types import (
     CopyDocumentParams,
     CopyDocumentResult,
     CreateDocumentParams,
     CreateDocumentResult,
     DocumentFile,
+    InsertImageParams,
+    InsertImageResult,
     ListDocumentsParams,
     ListDocumentsResult,
     ReadDocumentParams,
@@ -298,3 +302,72 @@ async def google_docs_replace_text(
         title=title,
         occurrences_changed=occurrences,
     )
+
+
+@tool(
+    scopes=SCOPES["google_docs_insert_image"],
+    api_docs="https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/batchUpdate",
+    provider="google",
+    service="google_docs",
+)
+async def google_docs_insert_image(
+    params: InsertImageParams,
+    *,
+    token: str,
+    base_url: str = _DOCS_BASE_URL,
+) -> InsertImageResult:
+    """Insert an image into a Google Doc at a given position."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            drive_file_id, public_url, filename = await upload_image_to_drive(params.file, token, client=client)
+
+            batch_body = {
+                "requests": [
+                    {
+                        "insertInlineImage": {
+                            "uri": public_url,
+                            "location": {"index": params.location_index},
+                            "objectSize": {
+                                "width": {"magnitude": params.width_pt, "unit": "PT"},
+                                "height": {"magnitude": params.height_pt, "unit": "PT"},
+                            },
+                        }
+                    }
+                ]
+            }
+
+            resp = await client.post(
+                f"{base_url}/{params.document_id}:batchUpdate",
+                headers=_headers(token, content_type=True),
+                json=batch_body,
+            )
+
+            if not resp.is_success:
+                await _cleanup_drive_file(drive_file_id, token, client)
+                return InsertImageResult(
+                    success=False,
+                    error=f"Docs API error {resp.status_code}: {resp.text}",
+                    drive_file_id=drive_file_id,
+                )
+    except ValueError as exc:
+        return InsertImageResult(success=False, error=str(exc))
+    except httpx.HTTPStatusError as exc:
+        return InsertImageResult(
+            success=False,
+            error=f"Drive API error {exc.response.status_code}: {exc.response.text}",
+        )
+    except httpx.HTTPError as exc:
+        return InsertImageResult(success=False, error=str(exc))
+
+    return InsertImageResult(
+        success=True,
+        document_id=params.document_id,
+        filename=filename,
+        drive_file_id=drive_file_id,
+    )
+
+
+async def _cleanup_drive_file(file_id: str, token: str, client: httpx.AsyncClient) -> None:
+    """Best-effort cleanup of an uploaded Drive file after insert failure."""
+    with contextlib.suppress(httpx.HTTPError):
+        await delete_drive_file(file_id, token, client=client)
