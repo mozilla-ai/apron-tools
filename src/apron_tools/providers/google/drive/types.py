@@ -295,3 +295,31 @@ class UploadFileResult(ToolResult):
         if not self.success:
             return f"Error: {self.error}"
         return f"File uploaded: {self.name} (id={self.id})\nURL: {self.web_view_link}"
+
+
+# ---------------------------------------------------------------------------
+# google_drive_read_text_file
+# ---------------------------------------------------------------------------
+
+
+class ReadTextFileParams(BaseModel):
+    """Parameters for reading a plain text file from Google Drive."""
+
+    file_id: str
+    """The Drive file ID to read."""
+
+
+class ReadTextFileResult(ToolResult):
+    """Result of reading a text file from Google Drive."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str = ""
+    content: str = ""
+
+    def __str__(self) -> str:
+        """Return the file content with the filename as a header."""
+        if not self.success:
+            return f"Error: {self.error}"
+        body = self.content if self.content.strip() else "(File is empty)"
+        return f"# {self.name}\n\n{body}"
