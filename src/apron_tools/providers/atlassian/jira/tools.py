@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.atlassian.jira.types import (
     AddCommentParams,
     AddCommentResult,
@@ -27,6 +28,8 @@ from apron_tools.providers.atlassian.jira.types import (
     ListVersionsResult,
     ProjectSummary,
     SprintSummary,
+    UploadAttachmentParams,
+    UploadAttachmentResult,
     VersionSummary,
 )
 from apron_tools.tool import tool
@@ -556,3 +559,65 @@ async def atlassian_jira_list_sprints(
     data = resp.json()
     sprints = [SprintSummary.model_validate(s) for s in data.get("values", [])]
     return ListSprintsResult(success=True, sprints=sprints)
+
+
+@tool(
+    scopes=SCOPES["atlassian_jira_upload_attachment"],
+    api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/",
+    provider="atlassian",
+    service="atlassian_jira",
+)
+async def atlassian_jira_upload_attachment(
+    params: UploadAttachmentParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UploadAttachmentResult:
+    """Upload a file as an attachment to a Jira issue."""
+    try:
+        data, filename, mime_type = await resolve_file_input(params.file)
+    except Exception as exc:
+        return UploadAttachmentResult(success=False, error=f"Failed to resolve file: {exc}")
+
+    cloud_id = await _resolve_cloud_id(token, base_url)
+    if not cloud_id:
+        return UploadAttachmentResult(
+            success=False,
+            error="Failed to resolve Jira cloud ID. Ensure you have access to a Jira site.",
+        )
+
+    url = _api_url(cloud_id, f"/issue/{params.issue_key}/attachments", base_url=base_url)
+    headers = _headers(token)
+    headers["X-Atlassian-Token"] = "no-check"
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                url,
+                headers=headers,
+                files={"file": (filename, data, mime_type)},
+            )
+    except httpx.HTTPError as exc:
+        return UploadAttachmentResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return UploadAttachmentResult(
+            success=False,
+            error=f"Jira API error {resp.status_code}: {resp.text}",
+        )
+
+    attachments = resp.json()
+    if isinstance(attachments, list) and attachments:
+        att = attachments[0]
+        return UploadAttachmentResult(
+            success=True,
+            attachment_id=att.get("id", ""),
+            filename=att.get("filename", filename),
+            issue_key=params.issue_key,
+        )
+
+    return UploadAttachmentResult(
+        success=True,
+        filename=filename,
+        issue_key=params.issue_key,
+    )

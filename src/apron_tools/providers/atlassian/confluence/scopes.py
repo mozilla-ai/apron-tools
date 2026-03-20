@@ -25,6 +25,7 @@ SCOPES: dict[str, list[ConfluenceScope]] = {
     ],
     "atlassian_confluence_search_content": [ConfluenceScope.SEARCH_CONFLUENCE],
     "atlassian_confluence_get_child_pages": [ConfluenceScope.READ_CONFLUENCE_CONTENT],
+    "atlassian_confluence_upload_attachment": [ConfluenceScope.WRITE_CONFLUENCE_CONTENT],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

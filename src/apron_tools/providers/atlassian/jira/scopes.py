@@ -25,6 +25,7 @@ SCOPES: dict[str, list[JiraScope]] = {
     "atlassian_jira_list_versions": [JiraScope.READ_JIRA_WORK],
     "atlassian_jira_list_boards": [JiraScope.READ_JIRA_WORK],
     "atlassian_jira_list_sprints": [JiraScope.READ_JIRA_WORK],
+    "atlassian_jira_upload_attachment": [JiraScope.WRITE_JIRA_WORK],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(
