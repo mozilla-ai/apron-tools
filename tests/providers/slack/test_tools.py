@@ -856,6 +856,11 @@ class TestSlackSaveFileForUpload:
         assert result.size == len(file_bytes)
         assert "screenshot.png" in str(result)
 
+        # Verify binary data survives JSON round-trip via Base64Bytes.
+        json_str = result.model_dump_json()
+        restored = SaveFileForUploadResult.model_validate_json(json_str)
+        assert restored.data == file_bytes
+
     async def test_file_too_large_from_head(self, httpx_mock: HTTPXMock) -> None:
         # HEAD reports file larger than 10 MB.
         httpx_mock.add_response(

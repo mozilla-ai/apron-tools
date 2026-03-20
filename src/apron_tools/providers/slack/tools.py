@@ -508,9 +508,16 @@ async def slack_save_file_for_upload(
                     error=f"HEAD request failed with status {head_resp.status_code}",
                 )
 
-            content_length = head_resp.headers.get("content-length")
-            if content_length and int(content_length) > max_bytes:
-                size_mb = int(content_length) / (1024 * 1024)
+            content_length_header = head_resp.headers.get("content-length")
+            content_length: int | None = None
+            if content_length_header is not None:
+                try:
+                    content_length = int(content_length_header)
+                except ValueError:
+                    content_length = None
+
+            if content_length is not None and content_length > max_bytes:
+                size_mb = content_length / (1024 * 1024)
                 return SaveFileForUploadResult(
                     success=False,
                     error=f"File too large: {size_mb:.1f} MB (max {params.max_size_mb} MB).",
@@ -538,7 +545,7 @@ async def slack_save_file_for_upload(
 
     return SaveFileForUploadResult(
         success=True,
-        data=response.content,
+        data=base64.b64encode(response.content),
         filename=filename,
         mime_type=mime_type,
         size=len(response.content),

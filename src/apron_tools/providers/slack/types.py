@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Base64Bytes, BaseModel, ConfigDict, Field, model_validator
 
 from apron_tools.types import ToolResult
 
@@ -522,7 +522,7 @@ class SaveFileForUploadResult(ToolResult):
 
     model_config = ConfigDict(extra="ignore")
 
-    data: bytes = b""
+    data: Base64Bytes = b""
     filename: str = ""
     mime_type: str = ""
     size: int = 0
