@@ -32,6 +32,8 @@ from apron_tools.providers.slack.types import (
     ReadChannelMessagesResult,
     ReadThreadParams,
     ReadThreadResult,
+    SaveFileForUploadParams,
+    SaveFileForUploadResult,
     SendChannelMessageParams,
     SendChannelMessageResult,
     SendUserMessageParams,
@@ -478,6 +480,76 @@ async def slack_download_file(
 
     encoded = base64.b64encode(response.content).decode("ascii")
     return DownloadFileResult(success=True, content=encoded, mime_type=mime_type)
+
+
+@tool(
+    scopes=SCOPES["slack_save_file_for_upload"],
+    api_docs="https://docs.slack.dev/reference/web-api/files/info",
+    provider="slack",
+)
+async def slack_save_file_for_upload(
+    params: SaveFileForUploadParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,  # noqa: ARG001
+) -> SaveFileForUploadResult:
+    """Download a Slack file and return it as raw bytes for cross-tool upload."""
+    from urllib.parse import unquote, urlparse
+
+    max_bytes = params.max_size_mb * 1024 * 1024
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
+            head_resp = await client.head(params.url, headers=headers)
+            if not head_resp.is_success:
+                return SaveFileForUploadResult(
+                    success=False,
+                    error=f"HEAD request failed with status {head_resp.status_code}",
+                )
+
+            content_length_header = head_resp.headers.get("content-length")
+            content_length: int | None = None
+            if content_length_header is not None:
+                try:
+                    content_length = int(content_length_header)
+                except ValueError:
+                    content_length = None
+
+            if content_length is not None and content_length > max_bytes:
+                size_mb = content_length / (1024 * 1024)
+                return SaveFileForUploadResult(
+                    success=False,
+                    error=f"File too large: {size_mb:.1f} MB (max {params.max_size_mb} MB).",
+                )
+
+            response = await client.get(params.url, headers=headers)
+    except httpx.TimeoutException:
+        return SaveFileForUploadResult(success=False, error="Request timed out.")
+    except httpx.HTTPError as exc:
+        return SaveFileForUploadResult(success=False, error=str(exc))
+
+    if not response.is_success:
+        return SaveFileForUploadResult(success=False, error=f"HTTP {response.status_code}")
+
+    if len(response.content) > max_bytes:
+        size_mb = len(response.content) / (1024 * 1024)
+        return SaveFileForUploadResult(
+            success=False,
+            error=f"File too large: {size_mb:.1f} MB (max {params.max_size_mb} MB).",
+        )
+
+    content_type = response.headers.get("content-type", "application/octet-stream")
+    mime_type = content_type.split(";")[0].strip()
+    filename = unquote(urlparse(params.url).path.rsplit("/", 1)[-1]) or "download"
+
+    return SaveFileForUploadResult(
+        success=True,
+        data=base64.b64encode(response.content),
+        filename=filename,
+        mime_type=mime_type,
+        size=len(response.content),
+    )
 
 
 @tool(
