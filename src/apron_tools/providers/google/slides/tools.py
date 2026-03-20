@@ -662,46 +662,6 @@ async def google_slides_insert_image(
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             drive_file_id, public_url, filename = await upload_image_to_drive(params.file, token, client=client)
-
-            image_id = f"image_{uuid.uuid4().hex[:8]}"
-            batch_body = {
-                "requests": [
-                    {
-                        "createImage": {
-                            "objectId": image_id,
-                            "url": public_url,
-                            "elementProperties": {
-                                "pageObjectId": params.slide_id,
-                                "size": {
-                                    "width": {"magnitude": params.width, "unit": "PT"},
-                                    "height": {"magnitude": params.height, "unit": "PT"},
-                                },
-                                "transform": {
-                                    "scaleX": 1,
-                                    "scaleY": 1,
-                                    "translateX": params.x,
-                                    "translateY": params.y,
-                                    "unit": "PT",
-                                },
-                            },
-                        }
-                    }
-                ]
-            }
-
-            resp = await client.post(
-                f"{base_url}/{params.presentation_id}:batchUpdate",
-                headers=_headers(token, content_type=True),
-                json=batch_body,
-            )
-
-            if not resp.is_success:
-                await _cleanup_drive_file(drive_file_id, token, client)
-                return InsertImageResult(
-                    success=False,
-                    error=f"Slides API error {resp.status_code}: {resp.text}",
-                    drive_file_id=drive_file_id,
-                )
     except ValueError as exc:
         return InsertImageResult(success=False, error=str(exc))
     except httpx.HTTPStatusError as exc:
@@ -712,6 +672,51 @@ async def google_slides_insert_image(
     except httpx.HTTPError as exc:
         return InsertImageResult(success=False, error=str(exc))
 
+    image_id = f"image_{uuid.uuid4().hex[:8]}"
+    batch_body = {
+        "requests": [
+            {
+                "createImage": {
+                    "objectId": image_id,
+                    "url": public_url,
+                    "elementProperties": {
+                        "pageObjectId": params.slide_id,
+                        "size": {
+                            "width": {"magnitude": params.width, "unit": "PT"},
+                            "height": {"magnitude": params.height, "unit": "PT"},
+                        },
+                        "transform": {
+                            "scaleX": 1,
+                            "scaleY": 1,
+                            "translateX": params.x,
+                            "translateY": params.y,
+                            "unit": "PT",
+                        },
+                    },
+                }
+            }
+        ]
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{base_url}/{params.presentation_id}:batchUpdate",
+                headers=_headers(token, content_type=True),
+                json=batch_body,
+            )
+    except httpx.HTTPError as exc:
+        await _cleanup_drive_file(drive_file_id, token)
+        return InsertImageResult(success=False, error=str(exc), drive_file_id=drive_file_id)
+
+    if not resp.is_success:
+        await _cleanup_drive_file(drive_file_id, token)
+        return InsertImageResult(
+            success=False,
+            error=f"Slides API error {resp.status_code}: {resp.text}",
+            drive_file_id=drive_file_id,
+        )
+
     return InsertImageResult(
         success=True,
         presentation_id=params.presentation_id,
@@ -721,7 +726,7 @@ async def google_slides_insert_image(
     )
 
 
-async def _cleanup_drive_file(file_id: str, token: str, client: httpx.AsyncClient) -> None:
+async def _cleanup_drive_file(file_id: str, token: str) -> None:
     """Best-effort cleanup of an uploaded Drive file after insert failure."""
     with contextlib.suppress(httpx.HTTPError):
-        await delete_drive_file(file_id, token, client=client)
+        await delete_drive_file(file_id, token)

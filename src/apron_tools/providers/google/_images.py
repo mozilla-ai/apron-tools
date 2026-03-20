@@ -16,6 +16,7 @@ clean up the Drive file if the downstream insert fails.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import uuid
 
@@ -87,18 +88,31 @@ async def upload_image_to_drive(
         file_id = resp_data["id"]
 
         # Set public reader permissions so the Docs/Slides API can fetch the image.
-        perm_resp = await c.post(
-            f"{_DRIVE_BASE_URL}/{file_id}/permissions",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            json={"role": "reader", "type": "anyone"},
-        )
-        perm_resp.raise_for_status()
+        try:
+            perm_resp = await c.post(
+                f"{_DRIVE_BASE_URL}/{file_id}/permissions",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                json={"role": "reader", "type": "anyone"},
+            )
+            perm_resp.raise_for_status()
+        except httpx.HTTPError:
+            # Best-effort cleanup if permission setting fails.
+            with contextlib.suppress(httpx.HTTPError):
+                await c.delete(
+                    f"{_DRIVE_BASE_URL}/{file_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"supportsAllDrives": "true"},
+                )
+            raise
 
         # Prefer webContentLink from the API when available.
-        public_url = resp_data.get("webContentLink", f"https://drive.google.com/uc?id={file_id}")
+        public_url = resp_data.get(
+            "webContentLink",
+            f"https://drive.google.com/uc?id={file_id}&export=download",
+        )
         return file_id, public_url
 
     if client is not None:
