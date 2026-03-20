@@ -1,0 +1,15 @@
+{
+  "data": {
+    "fileUpload": {
+      "success": true,
+      "uploadFile": {
+        "uploadUrl": "https://uploads.linear.app/presigned-url",
+        "assetUrl": "https://uploads.linear.app/asset-001.txt",
+        "headers": [
+          {"key": "x-amz-acl", "value": "public-read"},
+          {"key": "Cache-Control", "value": "max-age=31536000"}
+        ]
+      }
+    }
+  }
+}

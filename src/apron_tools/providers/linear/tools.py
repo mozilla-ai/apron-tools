@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.linear.types import (
     CreateIssueParams,
     CreateIssueResult,
@@ -33,6 +34,8 @@ from apron_tools.providers.linear.types import (
     UpdateIssueResult,
     UpdateProjectParams,
     UpdateProjectResult,
+    UploadFileToIssueParams,
+    UploadFileToIssueResult,
     WhoamiParams,
     WhoamiResult,
 )
@@ -726,3 +729,141 @@ async def linear_list_cycles(
     nodes = data.get("data", {}).get("cycles", {}).get("nodes", [])
     cycles = [CycleDetail.model_validate(n) for n in nodes]
     return ListCyclesResult(success=True, cycles=cycles)
+
+
+# ---------------------------------------------------------------------------
+# upload_file_to_issue
+# ---------------------------------------------------------------------------
+
+_FILE_UPLOAD_MUTATION = """
+mutation($size: Int!, $contentType: String!, $filename: String!) {
+    fileUpload(size: $size, contentType: $contentType, filename: $filename) {
+        success
+        uploadFile {
+            uploadUrl
+            assetUrl
+            headers {
+                key
+                value
+            }
+        }
+    }
+}
+"""
+
+_ATTACHMENT_CREATE_MUTATION = """
+mutation($issueId: String!, $title: String!, $url: String!) {
+    attachmentCreate(input: {
+        issueId: $issueId,
+        title: $title,
+        url: $url
+    }) {
+        success
+        attachment {
+            id
+            url
+        }
+    }
+}
+"""
+
+
+@tool(
+    scopes=SCOPES["linear_upload_file_to_issue"],
+    api_docs=_API_DOCS,
+    provider="linear",
+)
+async def linear_upload_file_to_issue(
+    params: UploadFileToIssueParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UploadFileToIssueResult:
+    """Upload a file and attach it to a Linear issue."""
+    try:
+        file_data, filename, mime_type = await resolve_file_input(params.file)
+    except Exception as exc:
+        return UploadFileToIssueResult(success=False, error=f"Failed to resolve file: {exc}")
+
+    # Step 1: Request a presigned upload URL.
+    try:
+        upload_resp = await _execute_graphql(
+            _FILE_UPLOAD_MUTATION,
+            {
+                "size": len(file_data),
+                "contentType": mime_type,
+                "filename": filename,
+            },
+            token,
+            base_url,
+        )
+    except httpx.HTTPError as exc:
+        return UploadFileToIssueResult(success=False, error=str(exc))
+
+    error = _extract_error(upload_resp)
+    if error:
+        return UploadFileToIssueResult(success=False, error=error)
+
+    file_upload = upload_resp.get("data", {}).get("fileUpload", {})
+    if not file_upload.get("success"):
+        return UploadFileToIssueResult(success=False, error="fileUpload mutation returned success=false")
+
+    upload_file = file_upload.get("uploadFile", {})
+    upload_url = upload_file.get("uploadUrl")
+    asset_url = upload_file.get("assetUrl")
+
+    if not upload_url or not asset_url:
+        return UploadFileToIssueResult(success=False, error="No upload URL returned from fileUpload")
+
+    # Step 2: PUT the file bytes to the presigned URL.
+    upload_headers = {h["key"]: h["value"] for h in upload_file.get("headers", [])}
+    upload_headers["Content-Type"] = mime_type
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            put_resp = await client.put(upload_url, headers=upload_headers, content=file_data)
+    except httpx.HTTPError as exc:
+        return UploadFileToIssueResult(success=False, error=str(exc))
+
+    if not put_resp.is_success:
+        return UploadFileToIssueResult(
+            success=False,
+            error=f"Upload failed with status {put_resp.status_code}",
+        )
+
+    # Step 3: Create an attachment linking the uploaded file to the issue.
+    attachment_title = params.title or filename
+
+    try:
+        attach_resp = await _execute_graphql(
+            _ATTACHMENT_CREATE_MUTATION,
+            {
+                "issueId": params.issue_id,
+                "title": attachment_title,
+                "url": asset_url,
+            },
+            token,
+            base_url,
+        )
+    except httpx.HTTPError as exc:
+        return UploadFileToIssueResult(success=False, error=str(exc))
+
+    error = _extract_error(attach_resp)
+    if error:
+        return UploadFileToIssueResult(success=False, error=error)
+
+    attachment_create = attach_resp.get("data", {}).get("attachmentCreate", {})
+    if not attachment_create.get("success"):
+        return UploadFileToIssueResult(
+            success=False,
+            error="attachmentCreate mutation returned success=false",
+        )
+
+    attachment = attachment_create.get("attachment", {})
+
+    return UploadFileToIssueResult(
+        success=True,
+        attachment_id=attachment.get("id"),
+        asset_url=asset_url,
+        filename=filename,
+    )

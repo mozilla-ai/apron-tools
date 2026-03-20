@@ -18,6 +18,7 @@ from apron_tools.providers.linear.tools import (
     linear_read_issue,
     linear_update_issue,
     linear_update_project,
+    linear_upload_file_to_issue,
     linear_whoami,
 )
 from apron_tools.providers.linear.types import (
@@ -41,6 +42,8 @@ from apron_tools.providers.linear.types import (
     UpdateIssueResult,
     UpdateProjectParams,
     UpdateProjectResult,
+    UploadFileToIssueParams,
+    UploadFileToIssueResult,
     WhoamiParams,
     WhoamiResult,
 )
@@ -532,3 +535,144 @@ class TestListCycles:
         assert defn.name == "linear_list_cycles"
         assert defn.provider == "linear"
         assert defn.scopes == ["read"]
+
+
+# ---------------------------------------------------------------------------
+# upload_file_to_issue
+# ---------------------------------------------------------------------------
+
+
+class TestUploadFileToIssue:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        file_content = b"hello world"
+        b64 = base64.b64encode(file_content).decode()
+
+        # Step 1: fileUpload mutation response.
+        httpx_mock.add_response(json=_load_json("file_upload.json"))
+        # Step 2: PUT to presigned URL.
+        httpx_mock.add_response(status_code=200)
+        # Step 3: attachmentCreate mutation response.
+        httpx_mock.add_response(json=_load_json("attachment_create.json"))
+
+        params = UploadFileToIssueParams(
+            issue_id="issue-001",
+            file=FileFromBytes(data=b64, filename="notes.txt", mime_type="text/plain"),
+        )
+        result = await linear_upload_file_to_issue(params, token=_TOKEN)
+
+        assert isinstance(result, UploadFileToIssueResult)
+        assert result.success is True
+        assert result.attachment_id == "attachment-001"
+        assert result.asset_url == "https://uploads.linear.app/asset-001.txt"
+        assert result.filename == "notes.txt"
+        assert "notes.txt" in str(result)
+
+        # Verify the PUT request used the presigned URL and headers.
+        requests = httpx_mock.get_requests()
+        put_req = requests[1]
+        assert put_req.method == "PUT"
+        assert str(put_req.url) == "https://uploads.linear.app/presigned-url"
+        assert put_req.headers["x-amz-acl"] == "public-read"
+        assert put_req.headers["Content-Type"] == "text/plain"
+        assert put_req.content == file_content
+
+    async def test_file_upload_graphql_error(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        httpx_mock.add_response(json=_load_json("error.json"))
+
+        params = UploadFileToIssueParams(
+            issue_id="issue-001",
+            file=FileFromBytes(
+                data=base64.b64encode(b"data").decode(),
+                filename="f.txt",
+                mime_type="text/plain",
+            ),
+        )
+        result = await linear_upload_file_to_issue(params, token=_TOKEN)
+
+        assert result.success is False
+        assert result.error is not None
+
+    async def test_presigned_put_failure(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        # Step 1 succeeds.
+        httpx_mock.add_response(json=_load_json("file_upload.json"))
+        # Step 2: PUT fails.
+        httpx_mock.add_response(status_code=403)
+
+        params = UploadFileToIssueParams(
+            issue_id="issue-001",
+            file=FileFromBytes(
+                data=base64.b64encode(b"data").decode(),
+                filename="f.txt",
+                mime_type="text/plain",
+            ),
+        )
+        result = await linear_upload_file_to_issue(params, token=_TOKEN)
+
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_attachment_create_graphql_error(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        # Steps 1 and 2 succeed.
+        httpx_mock.add_response(json=_load_json("file_upload.json"))
+        httpx_mock.add_response(status_code=200)
+        # Step 3: attachmentCreate returns a GraphQL error.
+        httpx_mock.add_response(json=_load_json("error.json"))
+
+        params = UploadFileToIssueParams(
+            issue_id="issue-001",
+            file=FileFromBytes(
+                data=base64.b64encode(b"data").decode(),
+                filename="f.txt",
+                mime_type="text/plain",
+            ),
+        )
+        result = await linear_upload_file_to_issue(params, token=_TOKEN)
+
+        assert result.success is False
+        assert result.error is not None
+
+    async def test_attachment_create_mutation_failed(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        # Steps 1 and 2 succeed.
+        httpx_mock.add_response(json=_load_json("file_upload.json"))
+        httpx_mock.add_response(status_code=200)
+        # Step 3: attachmentCreate returns success=false.
+        httpx_mock.add_response(json=_load_json("attachment_create_failed.json"))
+
+        params = UploadFileToIssueParams(
+            issue_id="issue-001",
+            file=FileFromBytes(
+                data=base64.b64encode(b"data").decode(),
+                filename="f.txt",
+                mime_type="text/plain",
+            ),
+        )
+        result = await linear_upload_file_to_issue(params, token=_TOKEN)
+
+        assert result.success is False
+        assert "attachmentCreate" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = linear_upload_file_to_issue._tool_definition
+        assert defn.name == "linear_upload_file_to_issue"
+        assert defn.provider == "linear"
+        assert defn.scopes == ["write"]

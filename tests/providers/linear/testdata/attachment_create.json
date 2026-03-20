@@ -1,0 +1,11 @@
+{
+  "data": {
+    "attachmentCreate": {
+      "success": true,
+      "attachment": {
+        "id": "attachment-001",
+        "url": "https://linear.app/team/issue/ATT-1"
+      }
+    }
+  }
+}

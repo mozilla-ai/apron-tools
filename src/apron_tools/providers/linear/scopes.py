@@ -27,6 +27,7 @@ SCOPES: dict[str, list[LinearScope]] = {
     "linear_create_project": [LinearScope.WRITE],
     "linear_update_project": [LinearScope.WRITE],
     "linear_list_cycles": [LinearScope.READ],
+    "linear_upload_file_to_issue": [LinearScope.WRITE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

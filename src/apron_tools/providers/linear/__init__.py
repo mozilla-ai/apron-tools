@@ -14,6 +14,7 @@ from .tools import (
     linear_read_issue,
     linear_update_issue,
     linear_update_project,
+    linear_upload_file_to_issue,
     linear_whoami,
 )
 
@@ -28,5 +29,6 @@ __all__ = [
     "linear_read_issue",
     "linear_update_issue",
     "linear_update_project",
+    "linear_upload_file_to_issue",
     "linear_whoami",
 ]
