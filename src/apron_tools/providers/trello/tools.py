@@ -1,0 +1,297 @@
+"""Trello tool functions for interacting with the Trello REST API."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+from apron_tools.providers.trello.types import (
+    CreateCardParams,
+    CreateCardResult,
+    GetCardParams,
+    GetCardResult,
+    ListBoardsParams,
+    ListBoardsResult,
+    ListCardsParams,
+    ListCardsResult,
+    ListListsParams,
+    ListListsResult,
+    MoveCardParams,
+    MoveCardResult,
+    SetCardDueDateParams,
+    SetCardDueDateResult,
+    TrelloBoard,
+    TrelloCard,
+    TrelloCardDetail,
+    TrelloList,
+)
+from apron_tools.tool import tool
+
+from .scopes import SCOPES
+
+_BASE_URL = "https://api.trello.com/1"
+_TIMEOUT = 60.0
+_API_DOCS = "https://developer.atlassian.com/cloud/trello/rest/"
+
+
+def _auth_params(api_key: str, token: str) -> dict[str, str]:
+    """Build authentication query parameters for a Trello API request."""
+    return {"key": api_key, "token": token}
+
+
+@tool(
+    scopes=SCOPES["trello_list_boards"],
+    api_docs=f"{_API_DOCS}api-group-members/#api-members-id-boards-get",
+    provider="trello",
+)
+async def trello_list_boards(
+    params: ListBoardsParams,
+    *,
+    token: str,
+    api_key: str,
+    base_url: str = _BASE_URL,
+) -> ListBoardsResult:
+    """List boards the authenticated Trello member belongs to."""
+    query: dict[str, Any] = {
+        **_auth_params(api_key, token),
+        "filter": params.filter,
+        "fields": "name,id,closed,url,shortUrl,prefs",
+        "lists": "none",
+        "limit": params.limit,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(f"{base_url}/members/me/boards", params=query)
+    except httpx.HTTPError as exc:
+        return ListBoardsResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return ListBoardsResult(
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    boards = [TrelloBoard.model_validate(b) for b in resp.json()]
+    return ListBoardsResult(success=True, boards=boards)
+
+
+@tool(
+    scopes=SCOPES["trello_list_lists"],
+    api_docs=f"{_API_DOCS}api-group-boards/#api-boards-id-lists-get",
+    provider="trello",
+)
+async def trello_list_lists(
+    params: ListListsParams,
+    *,
+    token: str,
+    api_key: str,
+    base_url: str = _BASE_URL,
+) -> ListListsResult:
+    """List lists on a Trello board."""
+    query: dict[str, Any] = {
+        **_auth_params(api_key, token),
+        "fields": "name,id,closed,pos",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(f"{base_url}/boards/{params.board_id}/lists", params=query)
+    except httpx.HTTPError as exc:
+        return ListListsResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return ListListsResult(
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    lists = [TrelloList.model_validate(lst) for lst in resp.json()]
+    return ListListsResult(success=True, lists=lists)
+
+
+@tool(
+    scopes=SCOPES["trello_list_cards"],
+    api_docs=f"{_API_DOCS}api-group-lists/#api-lists-id-cards-get",
+    provider="trello",
+)
+async def trello_list_cards(
+    params: ListCardsParams,
+    *,
+    token: str,
+    api_key: str,
+    base_url: str = _BASE_URL,
+) -> ListCardsResult:
+    """List cards on a Trello board or in a specific list."""
+    if not params.list_id and not params.board_id:
+        return ListCardsResult(success=False, error="Either board_id or list_id must be provided.")
+
+    query: dict[str, Any] = {
+        **_auth_params(api_key, token),
+        "filter": params.filter,
+        "fields": "name,id,idList,due,dueComplete,shortUrl,closed",
+        "members": "false",
+        "limit": params.limit,
+    }
+
+    endpoint = (
+        f"{base_url}/lists/{params.list_id}/cards" if params.list_id else f"{base_url}/boards/{params.board_id}/cards"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(endpoint, params=query)
+    except httpx.HTTPError as exc:
+        return ListCardsResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return ListCardsResult(
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    cards = [TrelloCard.model_validate(c) for c in resp.json()]
+    return ListCardsResult(success=True, cards=cards)
+
+
+@tool(
+    scopes=SCOPES["trello_get_card"],
+    api_docs=f"{_API_DOCS}api-group-cards/#api-cards-id-get",
+    provider="trello",
+)
+async def trello_get_card(
+    params: GetCardParams,
+    *,
+    token: str,
+    api_key: str,
+    base_url: str = _BASE_URL,
+) -> GetCardResult:
+    """Retrieve details of a single Trello card."""
+    query: dict[str, Any] = {
+        **_auth_params(api_key, token),
+        "fields": "name,id,desc,due,dueComplete,idList,idBoard,shortUrl,url,closed",
+        "list": "true",
+        "board": "true",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(f"{base_url}/cards/{params.card_id}", params=query)
+    except httpx.HTTPError as exc:
+        return GetCardResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return GetCardResult(
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    card = TrelloCardDetail.model_validate(resp.json())
+    return GetCardResult(success=True, card=card)
+
+
+@tool(
+    scopes=SCOPES["trello_create_card"],
+    api_docs=f"{_API_DOCS}api-group-cards/#api-cards-post",
+    provider="trello",
+)
+async def trello_create_card(
+    params: CreateCardParams,
+    *,
+    token: str,
+    api_key: str,
+    base_url: str = _BASE_URL,
+) -> CreateCardResult:
+    """Create a new card on a Trello list."""
+    query: dict[str, Any] = {
+        **_auth_params(api_key, token),
+        "idList": params.list_id,
+        "name": params.name,
+        "desc": params.description,
+        "pos": params.position,
+    }
+    if params.due_date:
+        query["due"] = params.due_date
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(f"{base_url}/cards", params=query)
+    except httpx.HTTPError as exc:
+        return CreateCardResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return CreateCardResult(
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    return CreateCardResult.model_validate(resp.json())
+
+
+@tool(
+    scopes=SCOPES["trello_move_card"],
+    api_docs=f"{_API_DOCS}api-group-cards/#api-cards-id-put",
+    provider="trello",
+)
+async def trello_move_card(
+    params: MoveCardParams,
+    *,
+    token: str,
+    api_key: str,
+    base_url: str = _BASE_URL,
+) -> MoveCardResult:
+    """Move a Trello card to a different list."""
+    query: dict[str, Any] = {
+        **_auth_params(api_key, token),
+        "idList": params.list_id,
+        "pos": params.position,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.put(f"{base_url}/cards/{params.card_id}", params=query)
+    except httpx.HTTPError as exc:
+        return MoveCardResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return MoveCardResult(
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    return MoveCardResult.model_validate(resp.json())
+
+
+@tool(
+    scopes=SCOPES["trello_set_card_due_date"],
+    api_docs=f"{_API_DOCS}api-group-cards/#api-cards-id-put",
+    provider="trello",
+)
+async def trello_set_card_due_date(
+    params: SetCardDueDateParams,
+    *,
+    token: str,
+    api_key: str,
+    base_url: str = _BASE_URL,
+) -> SetCardDueDateResult:
+    """Set or clear the due date on a Trello card."""
+    query: dict[str, Any] = {
+        **_auth_params(api_key, token),
+        "due": params.due_date or "",
+        "dueComplete": str(params.mark_complete).lower(),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.put(f"{base_url}/cards/{params.card_id}", params=query)
+    except httpx.HTTPError as exc:
+        return SetCardDueDateResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return SetCardDueDateResult(
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    return SetCardDueDateResult.model_validate(resp.json())

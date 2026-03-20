@@ -1,0 +1,26 @@
+[
+  {
+    "id": "list-001",
+    "name": "To Do",
+    "closed": false,
+    "pos": 16384,
+    "idBoard": "board-001",
+    "subscribed": false
+  },
+  {
+    "id": "list-002",
+    "name": "In Progress",
+    "closed": false,
+    "pos": 32768,
+    "idBoard": "board-001",
+    "subscribed": false
+  },
+  {
+    "id": "list-003",
+    "name": "Done",
+    "closed": false,
+    "pos": 49152,
+    "idBoard": "board-001",
+    "subscribed": false
+  }
+]
