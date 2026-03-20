@@ -1,0 +1,36 @@
+[
+  {
+    "id": "board-001",
+    "name": "Project Alpha",
+    "desc": "Main project board.",
+    "closed": false,
+    "url": "https://trello.com/b/abc123/project-alpha",
+    "shortUrl": "https://trello.com/b/abc123",
+    "prefs": {
+      "permissionLevel": "org",
+      "hideVotes": false,
+      "voting": "disabled",
+      "comments": "members",
+      "selfJoin": true,
+      "cardCovers": true,
+      "background": "blue"
+    }
+  },
+  {
+    "id": "board-002",
+    "name": "Archive Board",
+    "desc": "",
+    "closed": true,
+    "url": "https://trello.com/b/def456/archive-board",
+    "shortUrl": "https://trello.com/b/def456",
+    "prefs": {
+      "permissionLevel": "private",
+      "hideVotes": false,
+      "voting": "disabled",
+      "comments": "members",
+      "selfJoin": false,
+      "cardCovers": true,
+      "background": "green"
+    }
+  }
+]

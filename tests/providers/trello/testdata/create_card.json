@@ -1,0 +1,13 @@
+{
+  "id": "card-new-001",
+  "name": "New task",
+  "desc": "Task description",
+  "closed": false,
+  "idList": "list-001",
+  "idBoard": "board-001",
+  "due": null,
+  "dueComplete": false,
+  "shortUrl": "https://trello.com/c/xyz001",
+  "url": "https://trello.com/c/xyz001/2-new-task",
+  "pos": 65535
+}

@@ -1,0 +1,11 @@
+{
+  "id": "card-001",
+  "name": "Implement login page",
+  "closed": false,
+  "idList": "list-002",
+  "idBoard": "board-001",
+  "due": null,
+  "dueComplete": false,
+  "shortUrl": "https://trello.com/c/abc001",
+  "pos": 65535
+}

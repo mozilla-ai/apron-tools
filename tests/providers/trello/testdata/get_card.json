@@ -1,0 +1,20 @@
+{
+  "id": "card-001",
+  "name": "Implement login page",
+  "desc": "Build the authentication UI with email and password fields.",
+  "closed": false,
+  "idList": "list-001",
+  "idBoard": "board-001",
+  "due": "2026-04-01T12:00:00.000Z",
+  "dueComplete": false,
+  "shortUrl": "https://trello.com/c/abc001",
+  "url": "https://trello.com/c/abc001/1-implement-login-page",
+  "list": {
+    "id": "list-001",
+    "name": "To Do"
+  },
+  "board": {
+    "id": "board-001",
+    "name": "Project Alpha"
+  }
+}
