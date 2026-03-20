@@ -13,8 +13,13 @@ import os
 
 import pytest
 
-from apron_tools.providers.notion import notion_explore_teamspace
-from apron_tools.providers.notion.types import ExploreTeamspaceParams, ExploreTeamspaceResult
+from apron_tools.providers.notion import notion_explore_teamspace, notion_read_page
+from apron_tools.providers.notion.types import (
+    ExploreTeamspaceParams,
+    ExploreTeamspaceResult,
+    ReadPageParams,
+    ReadPageResult,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -37,3 +42,13 @@ class TestNotionExploreTeamspace:
     async def test_str_output(self, notion_token: str) -> None:
         result = await notion_explore_teamspace(ExploreTeamspaceParams(), token=notion_token)
         assert str(result)
+
+
+class TestNotionReadPage:
+    async def test_invalid_page_returns_error(self, notion_token: str) -> None:
+        result = await notion_read_page(
+            ReadPageParams(page_id="00000000-0000-0000-0000-000000000000"),
+            token=notion_token,
+        )
+        assert isinstance(result, ReadPageResult)
+        assert result.success is False

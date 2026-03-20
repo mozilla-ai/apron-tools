@@ -13,8 +13,13 @@ import os
 
 import pytest
 
-from apron_tools.providers.typeform import typeform_explore_workspace
-from apron_tools.providers.typeform.types import ExploreWorkspaceParams, ExploreWorkspaceResult
+from apron_tools.providers.typeform import typeform_explore_workspace, typeform_get_form_details
+from apron_tools.providers.typeform.types import (
+    ExploreWorkspaceParams,
+    ExploreWorkspaceResult,
+    GetFormDetailsParams,
+    GetFormDetailsResult,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -37,3 +42,13 @@ class TestTypeformExploreWorkspace:
     async def test_str_output(self, typeform_token: str) -> None:
         result = await typeform_explore_workspace(ExploreWorkspaceParams(page_size=5), token=typeform_token)
         assert str(result)
+
+
+class TestTypeformGetFormDetails:
+    async def test_invalid_form_returns_error(self, typeform_token: str) -> None:
+        result = await typeform_get_form_details(
+            GetFormDetailsParams(form_id="nonexistent_form_id"),
+            token=typeform_token,
+        )
+        assert isinstance(result, GetFormDetailsResult)
+        assert result.success is False

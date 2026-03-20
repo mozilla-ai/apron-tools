@@ -13,8 +13,13 @@ import os
 
 import pytest
 
-from apron_tools.providers.salesforce import salesforce_explore_org
-from apron_tools.providers.salesforce.types import ExploreOrgParams, ExploreOrgResult
+from apron_tools.providers.salesforce import salesforce_explore_org, salesforce_query_records
+from apron_tools.providers.salesforce.types import (
+    ExploreOrgParams,
+    ExploreOrgResult,
+    QueryRecordsParams,
+    QueryRecordsResult,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -36,4 +41,21 @@ class TestSalesforceExploreOrg:
 
     async def test_str_output(self, salesforce_token: str) -> None:
         result = await salesforce_explore_org(ExploreOrgParams(), token=salesforce_token)
+        assert str(result)
+
+
+class TestSalesforceQueryRecords:
+    async def test_returns_valid_result(self, salesforce_token: str) -> None:
+        result = await salesforce_query_records(
+            QueryRecordsParams(query="SELECT Id, Name FROM Account LIMIT 5"),
+            token=salesforce_token,
+        )
+        assert isinstance(result, QueryRecordsResult)
+        assert result.success is True
+
+    async def test_str_output(self, salesforce_token: str) -> None:
+        result = await salesforce_query_records(
+            QueryRecordsParams(query="SELECT Id, Name FROM Account LIMIT 5"),
+            token=salesforce_token,
+        )
         assert str(result)
