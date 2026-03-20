@@ -17,14 +17,14 @@ class TestDiscoverToolsWithTypeform:
     def test_discovers_typeform_tools(self):
         tools = discover_tools()
         names = [td.name for td in tools]
-        assert "typeform_list_forms" in names
-        assert "typeform_get_form" in names
-        assert "typeform_get_responses" in names
+        assert "typeform_explore_workspace" in names
+        assert "typeform_get_form_details" in names
+        assert "typeform_get_form_responses" in names
 
     def test_typeform_tools_have_correct_provider(self):
         tools = discover_tools()
         typeform_tools = [td for td in tools if td.provider == "typeform"]
-        assert len(typeform_tools) == 3
+        assert len(typeform_tools) == 5
 
     def test_typeform_tools_have_scopes(self):
         tools = discover_tools()
@@ -53,7 +53,7 @@ class TestGetToolsForProvider:
 
     def test_returns_typeform_tools(self):
         tools = get_tools_for_provider("typeform")
-        assert len(tools) == 3
+        assert len(tools) == 5
 
     def test_excludes_other_providers(self):
         tools = get_tools_for_provider("typeform")
@@ -120,7 +120,7 @@ class TestGetToolsForService:
 
     def test_standalone_provider_service_matches(self):
         tools = get_tools_for_service("typeform")
-        assert len(tools) == 3
+        assert len(tools) == 5
         for td in tools:
             assert td.service == "typeform"
             assert td.provider == "typeform"

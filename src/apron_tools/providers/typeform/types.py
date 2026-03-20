@@ -13,8 +13,8 @@ from apron_tools.types import ToolResult
 # ---------------------------------------------------------------------------
 
 
-class ListFormsParams(BaseModel):
-    """Parameters for listing Typeform forms."""
+class ExploreWorkspaceParams(BaseModel):
+    """Parameters for exploring a Typeform workspace."""
 
     page: int = 1
     page_size: int = 10
@@ -22,13 +22,43 @@ class ListFormsParams(BaseModel):
     workspace_id: str | None = None
 
 
-class GetFormParams(BaseModel):
-    """Parameters for retrieving a single Typeform form."""
+class GetFormDetailsParams(BaseModel):
+    """Parameters for retrieving details of a single Typeform form."""
 
     form_id: str
 
 
-class GetResponsesParams(BaseModel):
+class CreateFormParams(BaseModel):
+    """Parameters for creating a new Typeform form."""
+
+    title: str
+    fields: list[dict[str, Any]]
+    workspace_id: str | None = None
+    language: str = "en"
+    welcome_screens: list[dict[str, Any]] | None = None
+    thankyou_screens: list[dict[str, Any]] | None = None
+    settings: dict[str, Any] | None = None
+
+
+class UpdateFormParams(BaseModel):
+    """Parameters for updating an existing Typeform form.
+
+    Uses a read-modify-write pattern: the existing form is fetched,
+    then the provided fields are merged on top before sending the
+    full payload via PUT.
+    """
+
+    form_id: str
+    title: str | None = None
+    fields: list[dict[str, Any]] | None = None
+    workspace_id: str | None = None
+    language: str | None = None
+    welcome_screens: list[dict[str, Any]] | None = None
+    thankyou_screens: list[dict[str, Any]] | None = None
+    settings: dict[str, Any] | None = None
+
+
+class GetFormResponsesParams(BaseModel):
     """Parameters for retrieving responses to a Typeform form."""
 
     form_id: str
@@ -159,7 +189,7 @@ class FormResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ListFormsResult(ToolResult):
+class ExploreWorkspaceResult(ToolResult):
     """Result of listing Typeform forms."""
 
     model_config = ConfigDict(extra="ignore")
@@ -186,7 +216,7 @@ class ListFormsResult(ToolResult):
         return "\n".join(lines)
 
 
-class GetFormResult(ToolResult):
+class GetFormDetailsResult(ToolResult):
     """Result of retrieving a single Typeform form."""
 
     model_config = ConfigDict(extra="ignore")
@@ -222,7 +252,7 @@ class GetFormResult(ToolResult):
         return "\n".join(lines)
 
 
-class GetResponsesResult(ToolResult):
+class GetFormResponsesResult(ToolResult):
     """Result of retrieving responses to a Typeform form."""
 
     model_config = ConfigDict(extra="ignore")
@@ -250,3 +280,66 @@ class GetResponsesResult(ToolResult):
             ident = resp.response_id or resp.token or "unknown"
             lines.append(f"  - Response {ident}: {answer_count} answer(s), submitted {submitted}")
         return "\n".join(lines)
+
+
+def _extract_form_url(links: dict[str, Any]) -> str:
+    """Extract the display URL from a Typeform _links object."""
+    display = links.get("display")
+    if isinstance(display, str):
+        return display
+    self_link = links.get("self", "")
+    if isinstance(self_link, dict):
+        return self_link.get("href", "")
+    return str(self_link) if self_link else ""
+
+
+class CreateFormResult(ToolResult):
+    """Result of creating a new Typeform form."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    title: str = ""
+    url: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _set_success(cls, data: Any) -> Any:
+        """Set success=True when parsing raw API JSON."""
+        if isinstance(data, dict) and "success" not in data:
+            data["success"] = True
+            links = data.get("_links", {})
+            data["url"] = _extract_form_url(links)
+        return data
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the created form."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Form '{self.title}' created.\nID: {self.id}\nURL: {self.url}"
+
+
+class UpdateFormResult(ToolResult):
+    """Result of updating an existing Typeform form."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    title: str = ""
+    url: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _set_success(cls, data: Any) -> Any:
+        """Set success=True when parsing raw API JSON."""
+        if isinstance(data, dict) and "success" not in data:
+            data["success"] = True
+            links = data.get("_links", {})
+            data["url"] = _extract_form_url(links)
+        return data
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the updated form."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Form '{self.title}' updated.\nID: {self.id}\nURL: {self.url}"

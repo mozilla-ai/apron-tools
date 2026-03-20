@@ -11,13 +11,16 @@ class TypeformScope(StrEnum):
     """OAuth scopes for Typeform API access."""
 
     FORMS_READ = "forms:read"
+    FORMS_WRITE = "forms:write"
     RESPONSES_READ = "responses:read"
 
 
 SCOPES: dict[str, list[TypeformScope]] = {
-    "typeform_list_forms": [TypeformScope.FORMS_READ],
-    "typeform_get_form": [TypeformScope.FORMS_READ],
-    "typeform_get_responses": [TypeformScope.RESPONSES_READ],
+    "typeform_explore_workspace": [TypeformScope.FORMS_READ],
+    "typeform_get_form_details": [TypeformScope.FORMS_READ],
+    "typeform_create_form": [TypeformScope.FORMS_WRITE],
+    "typeform_update_form": [TypeformScope.FORMS_WRITE],
+    "typeform_get_form_responses": [TypeformScope.RESPONSES_READ],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(
