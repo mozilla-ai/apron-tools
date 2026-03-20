@@ -99,6 +99,14 @@ class ListCyclesParams(BaseModel):
     team_id: str | None = None
 
 
+class UploadFileToIssueParams(BaseModel):
+    """Parameters for uploading a file and attaching it to a Linear issue."""
+
+    issue_id: str
+    file: Any
+    title: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Shared nested models
 # ---------------------------------------------------------------------------
@@ -569,4 +577,23 @@ class ListCyclesResult(ToolResult):
             display = cycle.name or f"Cycle {cycle.number}"
             progress = f"{round(cycle.progress * 100)}%" if cycle.progress is not None else "N/A"
             lines.append(f"  - {display} (progress={progress}, id={cycle.id})")
+        return "\n".join(lines)
+
+
+class UploadFileToIssueResult(ToolResult):
+    """Result of uploading a file and attaching it to a Linear issue."""
+
+    attachment_id: str | None = None
+    asset_url: str | None = None
+    filename: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the uploaded file."""
+        if not self.success:
+            return f"Error: {self.error}"
+        lines = [f"Uploaded '{self.filename}' to issue."]
+        if self.attachment_id:
+            lines.append(f"Attachment ID: {self.attachment_id}")
+        if self.asset_url:
+            lines.append(f"Asset URL: {self.asset_url}")
         return "\n".join(lines)
