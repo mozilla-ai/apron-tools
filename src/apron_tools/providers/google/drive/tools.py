@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.google.drive.types import (
     CreateFolderParams,
     CreateFolderResult,
@@ -17,6 +18,8 @@ from apron_tools.providers.google.drive.types import (
     SearchResult,
     ShareFileParams,
     ShareFileResult,
+    UploadFileParams,
+    UploadFileResult,
 )
 from apron_tools.tool import tool
 
@@ -301,3 +304,70 @@ async def google_drive_share_file(
         )
 
     return ShareFileResult.model_validate(resp.json())
+
+
+_UPLOAD_BASE_URL = "https://www.googleapis.com/upload/drive/v3/files"
+
+
+@tool(
+    scopes=SCOPES["google_drive_upload_file"],
+    api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/create",
+    provider="google",
+    service="google_drive",
+)
+async def google_drive_upload_file(
+    params: UploadFileParams,
+    *,
+    token: str,
+    base_url: str = _UPLOAD_BASE_URL,
+) -> UploadFileResult:
+    """Upload a file to Google Drive."""
+    import json
+    import uuid
+
+    try:
+        data, filename, mime_type = await resolve_file_input(params.file)
+    except Exception as exc:
+        return UploadFileResult(success=False, error=f"Failed to resolve file: {exc}")
+
+    upload_name = params.name or filename
+
+    # Always use multipart/related upload so metadata (name, parents) is included.
+    metadata: dict = {"name": upload_name}
+    if params.folder_id:
+        metadata["parents"] = [params.folder_id]
+
+    boundary = f"apron_{uuid.uuid4().hex}"
+    body = (
+        (
+            f"--{boundary}\r\n"
+            f"Content-Type: application/json; charset=UTF-8\r\n\r\n"
+            f"{json.dumps(metadata)}\r\n"
+            f"--{boundary}\r\n"
+            f"Content-Type: {mime_type}\r\n\r\n"
+        ).encode()
+        + data
+        + f"\r\n--{boundary}--".encode()
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                base_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": f"multipart/related; boundary={boundary}",
+                },
+                params={"uploadType": "multipart", "fields": _FILE_FIELDS, "supportsAllDrives": "true"},
+                content=body,
+            )
+    except httpx.HTTPError as exc:
+        return UploadFileResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return UploadFileResult(
+            success=False,
+            error=f"Drive API error {resp.status_code}: {resp.text}",
+        )
+
+    return UploadFileResult.model_validate(resp.json())
