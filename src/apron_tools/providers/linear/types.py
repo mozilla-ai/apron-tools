@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from apron_tools.types import ToolResult
+from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -103,7 +103,7 @@ class UploadFileToIssueParams(BaseModel):
     """Parameters for uploading a file and attaching it to a Linear issue."""
 
     issue_id: str
-    file: Any
+    file: FileInput
     title: str | None = None
 
 

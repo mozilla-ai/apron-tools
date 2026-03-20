@@ -852,7 +852,14 @@ async def linear_upload_file_to_issue(
     if error:
         return UploadFileToIssueResult(success=False, error=error)
 
-    attachment = attach_resp.get("data", {}).get("attachmentCreate", {}).get("attachment", {})
+    attachment_create = attach_resp.get("data", {}).get("attachmentCreate", {})
+    if not attachment_create.get("success"):
+        return UploadFileToIssueResult(
+            success=False,
+            error="attachmentCreate mutation returned success=false",
+        )
+
+    attachment = attachment_create.get("attachment", {})
 
     return UploadFileToIssueResult(
         success=True,

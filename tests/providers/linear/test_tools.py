@@ -623,7 +623,7 @@ class TestUploadFileToIssue:
         assert result.success is False
         assert "403" in result.error
 
-    async def test_attachment_create_error(self, httpx_mock: HTTPXMock) -> None:
+    async def test_attachment_create_graphql_error(self, httpx_mock: HTTPXMock) -> None:
         import base64
 
         from apron_tools.types import FileFromBytes
@@ -631,7 +631,7 @@ class TestUploadFileToIssue:
         # Steps 1 and 2 succeed.
         httpx_mock.add_response(json=_load_json("file_upload.json"))
         httpx_mock.add_response(status_code=200)
-        # Step 3: attachmentCreate fails.
+        # Step 3: attachmentCreate returns a GraphQL error.
         httpx_mock.add_response(json=_load_json("error.json"))
 
         params = UploadFileToIssueParams(
@@ -646,6 +646,30 @@ class TestUploadFileToIssue:
 
         assert result.success is False
         assert result.error is not None
+
+    async def test_attachment_create_mutation_failed(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        # Steps 1 and 2 succeed.
+        httpx_mock.add_response(json=_load_json("file_upload.json"))
+        httpx_mock.add_response(status_code=200)
+        # Step 3: attachmentCreate returns success=false.
+        httpx_mock.add_response(json=_load_json("attachment_create_failed.json"))
+
+        params = UploadFileToIssueParams(
+            issue_id="issue-001",
+            file=FileFromBytes(
+                data=base64.b64encode(b"data").decode(),
+                filename="f.txt",
+                mime_type="text/plain",
+            ),
+        )
+        result = await linear_upload_file_to_issue(params, token=_TOKEN)
+
+        assert result.success is False
+        assert "attachmentCreate" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = linear_upload_file_to_issue._tool_definition
