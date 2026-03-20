@@ -3,7 +3,7 @@
 Skipped by default. To run::
 
     APRON_TOOLS_INTEGRATION_TESTS=1 \
-    MICROSOFT_TOKEN=eyJ0... \
+    MICROSOFT_TOKEN=... \
     uv run pytest -m integration -k microsoft -v
 """
 
@@ -36,34 +36,34 @@ def microsoft_token() -> str:
 
 class TestMicrosoftExcelListWorkbooks:
     async def test_returns_valid_result(self, microsoft_token: str) -> None:
-        result = await microsoft_excel_list_workbooks(ListWorkbooksParams(), token=microsoft_token)
+        result = await microsoft_excel_list_workbooks(ListWorkbooksParams(max_results=5), token=microsoft_token)
         assert isinstance(result, ListWorkbooksResult)
         assert result.success is True
 
     async def test_str_output(self, microsoft_token: str) -> None:
-        result = await microsoft_excel_list_workbooks(ListWorkbooksParams(), token=microsoft_token)
+        result = await microsoft_excel_list_workbooks(ListWorkbooksParams(max_results=5), token=microsoft_token)
         assert str(result)
 
 
 class TestMicrosoftOutlookListEmails:
     async def test_returns_valid_result(self, microsoft_token: str) -> None:
-        result = await microsoft_outlook_list_emails(ListEmailsParams(), token=microsoft_token)
+        result = await microsoft_outlook_list_emails(ListEmailsParams(limit=5), token=microsoft_token)
         assert isinstance(result, ListEmailsResult)
         assert result.success is True
 
     async def test_str_output(self, microsoft_token: str) -> None:
-        result = await microsoft_outlook_list_emails(ListEmailsParams(), token=microsoft_token)
+        result = await microsoft_outlook_list_emails(ListEmailsParams(limit=5), token=microsoft_token)
         assert str(result)
 
 
 class TestMicrosoftSharePointListSites:
     async def test_returns_valid_result(self, microsoft_token: str) -> None:
-        result = await microsoft_sharepoint_list_sites(ListSitesParams(), token=microsoft_token)
+        result = await microsoft_sharepoint_list_sites(ListSitesParams(limit=5), token=microsoft_token)
         assert isinstance(result, ListSitesResult)
         assert result.success is True
 
     async def test_str_output(self, microsoft_token: str) -> None:
-        result = await microsoft_sharepoint_list_sites(ListSitesParams(), token=microsoft_token)
+        result = await microsoft_sharepoint_list_sites(ListSitesParams(limit=5), token=microsoft_token)
         assert str(result)
 
 

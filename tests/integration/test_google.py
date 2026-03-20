@@ -40,12 +40,12 @@ def google_token() -> str:
 
 class TestGoogleCalendarListCalendars:
     async def test_returns_valid_result(self, google_token: str) -> None:
-        result = await google_calendar_list_calendars(ListCalendarsParams(), token=google_token)
+        result = await google_calendar_list_calendars(ListCalendarsParams(max_results=5), token=google_token)
         assert isinstance(result, ListCalendarsResult)
         assert result.success is True
 
     async def test_str_output(self, google_token: str) -> None:
-        result = await google_calendar_list_calendars(ListCalendarsParams(), token=google_token)
+        result = await google_calendar_list_calendars(ListCalendarsParams(max_results=5), token=google_token)
         assert str(result)
 
 
