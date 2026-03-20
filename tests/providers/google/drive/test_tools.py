@@ -376,3 +376,54 @@ class TestGoogleDriveUploadFile:
         assert defn.name == "google_drive_upload_file"
         assert defn.provider == "google"
         assert defn.service == "google_drive"
+
+
+class TestGoogleDriveReadTextFile:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        from apron_tools.providers.google.drive.tools import google_drive_read_text_file
+        from apron_tools.providers.google.drive.types import ReadTextFileParams
+
+        # First request: metadata. Second request: content.
+        httpx_mock.add_response(json={"name": "notes.txt", "mimeType": "text/plain"})
+        httpx_mock.add_response(text="Hello world\nLine two")
+        result = await google_drive_read_text_file(
+            ReadTextFileParams(file_id="file-001"),
+            token=_TOKEN,
+        )
+        assert result.success is True
+        assert result.name == "notes.txt"
+        assert "Hello world" in result.content
+        assert "notes.txt" in str(result)
+
+    async def test_non_text_file_rejected(self, httpx_mock: HTTPXMock) -> None:
+        from apron_tools.providers.google.drive.tools import google_drive_read_text_file
+        from apron_tools.providers.google.drive.types import ReadTextFileParams
+
+        httpx_mock.add_response(json={"name": "image.png", "mimeType": "image/png"})
+        result = await google_drive_read_text_file(
+            ReadTextFileParams(file_id="file-002"),
+            token=_TOKEN,
+        )
+        assert result.success is False
+        assert "text/plain" in result.error or "image/png" in result.error
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        from apron_tools.providers.google.drive.tools import google_drive_read_text_file
+        from apron_tools.providers.google.drive.types import ReadTextFileParams
+
+        httpx_mock.add_response(status_code=404, text="Not Found")
+        result = await google_drive_read_text_file(
+            ReadTextFileParams(file_id="file-404"),
+            token=_TOKEN,
+        )
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        from apron_tools.providers.google.drive.tools import google_drive_read_text_file
+
+        defn = google_drive_read_text_file._tool_definition
+        assert defn.name == "google_drive_read_text_file"
+        assert defn.provider == "google"
+        assert defn.service == "google_drive"
+        assert "https://www.googleapis.com/auth/drive" in defn.scopes

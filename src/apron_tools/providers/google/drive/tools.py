@@ -14,6 +14,8 @@ from apron_tools.providers.google.drive.types import (
     ListFilesResult,
     MoveFileParams,
     MoveFileResult,
+    ReadTextFileParams,
+    ReadTextFileResult,
     SearchParams,
     SearchResult,
     ShareFileParams,
@@ -371,3 +373,66 @@ async def google_drive_upload_file(
         )
 
     return UploadFileResult.model_validate(resp.json())
+
+
+@tool(
+    scopes=SCOPES["google_drive_read_text_file"],
+    api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/get",
+    provider="google",
+    service="google_drive",
+)
+async def google_drive_read_text_file(
+    params: ReadTextFileParams,
+    *,
+    token: str,
+    base_url: str = _DRIVE_BASE_URL,
+) -> ReadTextFileResult:
+    """Read the contents of a plain text file from Google Drive."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
+            # Get metadata to verify it's a text file.
+            meta_resp = await client.get(
+                f"{base_url}/{params.file_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"fields": "name,mimeType", "supportsAllDrives": "true"},
+            )
+    except httpx.HTTPError as exc:
+        return ReadTextFileResult(success=False, error=str(exc))
+
+    if not meta_resp.is_success:
+        return ReadTextFileResult(
+            success=False,
+            error=f"Drive API error {meta_resp.status_code}: {meta_resp.text}",
+        )
+
+    meta = meta_resp.json()
+    file_name = meta.get("name", "Untitled")
+    mime_type = meta.get("mimeType", "unknown")
+
+    if mime_type != "text/plain":
+        return ReadTextFileResult(
+            success=False,
+            error=f"Only plain text (.txt) files are supported. '{file_name}' has type '{mime_type}'.",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
+            content_resp = await client.get(
+                f"{base_url}/{params.file_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"alt": "media", "supportsAllDrives": "true"},
+            )
+    except httpx.HTTPError as exc:
+        return ReadTextFileResult(success=False, error=str(exc))
+
+    if not content_resp.is_success:
+        return ReadTextFileResult(
+            success=False,
+            error=f"Drive API error {content_resp.status_code}: {content_resp.text}",
+        )
+
+    return ReadTextFileResult(
+        success=True,
+        name=file_name,
+        content=content_resp.text,
+    )
