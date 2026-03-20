@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from apron_tools.types import ToolResult
+from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -484,3 +484,34 @@ class ListSprintsResult(ToolResult):
             goal = f" goal={s.goal!r}" if s.goal else ""
             lines.append(f"  - {s.name} (id={s.id}) [{s.state}]{dates}{goal}")
         return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# atlassian_jira_upload_attachment
+# ---------------------------------------------------------------------------
+
+
+class UploadAttachmentParams(BaseModel):
+    """Parameters for uploading an attachment to a Jira issue."""
+
+    issue_key: str
+    """The issue key (e.g. "PROJ-123") or issue ID."""
+
+    file: FileInput
+    """File to upload — either a URL to fetch or raw bytes."""
+
+
+class UploadAttachmentResult(ToolResult):
+    """Result of uploading an attachment to a Jira issue."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    attachment_id: str = ""
+    filename: str = ""
+    issue_key: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Attachment '{self.filename}' uploaded to {self.issue_key} (id={self.attachment_id})."

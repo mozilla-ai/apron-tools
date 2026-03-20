@@ -13,6 +13,7 @@ from .tools import (
     atlassian_jira_list_boards,
     atlassian_jira_list_sprints,
     atlassian_jira_list_versions,
+    atlassian_jira_upload_attachment,
 )
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "atlassian_jira_list_boards",
     "atlassian_jira_list_sprints",
     "atlassian_jira_list_versions",
+    "atlassian_jira_upload_attachment",
 ]

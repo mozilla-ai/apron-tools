@@ -12,6 +12,7 @@ from .confluence import (
     atlassian_confluence_get_page_content,
     atlassian_confluence_search_content,
     atlassian_confluence_update_page,
+    atlassian_confluence_upload_attachment,
 )
 from .jira import (
     atlassian_jira_add_comment,
@@ -23,6 +24,7 @@ from .jira import (
     atlassian_jira_list_boards,
     atlassian_jira_list_sprints,
     atlassian_jira_list_versions,
+    atlassian_jira_upload_attachment,
 )
 
 __all__ = [
@@ -32,6 +34,7 @@ __all__ = [
     "atlassian_confluence_get_page_content",
     "atlassian_confluence_search_content",
     "atlassian_confluence_update_page",
+    "atlassian_confluence_upload_attachment",
     "atlassian_jira_add_comment",
     "atlassian_jira_assign_issue",
     "atlassian_jira_create_issue",
@@ -41,4 +44,5 @@ __all__ = [
     "atlassian_jira_list_boards",
     "atlassian_jira_list_sprints",
     "atlassian_jira_list_versions",
+    "atlassian_jira_upload_attachment",
 ]

@@ -501,3 +501,62 @@ class TestListSprints:
         assert defn.provider == "atlassian"
         assert defn.service == "atlassian_jira"
         assert "read:jira-work" in defn.scopes
+
+
+class TestJiraUploadAttachment:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.providers.atlassian.jira.tools import atlassian_jira_upload_attachment
+        from apron_tools.providers.atlassian.jira.types import UploadAttachmentParams
+        from apron_tools.types import FileFromBytes
+
+        _mock_cloud_id(httpx_mock)
+        httpx_mock.add_response(
+            url=f"{_API_PREFIX}/issue/EX-1/attachments",
+            json=[{"id": "att-001", "filename": "screenshot.png"}],
+        )
+        b64 = base64.b64encode(b"png data").decode()
+        result = await atlassian_jira_upload_attachment(
+            UploadAttachmentParams(
+                issue_key="EX-1",
+                file=FileFromBytes(data=b64, filename="screenshot.png", mime_type="image/png"),
+            ),
+            token=_TOKEN,
+        )
+        assert result.success is True
+        assert result.attachment_id == "att-001"
+        assert result.filename == "screenshot.png"
+        assert result.issue_key == "EX-1"
+
+    async def test_cloud_id_failure(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.providers.atlassian.jira.tools import atlassian_jira_upload_attachment
+        from apron_tools.providers.atlassian.jira.types import UploadAttachmentParams
+        from apron_tools.types import FileFromBytes
+
+        httpx_mock.add_response(
+            url=f"{_BASE}/oauth/token/accessible-resources",
+            status_code=401,
+            text="Unauthorized",
+        )
+        b64 = base64.b64encode(b"data").decode()
+        result = await atlassian_jira_upload_attachment(
+            UploadAttachmentParams(
+                issue_key="EX-1",
+                file=FileFromBytes(data=b64, filename="f.bin", mime_type="application/octet-stream"),
+            ),
+            token="bad-token",
+        )
+        assert result.success is False
+        assert "cloud ID" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        from apron_tools.providers.atlassian.jira.tools import atlassian_jira_upload_attachment
+
+        defn = atlassian_jira_upload_attachment._tool_definition
+        assert defn.name == "atlassian_jira_upload_attachment"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_jira"
+        assert "write:jira-work" in defn.scopes

@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from apron_tools.types import ToolResult
+from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -322,3 +322,34 @@ class GetChildPagesResult(ToolResult):
         for c in self.children:
             lines.append(f"  - {c.title} (id={c.id}, space={c.space_id})")
         return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# atlassian_confluence_upload_attachment
+# ---------------------------------------------------------------------------
+
+
+class UploadAttachmentParams(BaseModel):
+    """Parameters for uploading an attachment to a Confluence page."""
+
+    page_id: str
+    """The ID of the Confluence page to attach the file to."""
+
+    file: FileInput
+    """File to upload — either a URL to fetch or raw bytes."""
+
+
+class UploadAttachmentResult(ToolResult):
+    """Result of uploading an attachment to a Confluence page."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    attachment_id: str = ""
+    filename: str = ""
+    page_id: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Attachment '{self.filename}' uploaded to page {self.page_id} (id={self.attachment_id})."

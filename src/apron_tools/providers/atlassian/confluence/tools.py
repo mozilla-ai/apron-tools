@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.atlassian.confluence.types import (
     ChildPageSummary,
     CreatePageParams,
@@ -21,6 +22,8 @@ from apron_tools.providers.atlassian.confluence.types import (
     SpaceSummary,
     UpdatePageParams,
     UpdatePageResult,
+    UploadAttachmentParams,
+    UploadAttachmentResult,
 )
 from apron_tools.tool import tool
 
@@ -371,3 +374,60 @@ async def atlassian_confluence_get_child_pages(
     data = resp.json()
     children = [ChildPageSummary.model_validate(c) for c in data.get("results", [])]
     return GetChildPagesResult(success=True, children=children)
+
+
+@tool(
+    scopes=SCOPES["atlassian_confluence_upload_attachment"],
+    api_docs="https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-content-attachments/",
+    provider="atlassian",
+    service="atlassian_confluence",
+)
+async def atlassian_confluence_upload_attachment(
+    params: UploadAttachmentParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UploadAttachmentResult:
+    """Upload a file as an attachment to a Confluence page."""
+    try:
+        data, filename, mime_type = await resolve_file_input(params.file)
+    except Exception as exc:
+        return UploadAttachmentResult(success=False, error=f"Failed to resolve file: {exc}")
+
+    cloud_id = await _resolve_cloud_id(token, base_url)
+    if not cloud_id:
+        return UploadAttachmentResult(
+            success=False,
+            error="Failed to resolve Confluence cloud ID. Ensure you have access to a Confluence site.",
+        )
+
+    url = _api_v1_url(cloud_id, f"/content/{params.page_id}/child/attachment", base_url=base_url)
+    headers = _headers(token)
+    headers["X-Atlassian-Token"] = "no-check"
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                url,
+                headers=headers,
+                files={"file": (filename, data, mime_type)},
+            )
+    except httpx.HTTPError as exc:
+        return UploadAttachmentResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return UploadAttachmentResult(
+            success=False,
+            error=f"Confluence API error {resp.status_code}: {resp.text}",
+        )
+
+    results = resp.json().get("results", [])
+    attachment_id = results[0].get("id", "") if results else ""
+    att_filename = results[0].get("title", filename) if results else filename
+
+    return UploadAttachmentResult(
+        success=True,
+        attachment_id=attachment_id,
+        filename=att_filename,
+        page_id=params.page_id,
+    )

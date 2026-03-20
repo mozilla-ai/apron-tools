@@ -418,3 +418,62 @@ class TestGetChildPages:
         assert defn.provider == "atlassian"
         assert defn.service == "atlassian_confluence"
         assert "read:confluence-content.all" in defn.scopes
+
+
+class TestConfluenceUploadAttachment:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.providers.atlassian.confluence.tools import atlassian_confluence_upload_attachment
+        from apron_tools.providers.atlassian.confluence.types import UploadAttachmentParams
+        from apron_tools.types import FileFromBytes
+
+        _mock_cloud_id(httpx_mock)
+        httpx_mock.add_response(
+            url=f"{_V1_PREFIX}/content/page-001/child/attachment",
+            json={"results": [{"id": "att-001", "title": "report.pdf"}]},
+        )
+        b64 = base64.b64encode(b"pdf data").decode()
+        result = await atlassian_confluence_upload_attachment(
+            UploadAttachmentParams(
+                page_id="page-001",
+                file=FileFromBytes(data=b64, filename="report.pdf", mime_type="application/pdf"),
+            ),
+            token=_TOKEN,
+        )
+        assert result.success is True
+        assert result.attachment_id == "att-001"
+        assert result.filename == "report.pdf"
+        assert result.page_id == "page-001"
+
+    async def test_cloud_id_failure(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.providers.atlassian.confluence.tools import atlassian_confluence_upload_attachment
+        from apron_tools.providers.atlassian.confluence.types import UploadAttachmentParams
+        from apron_tools.types import FileFromBytes
+
+        httpx_mock.add_response(
+            url=f"{_BASE}/oauth/token/accessible-resources",
+            status_code=401,
+            text="Unauthorized",
+        )
+        b64 = base64.b64encode(b"data").decode()
+        result = await atlassian_confluence_upload_attachment(
+            UploadAttachmentParams(
+                page_id="page-001",
+                file=FileFromBytes(data=b64, filename="f.bin", mime_type="application/octet-stream"),
+            ),
+            token="bad-token",
+        )
+        assert result.success is False
+        assert "cloud ID" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        from apron_tools.providers.atlassian.confluence.tools import atlassian_confluence_upload_attachment
+
+        defn = atlassian_confluence_upload_attachment._tool_definition
+        assert defn.name == "atlassian_confluence_upload_attachment"
+        assert defn.provider == "atlassian"
+        assert defn.service == "atlassian_confluence"
+        assert "write:confluence-content" in defn.scopes

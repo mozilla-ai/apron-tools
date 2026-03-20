@@ -10,6 +10,7 @@ from .tools import (
     atlassian_confluence_get_page_content,
     atlassian_confluence_search_content,
     atlassian_confluence_update_page,
+    atlassian_confluence_upload_attachment,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "atlassian_confluence_get_page_content",
     "atlassian_confluence_search_content",
     "atlassian_confluence_update_page",
+    "atlassian_confluence_upload_attachment",
 ]
