@@ -393,33 +393,29 @@ async def google_drive_read_text_file(
             # Get metadata to verify it's a text file.
             meta_resp = await client.get(
                 f"{base_url}/{params.file_id}",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=_headers(token),
                 params={"fields": "name,mimeType", "supportsAllDrives": "true"},
             )
-    except httpx.HTTPError as exc:
-        return ReadTextFileResult(success=False, error=str(exc))
+            if not meta_resp.is_success:
+                return ReadTextFileResult(
+                    success=False,
+                    error=f"Drive API error {meta_resp.status_code}: {meta_resp.text}",
+                )
 
-    if not meta_resp.is_success:
-        return ReadTextFileResult(
-            success=False,
-            error=f"Drive API error {meta_resp.status_code}: {meta_resp.text}",
-        )
+            meta = meta_resp.json()
+            file_name = meta.get("name", "Untitled")
+            mime_type = meta.get("mimeType", "unknown")
 
-    meta = meta_resp.json()
-    file_name = meta.get("name", "Untitled")
-    mime_type = meta.get("mimeType", "unknown")
+            if mime_type != "text/plain":
+                return ReadTextFileResult(
+                    success=False,
+                    error=f"Only files with MIME type 'text/plain' are supported."
+                    f" '{file_name}' has type '{mime_type}'.",
+                )
 
-    if mime_type != "text/plain":
-        return ReadTextFileResult(
-            success=False,
-            error=f"Only plain text (.txt) files are supported. '{file_name}' has type '{mime_type}'.",
-        )
-
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
             content_resp = await client.get(
                 f"{base_url}/{params.file_id}",
-                headers={"Authorization": f"Bearer {token}"},
+                headers=_headers(token),
                 params={"alt": "media", "supportsAllDrives": "true"},
             )
     except httpx.HTTPError as exc:
