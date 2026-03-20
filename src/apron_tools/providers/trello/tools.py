@@ -40,6 +40,13 @@ def _auth_params(api_key: str, token: str) -> dict[str, str]:
     return {"key": api_key, "token": token}
 
 
+def _redact_error(exc: Exception) -> str:
+    """Return an error string with Trello auth query params redacted."""
+    import re
+
+    return re.sub(r"(key|token)=[^&\s]+", r"\1=REDACTED", str(exc))
+
+
 @tool(
     scopes=SCOPES["trello_list_boards"],
     api_docs=f"{_API_DOCS}api-group-members/#api-members-id-boards-get",
@@ -65,7 +72,7 @@ async def trello_list_boards(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(f"{base_url}/members/me/boards", params=query)
     except httpx.HTTPError as exc:
-        return ListBoardsResult(success=False, error=str(exc))
+        return ListBoardsResult(success=False, error=_redact_error(exc))
 
     if not resp.is_success:
         return ListBoardsResult(
@@ -99,7 +106,7 @@ async def trello_list_lists(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(f"{base_url}/boards/{params.board_id}/lists", params=query)
     except httpx.HTTPError as exc:
-        return ListListsResult(success=False, error=str(exc))
+        return ListListsResult(success=False, error=_redact_error(exc))
 
     if not resp.is_success:
         return ListListsResult(
@@ -143,7 +150,7 @@ async def trello_list_cards(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(endpoint, params=query)
     except httpx.HTTPError as exc:
-        return ListCardsResult(success=False, error=str(exc))
+        return ListCardsResult(success=False, error=_redact_error(exc))
 
     if not resp.is_success:
         return ListCardsResult(
@@ -179,7 +186,7 @@ async def trello_get_card(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(f"{base_url}/cards/{params.card_id}", params=query)
     except httpx.HTTPError as exc:
-        return GetCardResult(success=False, error=str(exc))
+        return GetCardResult(success=False, error=_redact_error(exc))
 
     if not resp.is_success:
         return GetCardResult(
@@ -218,7 +225,7 @@ async def trello_create_card(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(f"{base_url}/cards", params=query)
     except httpx.HTTPError as exc:
-        return CreateCardResult(success=False, error=str(exc))
+        return CreateCardResult(success=False, error=_redact_error(exc))
 
     if not resp.is_success:
         return CreateCardResult(
@@ -252,7 +259,7 @@ async def trello_move_card(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.put(f"{base_url}/cards/{params.card_id}", params=query)
     except httpx.HTTPError as exc:
-        return MoveCardResult(success=False, error=str(exc))
+        return MoveCardResult(success=False, error=_redact_error(exc))
 
     if not resp.is_success:
         return MoveCardResult(
@@ -279,14 +286,15 @@ async def trello_set_card_due_date(
     query: dict[str, Any] = {
         **_auth_params(api_key, token),
         "due": params.due_date or "",
-        "dueComplete": str(params.mark_complete).lower(),
     }
+    if params.mark_complete is not None:
+        query["dueComplete"] = str(params.mark_complete).lower()
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.put(f"{base_url}/cards/{params.card_id}", params=query)
     except httpx.HTTPError as exc:
-        return SetCardDueDateResult(success=False, error=str(exc))
+        return SetCardDueDateResult(success=False, error=_redact_error(exc))
 
     if not resp.is_success:
         return SetCardDueDateResult(

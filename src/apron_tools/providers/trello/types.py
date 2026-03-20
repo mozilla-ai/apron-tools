@@ -60,11 +60,15 @@ class MoveCardParams(BaseModel):
 
 
 class SetCardDueDateParams(BaseModel):
-    """Parameters for setting or clearing a card's due date."""
+    """Parameters for setting or clearing a card's due date.
+
+    If ``mark_complete`` is not provided, the existing completion status
+    is left unchanged.
+    """
 
     card_id: str
     due_date: str | None = None
-    mark_complete: bool = False
+    mark_complete: bool | None = None
 
 
 # ---------------------------------------------------------------------------
