@@ -317,62 +317,61 @@ async def google_docs_insert_image(
     base_url: str = _DOCS_BASE_URL,
 ) -> InsertImageResult:
     """Insert an image into a Google Doc at a given position."""
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        try:
             drive_file_id, public_url, filename = await upload_image_to_drive(params.file, token, client=client)
-    except ValueError as exc:
-        return InsertImageResult(success=False, error=str(exc))
-    except httpx.HTTPStatusError as exc:
-        return InsertImageResult(
-            success=False,
-            error=f"Drive API error {exc.response.status_code}: {exc.response.text}",
-        )
-    except httpx.HTTPError as exc:
-        return InsertImageResult(success=False, error=str(exc))
+        except ValueError as exc:
+            return InsertImageResult(success=False, error=str(exc))
+        except httpx.HTTPStatusError as exc:
+            return InsertImageResult(
+                success=False,
+                error=f"Drive API error {exc.response.status_code}: {exc.response.text}",
+            )
+        except httpx.HTTPError as exc:
+            return InsertImageResult(success=False, error=str(exc))
 
-    batch_body = {
-        "requests": [
-            {
-                "insertInlineImage": {
-                    "uri": public_url,
-                    "location": {"index": params.location_index},
-                    "objectSize": {
-                        "width": {"magnitude": params.width_pt, "unit": "PT"},
-                        "height": {"magnitude": params.height_pt, "unit": "PT"},
-                    },
+        batch_body = {
+            "requests": [
+                {
+                    "insertInlineImage": {
+                        "uri": public_url,
+                        "location": {"index": params.location_index},
+                        "objectSize": {
+                            "width": {"magnitude": params.width_pt, "unit": "PT"},
+                            "height": {"magnitude": params.height_pt, "unit": "PT"},
+                        },
+                    }
                 }
-            }
-        ]
-    }
+            ]
+        }
 
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        try:
             resp = await client.post(
                 f"{base_url}/{params.document_id}:batchUpdate",
                 headers=_headers(token, content_type=True),
                 json=batch_body,
             )
-    except httpx.HTTPError as exc:
-        await _cleanup_drive_file(drive_file_id, token)
-        return InsertImageResult(success=False, error=str(exc), drive_file_id=drive_file_id)
+        except httpx.HTTPError as exc:
+            await _cleanup_drive_file(drive_file_id, token, client=client)
+            return InsertImageResult(success=False, error=str(exc), drive_file_id=drive_file_id)
 
-    if not resp.is_success:
-        await _cleanup_drive_file(drive_file_id, token)
+        if not resp.is_success:
+            await _cleanup_drive_file(drive_file_id, token, client=client)
+            return InsertImageResult(
+                success=False,
+                error=f"Docs API error {resp.status_code}: {resp.text}",
+                drive_file_id=drive_file_id,
+            )
+
         return InsertImageResult(
-            success=False,
-            error=f"Docs API error {resp.status_code}: {resp.text}",
+            success=True,
+            document_id=params.document_id,
+            filename=filename,
             drive_file_id=drive_file_id,
         )
 
-    return InsertImageResult(
-        success=True,
-        document_id=params.document_id,
-        filename=filename,
-        drive_file_id=drive_file_id,
-    )
 
-
-async def _cleanup_drive_file(file_id: str, token: str) -> None:
+async def _cleanup_drive_file(file_id: str, token: str, *, client: httpx.AsyncClient) -> None:
     """Best-effort cleanup of an uploaded Drive file after insert failure."""
     with contextlib.suppress(httpx.HTTPError):
-        await delete_drive_file(file_id, token)
+        await delete_drive_file(file_id, token, client=client)
