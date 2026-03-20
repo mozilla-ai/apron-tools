@@ -282,6 +282,17 @@ class GetFormResponsesResult(ToolResult):
         return "\n".join(lines)
 
 
+def _extract_form_url(links: dict[str, Any]) -> str:
+    """Extract the display URL from a Typeform _links object."""
+    display = links.get("display")
+    if isinstance(display, str):
+        return display
+    self_link = links.get("self", "")
+    if isinstance(self_link, dict):
+        return self_link.get("href", "")
+    return str(self_link) if self_link else ""
+
+
 class CreateFormResult(ToolResult):
     """Result of creating a new Typeform form."""
 
@@ -298,7 +309,7 @@ class CreateFormResult(ToolResult):
         if isinstance(data, dict) and "success" not in data:
             data["success"] = True
             links = data.get("_links", {})
-            data["url"] = links.get("display", links.get("self", ""))
+            data["url"] = _extract_form_url(links)
         return data
 
     def __str__(self) -> str:
@@ -324,7 +335,7 @@ class UpdateFormResult(ToolResult):
         if isinstance(data, dict) and "success" not in data:
             data["success"] = True
             links = data.get("_links", {})
-            data["url"] = links.get("display", links.get("self", ""))
+            data["url"] = _extract_form_url(links)
         return data
 
     def __str__(self) -> str:
