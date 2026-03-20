@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from apron_tools.types import ToolResult
 
@@ -88,6 +88,19 @@ class DownloadFileParams(BaseModel):
 
     url: str
     max_size_mb: int = 10
+
+
+class SaveFileForUploadParams(BaseModel):
+    """Parameters for saving a Slack file for cross-tool upload.
+
+    The URL should be a ``url_private_download`` value from
+    ``slack_get_file_info``. The file is downloaded with the caller's
+    Slack token and returned as raw bytes with metadata, ready to be
+    passed to another tool's ``FileInput``.
+    """
+
+    url: str
+    max_size_mb: int = Field(default=10, gt=0)
 
 
 class GetReactionsParams(BaseModel):
@@ -497,6 +510,29 @@ class DownloadFileResult(ToolResult):
         if self.mime_type.startswith("text/"):
             return self.content
         return f"Content-Type: {self.mime_type}\nEncoding: base64\n\n{self.content}"
+
+
+class SaveFileForUploadResult(ToolResult):
+    """Result of saving a Slack file for cross-tool upload.
+
+    Contains the raw file bytes (base64-encoded for JSON transport),
+    filename, and MIME type — the fields needed to construct a
+    ``FileFromBytes`` for another tool's ``FileInput``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    data: bytes = b""
+    filename: str = ""
+    mime_type: str = ""
+    size: int = 0
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the saved file."""
+        if not self.success:
+            return f"Error: {self.error}"
+        size_kb = self.size / 1024
+        return f"File saved for upload.\nFilename: {self.filename}\nType: {self.mime_type}\nSize: {size_kb:.1f} KB"
 
 
 class GetReactionsResult(ToolResult):

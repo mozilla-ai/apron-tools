@@ -15,6 +15,7 @@ from .tools import (
     slack_join_channel,
     slack_read_channel_messages,
     slack_read_thread,
+    slack_save_file_for_upload,
     slack_send_channel_message,
     slack_send_user_message,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "slack_join_channel",
     "slack_read_channel_messages",
     "slack_read_thread",
+    "slack_save_file_for_upload",
     "slack_send_channel_message",
     "slack_send_user_message",
 ]

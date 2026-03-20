@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from pytest_httpx import HTTPXMock
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
@@ -21,6 +22,7 @@ from apron_tools.providers.slack.tools import (
     slack_join_channel,
     slack_read_channel_messages,
     slack_read_thread,
+    slack_save_file_for_upload,
     slack_send_channel_message,
     slack_send_user_message,
 )
@@ -47,6 +49,8 @@ from apron_tools.providers.slack.types import (
     ReadChannelMessagesResult,
     ReadThreadParams,
     ReadThreadResult,
+    SaveFileForUploadParams,
+    SaveFileForUploadResult,
     SendChannelMessageParams,
     SendChannelMessageResult,
     SendUserMessageParams,
@@ -816,3 +820,70 @@ class TestSlackAddReaction:
         defn = slack_add_reaction._tool_definition
         assert defn.name == "slack_add_reaction"
         assert defn.provider == "slack"
+
+
+# ---------------------------------------------------------------------------
+# save_file_for_upload
+# ---------------------------------------------------------------------------
+
+
+class TestSlackSaveFileForUpload:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        file_bytes = b"\x89PNG\r\n\x1a\nfakeimage"
+
+        # HEAD response.
+        httpx_mock.add_response(
+            method="HEAD",
+            headers={"content-length": str(len(file_bytes)), "content-type": "image/png"},
+        )
+        # GET response.
+        httpx_mock.add_response(
+            method="GET",
+            content=file_bytes,
+            headers={"content-type": "image/png"},
+        )
+
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="https://files.slack.com/files-pri/T1/screenshot.png"),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, SaveFileForUploadResult)
+        assert result.success is True
+        assert result.data == file_bytes
+        assert result.filename == "screenshot.png"
+        assert result.mime_type == "image/png"
+        assert result.size == len(file_bytes)
+        assert "screenshot.png" in str(result)
+
+    async def test_file_too_large_from_head(self, httpx_mock: HTTPXMock) -> None:
+        # HEAD reports file larger than 10 MB.
+        httpx_mock.add_response(
+            method="HEAD",
+            headers={"content-length": str(11 * 1024 * 1024), "content-type": "image/png"},
+        )
+
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="https://files.slack.com/files-pri/T1/huge.zip"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "too large" in result.error.lower()
+
+    async def test_http_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(method="HEAD", status_code=403)
+
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="https://files.slack.com/files-pri/T1/secret.pdf"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = slack_save_file_for_upload._tool_definition
+        assert defn.name == "slack_save_file_for_upload"
+        assert defn.provider == "slack"
+        assert "files:read" in defn.scopes
