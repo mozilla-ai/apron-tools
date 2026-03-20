@@ -8,6 +8,7 @@ API docs:
 from .tools import (
     google_docs_copy_document,
     google_docs_create_document,
+    google_docs_insert_image,
     google_docs_list_documents,
     google_docs_read_document,
     google_docs_replace_text,
@@ -17,6 +18,7 @@ from .tools import (
 __all__ = [
     "google_docs_copy_document",
     "google_docs_create_document",
+    "google_docs_insert_image",
     "google_docs_list_documents",
     "google_docs_read_document",
     "google_docs_replace_text",

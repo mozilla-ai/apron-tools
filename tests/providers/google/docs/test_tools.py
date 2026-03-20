@@ -10,6 +10,7 @@ from pytest_httpx import HTTPXMock
 from apron_tools.providers.google.docs.tools import (
     google_docs_copy_document,
     google_docs_create_document,
+    google_docs_insert_image,
     google_docs_list_documents,
     google_docs_read_document,
     google_docs_update_document,
@@ -19,6 +20,8 @@ from apron_tools.providers.google.docs.types import (
     CopyDocumentResult,
     CreateDocumentParams,
     CreateDocumentResult,
+    InsertImageParams,
+    InsertImageResult,
     ListDocumentsParams,
     ListDocumentsResult,
     ReadDocumentParams,
@@ -331,3 +334,99 @@ class TestGoogleDocsReplaceText:
         assert defn.name == "google_docs_replace_text"
         assert defn.provider == "google"
         assert defn.service == "google_docs"
+
+
+# ---------------------------------------------------------------------------
+# insert_image
+# ---------------------------------------------------------------------------
+
+
+class TestGoogleDocsInsertImage:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        img = base64.b64encode(b"\x89PNG\r\n\x1a\nfakedata").decode()
+
+        # Step 1: Drive upload (returns webContentLink).
+        httpx_mock.add_response(
+            json={
+                "id": "drive-img-001",
+                "webContentLink": "https://drive.google.com/uc?id=drive-img-001&export=download",
+            }
+        )
+        # Step 2: Permission set.
+        httpx_mock.add_response(json={"id": "perm-001"})
+        # Step 3: batchUpdate insertInlineImage.
+        httpx_mock.add_response(json={"documentId": "doc-001", "replies": [{}]})
+
+        params = InsertImageParams(
+            document_id="doc-001",
+            file=FileFromBytes(data=img, filename="logo.png", mime_type="image/png"),
+        )
+        result = await google_docs_insert_image(params, token="test-token")
+
+        assert isinstance(result, InsertImageResult)
+        assert result.success is True
+        assert result.document_id == "doc-001"
+        assert result.filename == "logo.png"
+        assert result.drive_file_id == "drive-img-001"
+        assert "logo.png" in str(result)
+
+    async def test_non_image_rejected(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        params = InsertImageParams(
+            document_id="doc-001",
+            file=FileFromBytes(
+                data=base64.b64encode(b"text").decode(),
+                filename="notes.txt",
+                mime_type="text/plain",
+            ),
+        )
+        result = await google_docs_insert_image(params, token="test-token")
+
+        assert result.success is False
+        assert "image" in result.error.lower()
+
+    async def test_batch_update_error_cleans_up_drive_file(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        img = base64.b64encode(b"\x89PNGfake").decode()
+
+        # Drive upload and permission succeed.
+        httpx_mock.add_response(json={"id": "drive-img-001"})
+        httpx_mock.add_response(json={"id": "perm-001"})
+        # batchUpdate fails.
+        httpx_mock.add_response(status_code=400, text="Bad Request")
+        # Cleanup DELETE.
+        httpx_mock.add_response(status_code=204)
+
+        params = InsertImageParams(
+            document_id="doc-001",
+            file=FileFromBytes(data=img, filename="logo.png", mime_type="image/png"),
+        )
+        result = await google_docs_insert_image(params, token="test-token")
+
+        assert result.success is False
+        assert "400" in result.error
+        assert result.drive_file_id == "drive-img-001"
+
+        # Verify cleanup DELETE was called.
+        requests = httpx_mock.get_requests()
+        delete_req = [r for r in requests if r.method == "DELETE"]
+        assert len(delete_req) == 1
+        assert "drive-img-001" in str(delete_req[0].url)
+
+    async def test_has_tool_definition(self) -> None:
+        defn = google_docs_insert_image._tool_definition
+        assert defn.name == "google_docs_insert_image"
+        assert defn.provider == "google"
+        assert defn.service == "google_docs"
+        assert "https://www.googleapis.com/auth/drive" in defn.scopes
+        assert "https://www.googleapis.com/auth/documents" in defn.scopes

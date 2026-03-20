@@ -25,6 +25,7 @@ SCOPES: dict[str, list[GoogleSlidesScope]] = {
     "google_slides_insert_element": [GoogleSlidesScope.PRESENTATIONS],
     "google_slides_update_table_cell": [GoogleSlidesScope.PRESENTATIONS],
     "google_slides_format_text": [GoogleSlidesScope.PRESENTATIONS],
+    "google_slides_insert_image": [GoogleSlidesScope.PRESENTATIONS, GoogleSlidesScope.DRIVE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

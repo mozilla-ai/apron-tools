@@ -15,6 +15,7 @@ from apron_tools.providers.google.slides.tools import (
     google_slides_duplicate_slide,
     google_slides_format_text,
     google_slides_insert_element,
+    google_slides_insert_image,
     google_slides_list_presentations,
     google_slides_read_presentation,
     google_slides_update_slide_text,
@@ -33,6 +34,8 @@ from apron_tools.providers.google.slides.types import (
     FormatTextResult,
     InsertElementParams,
     InsertElementResult,
+    InsertImageParams,
+    InsertImageResult,
     ListPresentationsParams,
     ListPresentationsResult,
     ReadPresentationParams,
@@ -601,4 +604,104 @@ class TestFormatText:
         assert defn.name == "google_slides_format_text"
         assert defn.provider == "google"
         assert defn.service == "google_slides"
+        assert "https://www.googleapis.com/auth/presentations" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# insert_image
+# ---------------------------------------------------------------------------
+
+
+class TestGoogleSlidesInsertImage:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        img = base64.b64encode(b"\x89PNG\r\n\x1a\nfakedata").decode()
+
+        # Step 1: Drive upload (returns webContentLink).
+        httpx_mock.add_response(
+            json={
+                "id": "drive-img-001",
+                "webContentLink": "https://drive.google.com/uc?id=drive-img-001&export=download",
+            }
+        )
+        # Step 2: Permission set.
+        httpx_mock.add_response(json={"id": "perm-001"})
+        # Step 3: batchUpdate createImage.
+        httpx_mock.add_response(json={"presentationId": _PRES_ID, "replies": [{}]})
+
+        params = InsertImageParams(
+            presentation_id=_PRES_ID,
+            slide_id="slide-001",
+            file=FileFromBytes(data=img, filename="chart.png", mime_type="image/png"),
+        )
+        result = await google_slides_insert_image(params, token=_TOKEN)
+
+        assert isinstance(result, InsertImageResult)
+        assert result.success is True
+        assert result.presentation_id == _PRES_ID
+        assert result.filename == "chart.png"
+        assert result.drive_file_id == "drive-img-001"
+        assert result.image_id.startswith("image_")
+        assert "chart.png" in str(result)
+
+    async def test_non_image_rejected(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        params = InsertImageParams(
+            presentation_id=_PRES_ID,
+            slide_id="slide-001",
+            file=FileFromBytes(
+                data=base64.b64encode(b"text").decode(),
+                filename="notes.txt",
+                mime_type="text/plain",
+            ),
+        )
+        result = await google_slides_insert_image(params, token=_TOKEN)
+
+        assert result.success is False
+        assert "image" in result.error.lower()
+
+    async def test_batch_update_error_cleans_up_drive_file(self, httpx_mock: HTTPXMock) -> None:
+        import base64
+
+        from apron_tools.types import FileFromBytes
+
+        img = base64.b64encode(b"\x89PNGfake").decode()
+
+        # Drive upload and permission succeed.
+        httpx_mock.add_response(json={"id": "drive-img-001"})
+        httpx_mock.add_response(json={"id": "perm-001"})
+        # batchUpdate fails.
+        httpx_mock.add_response(status_code=400, text="Bad Request")
+        # Cleanup DELETE.
+        httpx_mock.add_response(status_code=204)
+
+        params = InsertImageParams(
+            presentation_id=_PRES_ID,
+            slide_id="slide-001",
+            file=FileFromBytes(data=img, filename="chart.png", mime_type="image/png"),
+        )
+        result = await google_slides_insert_image(params, token=_TOKEN)
+
+        assert result.success is False
+        assert "400" in result.error
+        assert result.drive_file_id == "drive-img-001"
+
+        # Verify cleanup DELETE was called.
+        requests = httpx_mock.get_requests()
+        delete_req = [r for r in requests if r.method == "DELETE"]
+        assert len(delete_req) == 1
+        assert "drive-img-001" in str(delete_req[0].url)
+
+    async def test_has_tool_definition(self) -> None:
+        defn = google_slides_insert_image._tool_definition
+        assert defn.name == "google_slides_insert_image"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
+        assert "https://www.googleapis.com/auth/drive" in defn.scopes
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes
