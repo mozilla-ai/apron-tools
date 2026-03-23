@@ -46,6 +46,31 @@ class TestDiscoverToolsWithTypeform:
             assert td.api_docs_url.startswith("https://")
 
 
+class TestDiscoverToolsStructure:
+    """Verify discovery works across flat and hierarchical provider structures."""
+
+    def test_discovers_flat_provider_tools(self):
+        tools = discover_tools()
+        names = {td.name for td in tools}
+        assert "github_get_issue" in names
+        assert "slack_send_channel_message" in names
+
+    def test_discovers_hierarchical_provider_tools(self):
+        tools = discover_tools()
+        names = {td.name for td in tools}
+        assert "google_sheets_list_spreadsheets" in names
+        assert "gmail_list_emails" in names
+        assert "microsoft_teams_list_chats" in names
+        assert "atlassian_jira_explore_projects" in names
+
+    def test_discovers_optional_provider_tools(self):
+        """PowerPoint and Word tools are optional — discovered when installed."""
+        tools = discover_tools()
+        names = {td.name for td in tools}
+        assert "microsoft_powerpoint_read_presentation" in names
+        assert "microsoft_word_read_document" in names
+
+
 class TestGetToolsForProvider:
     def test_unknown_provider_returns_empty(self):
         tools = get_tools_for_provider("nonexistent_provider")
