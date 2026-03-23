@@ -13,9 +13,9 @@ import os
 
 import pytest
 
-from apron_tools.providers.atlassian.confluence import atlassian_confluence_explore_spaces
+from apron_tools.providers.atlassian.confluence.tools import atlassian_confluence_explore_spaces
 from apron_tools.providers.atlassian.confluence.types import ExploreSpacesParams, ExploreSpacesResult
-from apron_tools.providers.atlassian.jira import atlassian_jira_explore_projects
+from apron_tools.providers.atlassian.jira.tools import atlassian_jira_explore_projects
 from apron_tools.providers.atlassian.jira.types import ExploreProjectsParams, ExploreProjectsResult
 
 pytestmark = pytest.mark.integration

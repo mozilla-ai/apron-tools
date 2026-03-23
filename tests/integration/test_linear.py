@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from apron_tools.providers.linear import linear_list_issues, linear_list_teams, linear_whoami
+from apron_tools.providers.linear.tools import linear_list_issues, linear_list_teams, linear_whoami
 from apron_tools.providers.linear.types import (
     ListIssuesParams,
     ListIssuesResult,

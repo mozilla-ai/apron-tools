@@ -13,13 +13,13 @@ import os
 
 import pytest
 
-from apron_tools.providers.microsoft.excel import microsoft_excel_list_workbooks
+from apron_tools.providers.microsoft.excel.tools import microsoft_excel_list_workbooks
 from apron_tools.providers.microsoft.excel.types import ListWorkbooksParams, ListWorkbooksResult
-from apron_tools.providers.microsoft.outlook import microsoft_outlook_list_emails
+from apron_tools.providers.microsoft.outlook.tools import microsoft_outlook_list_emails
 from apron_tools.providers.microsoft.outlook.types import ListEmailsParams, ListEmailsResult
-from apron_tools.providers.microsoft.sharepoint import microsoft_sharepoint_list_sites
+from apron_tools.providers.microsoft.sharepoint.tools import microsoft_sharepoint_list_sites
 from apron_tools.providers.microsoft.sharepoint.types import ListSitesParams, ListSitesResult
-from apron_tools.providers.microsoft.teams import microsoft_teams_explore_workspace
+from apron_tools.providers.microsoft.teams.tools import microsoft_teams_explore_workspace
 from apron_tools.providers.microsoft.teams.types import ExploreWorkspaceParams, ExploreWorkspaceResult
 
 pytestmark = pytest.mark.integration

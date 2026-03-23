@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from apron_tools.providers.typeform import typeform_explore_workspace, typeform_get_form_details
+from apron_tools.providers.typeform.tools import typeform_explore_workspace, typeform_get_form_details
 from apron_tools.providers.typeform.types import (
     ExploreWorkspaceParams,
     ExploreWorkspaceResult,
