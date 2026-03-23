@@ -17,8 +17,9 @@ def _collect_tools(package_path: str, package_fs_path: Sequence[str]) -> list[To
     """Collect tool definitions from a provider package.
 
     Handles both flat providers (tools.py at package root) and hierarchical
-    providers (tools.py inside sub-service packages). Wraps each import in
-    try/except ImportError for optional dependencies (e.g. powerpoint, word).
+    providers (tools.py inside sub-service packages). Catches ModuleNotFoundError
+    for optional dependencies (e.g. powerpoint, word) while letting internal
+    import errors propagate.
     """
     tools: list[ToolDefinition] = []
 
@@ -29,7 +30,7 @@ def _collect_tools(package_path: str, package_fs_path: Sequence[str]) -> list[To
     if has_tools_module:
         try:
             module = importlib.import_module(f"{package_path}.tools")
-        except ImportError:
+        except ModuleNotFoundError:
             _log.debug("Skipping %s.tools — optional dependency not installed.", package_path)
             return tools
         for attr_name in dir(module):
@@ -64,11 +65,7 @@ def _collect_capability_groups(
     )
 
     if has_scopes_module:
-        try:
-            module = importlib.import_module(f"{package_path}.scopes")
-        except ImportError:
-            _log.debug("Skipping %s.scopes — optional dependency not installed.", package_path)
-            return groups
+        module = importlib.import_module(f"{package_path}.scopes")
         cg = getattr(module, "CAPABILITY_GROUP", None)
         if isinstance(cg, CapabilityGroup):
             groups.append(cg)

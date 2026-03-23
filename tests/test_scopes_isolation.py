@@ -1,7 +1,11 @@
-"""Verify scopes are importable without loading tool SDK dependencies."""
+"""Verify scopes are importable without loading tool SDK dependencies.
+
+Uses subprocess to guarantee a clean sys.modules — no test-ordering dependency.
+"""
 
 import importlib
 import pkgutil
+import subprocess
 import sys
 
 import apron_tools.providers as _providers_pkg
@@ -10,13 +14,11 @@ from apron_tools.types import CapabilityGroup
 # SDK packages that should NOT be loaded when importing only scopes.
 # Only includes packages imported by provider tools.py files, not core
 # dependencies like httpx which are always loaded.
-SDK_PACKAGES = frozenset(
-    {
-        "github",
-        "slack_sdk",
-        "pptx",
-        "docx",
-    }
+SDK_PACKAGES = (
+    "github",
+    "slack_sdk",
+    "pptx",
+    "docx",
 )
 
 
@@ -40,21 +42,26 @@ def _collect_scopes_modules() -> list[str]:
     return modules
 
 
+# Script executed in a clean subprocess to verify SDK isolation.
+_ISOLATION_SCRIPT = f"""\
+import sys
+from apron_tools.registry import discover_capability_groups
+
+discover_capability_groups()
+
+sdk_packages = {SDK_PACKAGES!r}
+loaded = [pkg for pkg in sdk_packages if pkg in sys.modules]
+if loaded:
+    print(",".join(loaded))
+    sys.exit(1)
+"""
+
+
 class TestScopesImportIsolation:
     def test_all_scopes_modules_discovered(self):
         """Sanity check — we find all 21 scopes modules."""
         modules = _collect_scopes_modules()
         assert len(modules) >= 21
-
-    def test_importing_scopes_does_not_load_sdks(self):
-        """Import every scopes module and verify no SDK packages are loaded."""
-        pre_loaded = {pkg for pkg in SDK_PACKAGES if pkg in sys.modules}
-
-        for module_path in _collect_scopes_modules():
-            importlib.import_module(module_path)
-
-        newly_loaded = {pkg for pkg in SDK_PACKAGES if pkg in sys.modules and pkg not in pre_loaded}
-        assert newly_loaded == set(), f"Importing scopes modules loaded SDK packages: {newly_loaded}"
 
     def test_every_scopes_module_has_capability_group(self):
         """Every scopes module exports a CAPABILITY_GROUP instance."""
@@ -64,10 +71,10 @@ class TestScopesImportIsolation:
             assert isinstance(cg, CapabilityGroup), f"{module_path} missing CAPABILITY_GROUP"
 
     def test_discover_capability_groups_does_not_load_sdks(self):
-        """The public API function also avoids loading SDK packages."""
-        from apron_tools.registry import discover_capability_groups
-
-        pre_loaded = {pkg for pkg in SDK_PACKAGES if pkg in sys.modules}
-        discover_capability_groups()
-        newly_loaded = {pkg for pkg in SDK_PACKAGES if pkg in sys.modules and pkg not in pre_loaded}
-        assert newly_loaded == set(), f"discover_capability_groups() loaded SDK packages: {newly_loaded}"
+        """Run in a clean subprocess to guarantee no SDK packages are loaded."""
+        result = subprocess.run(
+            [sys.executable, "-c", _ISOLATION_SCRIPT],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"discover_capability_groups() loaded SDK packages: {result.stdout.strip()}"
