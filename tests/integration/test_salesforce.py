@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from apron_tools.providers.salesforce import salesforce_explore_org, salesforce_query_records
+from apron_tools.providers.salesforce.tools import salesforce_explore_org, salesforce_query_records
 from apron_tools.providers.salesforce.types import (
     ExploreOrgParams,
     ExploreOrgResult,

@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from apron_tools.providers.github import github_list_issues, github_list_repositories
+from apron_tools.providers.github.tools import github_list_issues, github_list_repositories
 from apron_tools.providers.github.types import (
     ListIssuesParams,
     ListIssuesResult,

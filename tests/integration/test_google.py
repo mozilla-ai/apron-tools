@@ -13,17 +13,17 @@ import os
 
 import pytest
 
-from apron_tools.providers.google.calendar import google_calendar_list_calendars
+from apron_tools.providers.google.calendar.tools import google_calendar_list_calendars
 from apron_tools.providers.google.calendar.types import ListCalendarsParams, ListCalendarsResult
-from apron_tools.providers.google.docs import google_docs_list_documents
+from apron_tools.providers.google.docs.tools import google_docs_list_documents
 from apron_tools.providers.google.docs.types import ListDocumentsParams, ListDocumentsResult
-from apron_tools.providers.google.drive import google_drive_list_files
+from apron_tools.providers.google.drive.tools import google_drive_list_files
 from apron_tools.providers.google.drive.types import ListFilesParams, ListFilesResult
-from apron_tools.providers.google.gmail import gmail_list_labels
+from apron_tools.providers.google.gmail.tools import gmail_list_labels
 from apron_tools.providers.google.gmail.types import ListLabelsParams, ListLabelsResult
-from apron_tools.providers.google.sheets import google_sheets_list_spreadsheets
+from apron_tools.providers.google.sheets.tools import google_sheets_list_spreadsheets
 from apron_tools.providers.google.sheets.types import ListSpreadsheetsParams, ListSpreadsheetsResult
-from apron_tools.providers.google.slides import google_slides_list_presentations
+from apron_tools.providers.google.slides.tools import google_slides_list_presentations
 from apron_tools.providers.google.slides.types import ListPresentationsParams, ListPresentationsResult
 
 pytestmark = pytest.mark.integration

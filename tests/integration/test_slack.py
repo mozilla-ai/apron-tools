@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from apron_tools.providers.slack import slack_explore_workspace, slack_get_file_info
+from apron_tools.providers.slack.tools import slack_explore_workspace, slack_get_file_info
 from apron_tools.providers.slack.types import (
     ExploreWorkspaceParams,
     ExploreWorkspaceResult,

@@ -14,7 +14,7 @@ import os
 
 import pytest
 
-from apron_tools.providers.trello import trello_list_boards
+from apron_tools.providers.trello.tools import trello_list_boards
 from apron_tools.providers.trello.types import ListBoardsParams, ListBoardsResult
 
 pytestmark = pytest.mark.integration

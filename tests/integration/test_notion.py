@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from apron_tools.providers.notion import notion_explore_teamspace, notion_read_page
+from apron_tools.providers.notion.tools import notion_explore_teamspace, notion_read_page
 from apron_tools.providers.notion.types import (
     ExploreTeamspaceParams,
     ExploreTeamspaceResult,
