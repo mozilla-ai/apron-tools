@@ -8,7 +8,7 @@ import pkgutil
 from collections.abc import Sequence
 
 import apron_tools.providers as _providers_pkg
-from apron_tools.types import ToolDefinition
+from apron_tools.types import CapabilityGroup, ToolDefinition
 
 _log = logging.getLogger(__name__)
 
@@ -46,6 +46,61 @@ def _collect_tools(package_path: str, package_fs_path: Sequence[str]) -> list[To
         tools.extend(_collect_tools(sub_path, sub_pkg.__path__))
 
     return tools
+
+
+def _collect_capability_groups(
+    package_path: str,
+    package_fs_path: Sequence[str],
+) -> list[CapabilityGroup]:
+    """Collect capability groups from a provider package.
+
+    Handles both flat providers (scopes.py at package root) and hierarchical
+    providers (scopes.py inside sub-service packages).
+    """
+    groups: list[CapabilityGroup] = []
+
+    has_scopes_module = any(
+        name == "scopes" and not is_pkg for _imp, name, is_pkg in pkgutil.iter_modules(package_fs_path)
+    )
+
+    if has_scopes_module:
+        try:
+            module = importlib.import_module(f"{package_path}.scopes")
+        except ImportError:
+            _log.debug("Skipping %s.scopes — optional dependency not installed.", package_path)
+            return groups
+        cg = getattr(module, "CAPABILITY_GROUP", None)
+        if isinstance(cg, CapabilityGroup):
+            groups.append(cg)
+        return groups
+
+    for _imp, sub_name, is_pkg in pkgutil.iter_modules(package_fs_path):
+        if not is_pkg:
+            continue
+        sub_path = f"{package_path}.{sub_name}"
+        sub_pkg = importlib.import_module(sub_path)
+        groups.extend(_collect_capability_groups(sub_path, sub_pkg.__path__))
+
+    return groups
+
+
+def discover_capability_groups() -> list[CapabilityGroup]:
+    """Discover all capability groups across providers.
+
+    Scans ``apron_tools.providers.*`` subpackages and collects
+    ``CAPABILITY_GROUP`` from each provider's ``scopes`` module.
+    This is lightweight — it only loads scope definitions, never
+    tool implementations or their SDK dependencies.
+    """
+    groups: list[CapabilityGroup] = []
+    for _imp, name, is_pkg in pkgutil.iter_modules(_providers_pkg.__path__):
+        if not is_pkg:
+            continue
+        pkg = importlib.import_module(f"apron_tools.providers.{name}")
+        groups.extend(
+            _collect_capability_groups(f"apron_tools.providers.{name}", pkg.__path__),
+        )
+    return groups
 
 
 def discover_tools() -> list[ToolDefinition]:

@@ -1,5 +1,10 @@
-from apron_tools.registry import discover_tools, get_tools_for_provider, get_tools_for_service
-from apron_tools.types import ToolDefinition
+from apron_tools.registry import (
+    discover_capability_groups,
+    discover_tools,
+    get_tools_for_provider,
+    get_tools_for_service,
+)
+from apron_tools.types import CapabilityGroup, ToolDefinition
 
 
 class TestDiscoverTools:
@@ -149,3 +154,39 @@ class TestGetToolsForService:
         for td in tools:
             assert td.service == "typeform"
             assert td.provider == "typeform"
+
+
+class TestDiscoverCapabilityGroups:
+    def test_returns_list(self):
+        groups = discover_capability_groups()
+        assert isinstance(groups, list)
+
+    def test_all_items_are_capability_groups(self):
+        groups = discover_capability_groups()
+        for cg in groups:
+            assert isinstance(cg, CapabilityGroup)
+
+    def test_discovers_flat_providers(self):
+        groups = discover_capability_groups()
+        providers = {cg.provider for cg in groups}
+        assert "github" in providers
+        assert "slack" in providers
+        assert "typeform" in providers
+
+    def test_discovers_hierarchical_providers(self):
+        groups = discover_capability_groups()
+        providers = {cg.provider for cg in groups}
+        assert "gmail" in providers
+        assert "google_sheets" in providers
+        assert "microsoft_teams" in providers
+        assert "atlassian_jira" in providers
+
+    def test_each_group_has_scopes(self):
+        groups = discover_capability_groups()
+        for cg in groups:
+            assert len(cg.scopes) > 0, f"{cg.provider} has no scopes"
+
+    def test_each_group_has_display_name(self):
+        groups = discover_capability_groups()
+        for cg in groups:
+            assert cg.display_name, f"{cg.provider} has no display_name"
