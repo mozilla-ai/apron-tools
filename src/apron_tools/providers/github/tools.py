@@ -22,9 +22,13 @@ from .types import (
     CreateIssueResult,
     CreatePullRequestParams,
     CreatePullRequestResult,
+    CreateReleaseParams,
+    CreateReleaseResult,
     ExploreReleasesParams,
     ExploreReleasesResult,
     FileContentEntry,
+    GenerateReleaseNotesParams,
+    GenerateReleaseNotesResult,
     GetFileContentParams,
     GetFileContentResult,
     GetIssueParams,
@@ -812,6 +816,117 @@ async def github_create_pull_request(
             return CreatePullRequestResult(success=True, pull_request=_pr_detail(pr))
         except GithubException as exc:
             return CreatePullRequestResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+def _release_notes_mode(generate: bool, body: str) -> str:
+    """Describe how notes were composed for a release.
+
+    GitHub prepends ``body`` to auto-generated notes when both are provided,
+    so we surface that combination explicitly for the tool caller.
+    """
+    if generate and body:
+        return "manual + auto-generated"
+    if generate:
+        return "auto-generated"
+    if body:
+        return "manual"
+    return "none"
+
+
+@tool(
+    scopes=SCOPES["github_create_release"],
+    api_docs="https://docs.github.com/en/rest/releases/releases#create-a-release",
+    provider="github",
+)
+async def github_create_release(
+    params: CreateReleaseParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateReleaseResult:
+    """Create a GitHub release, optionally auto-generating release notes."""
+
+    def _call() -> CreateReleaseResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {
+                "tag": params.tag_name,
+                "draft": params.draft,
+                "prerelease": params.prerelease,
+                "generate_release_notes": params.generate_release_notes,
+            }
+            if params.release_title:
+                kwargs["name"] = params.release_title
+            if params.release_notes:
+                kwargs["message"] = params.release_notes
+            if params.target_commitish:
+                kwargs["target_commitish"] = params.target_commitish
+            release = repo.create_git_release(**kwargs)
+            return CreateReleaseResult(
+                success=True,
+                release=_release_summary(release),
+                target_commitish=params.target_commitish or None,
+                notes_mode=_release_notes_mode(
+                    params.generate_release_notes,
+                    params.release_notes,
+                ),
+            )
+        except GithubException as exc:
+            return CreateReleaseResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_generate_release_notes"],
+    api_docs=("https://docs.github.com/en/rest/releases/releases#generate-release-notes-content-for-a-release"),
+    provider="github",
+)
+async def github_generate_release_notes(
+    params: GenerateReleaseNotesParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> GenerateReleaseNotesResult:
+    """Preview auto-generated release notes without creating a release."""
+
+    def _call() -> GenerateReleaseNotesResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {"tag_name": params.tag_name}
+            if params.target_commitish:
+                kwargs["target_commitish"] = params.target_commitish
+            if params.previous_tag_name:
+                kwargs["previous_tag_name"] = params.previous_tag_name
+            if params.configuration_file_path:
+                kwargs["configuration_file_path"] = params.configuration_file_path
+            notes = repo.generate_release_notes(**kwargs)
+            return GenerateReleaseNotesResult(
+                success=True,
+                owner=params.owner,
+                repo=params.repo,
+                tag_name=params.tag_name,
+                release_title=notes.name or params.tag_name,
+                target_commitish=params.target_commitish or None,
+                previous_tag_name=params.previous_tag_name or None,
+                notes=notes.body,
+            )
+        except GithubException as exc:
+            return GenerateReleaseNotesResult(
                 success=False,
                 error=f"GitHub API error {exc.status}: {exc.data}",
             )
