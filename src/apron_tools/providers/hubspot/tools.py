@@ -13,17 +13,20 @@ from apron_tools.providers.hubspot.types import (
     CreateDealParams,
     CreateNoteParams,
     CreateResult,
+    CreateTaskParams,
     CrmRecord,
     SearchCompaniesParams,
     SearchContactsParams,
     SearchDealsParams,
     SearchNotesParams,
     SearchResult,
+    SearchTasksParams,
     UpdateCompanyParams,
     UpdateContactParams,
     UpdateDealParams,
     UpdateNoteParams,
     UpdateResult,
+    UpdateTaskParams,
 )
 from apron_tools.tool import tool
 
@@ -416,6 +419,75 @@ async def hubspot_update_note(
     """Update an existing note engagement in HubSpot."""
     return await _update_object(
         "notes",
+        params.record_id,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tasks
+# ---------------------------------------------------------------------------
+
+
+@tool(
+    scopes=SCOPES["hubspot_search_tasks"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/search",
+    provider="hubspot",
+)
+async def hubspot_search_tasks(
+    params: SearchTasksParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchResult:
+    """Search for task engagements in HubSpot using a text query."""
+    return await _search_objects(
+        "tasks",
+        params.query,
+        params.limit,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_create_task"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/tasks",
+    provider="hubspot",
+)
+async def hubspot_create_task(
+    params: CreateTaskParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateResult:
+    """Create a task engagement in HubSpot."""
+    return await _create_object(
+        "tasks",
+        params.properties,
+        params.associations,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_update_task"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/tasks",
+    provider="hubspot",
+)
+async def hubspot_update_task(
+    params: UpdateTaskParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UpdateResult:
+    """Update an existing task engagement in HubSpot."""
+    return await _update_object(
+        "tasks",
         params.record_id,
         params.properties,
         token=token,

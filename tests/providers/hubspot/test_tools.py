@@ -12,14 +12,17 @@ from apron_tools.providers.hubspot.tools import (
     hubspot_create_contact,
     hubspot_create_deal,
     hubspot_create_note,
+    hubspot_create_task,
     hubspot_search_companies,
     hubspot_search_contacts,
     hubspot_search_deals,
     hubspot_search_notes,
+    hubspot_search_tasks,
     hubspot_update_company,
     hubspot_update_contact,
     hubspot_update_deal,
     hubspot_update_note,
+    hubspot_update_task,
 )
 from apron_tools.providers.hubspot.types import (
     CreateCompanyParams,
@@ -27,16 +30,19 @@ from apron_tools.providers.hubspot.types import (
     CreateDealParams,
     CreateNoteParams,
     CreateResult,
+    CreateTaskParams,
     SearchCompaniesParams,
     SearchContactsParams,
     SearchDealsParams,
     SearchNotesParams,
     SearchResult,
+    SearchTasksParams,
     UpdateCompanyParams,
     UpdateContactParams,
     UpdateDealParams,
     UpdateNoteParams,
     UpdateResult,
+    UpdateTaskParams,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -859,5 +865,149 @@ class TestUpdateNote:
     async def test_has_tool_definition(self) -> None:
         defn = hubspot_update_note._tool_definition
         assert defn.name == "hubspot_update_note"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.contacts.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_search_tasks
+# ---------------------------------------------------------------------------
+
+
+class TestSearchTasks:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/tasks/search",
+            method="POST",
+            json=_load_json("search_tasks.json"),
+        )
+
+        result = await hubspot_search_tasks(
+            SearchTasksParams(query="proposal"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert len(result.results) == 1
+        assert result.results[0].id == "3101"
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/tasks/search",
+            method="POST",
+            status_code=401,
+            text="Unauthorized",
+        )
+
+        result = await hubspot_search_tasks(
+            SearchTasksParams(query="proposal"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "401" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_search_tasks._tool_definition
+        assert defn.name == "hubspot_search_tasks"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.contacts.read"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_create_task
+# ---------------------------------------------------------------------------
+
+
+class TestCreateTask:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/tasks",
+            method="POST",
+            status_code=201,
+            json=_load_json("create_task.json"),
+        )
+
+        result = await hubspot_create_task(
+            CreateTaskParams(
+                properties={
+                    "hs_task_subject": "Follow up on proposal",
+                    "hs_task_priority": "HIGH",
+                    "hs_task_status": "NOT_STARTED",
+                },
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CreateResult)
+        assert result.success is True
+        assert result.id == "3101"
+
+    async def test_sends_properties_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/tasks",
+            method="POST",
+            status_code=201,
+            json=_load_json("create_task.json"),
+        )
+
+        await hubspot_create_task(
+            CreateTaskParams(properties={"hs_task_subject": "Follow up"}),
+            token=_TOKEN,
+        )
+
+        body = json.loads(httpx_mock.get_requests()[-1].content)
+        assert body == {"properties": {"hs_task_subject": "Follow up"}}
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_create_task._tool_definition
+        assert defn.name == "hubspot_create_task"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.contacts.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_update_task
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateTask:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/tasks/3101",
+            method="PATCH",
+            json=_load_json("update_task.json"),
+        )
+
+        result = await hubspot_update_task(
+            UpdateTaskParams(
+                record_id="3101",
+                properties={"hs_task_status": "COMPLETED"},
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.id == "3101"
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/tasks/missing",
+            method="PATCH",
+            status_code=404,
+            text="Not Found",
+        )
+
+        result = await hubspot_update_task(
+            UpdateTaskParams(record_id="missing", properties={"hs_task_status": "x"}),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_update_task._tool_definition
+        assert defn.name == "hubspot_update_task"
         assert defn.provider == "hubspot"
         assert defn.scopes == ["crm.objects.contacts.write"]
