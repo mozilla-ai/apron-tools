@@ -1,0 +1,31 @@
+{
+  "comments": [
+    {
+      "id": "cmt-001",
+      "content": "Let's revisit this section.",
+      "resolved": false,
+      "author": {"displayName": "Alice"},
+      "createdTime": "2024-06-01T10:30:00Z",
+      "quotedFileContent": {
+        "value": "Quoted text the comment is anchored to",
+        "mimeType": "text/html"
+      },
+      "replies": [
+        {
+          "id": "rep-001",
+          "content": "Agreed, I'll update it.",
+          "author": {"displayName": "Bob"},
+          "createdTime": "2024-06-01T11:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "cmt-002",
+      "content": "Already done.",
+      "resolved": true,
+      "author": {"displayName": "Charlie"},
+      "createdTime": "2024-05-30T09:00:00Z",
+      "replies": []
+    }
+  ]
+}

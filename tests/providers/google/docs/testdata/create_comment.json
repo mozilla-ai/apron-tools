@@ -1,0 +1,10 @@
+{
+  "id": "cmt-003",
+  "content": "This looks great!",
+  "author": {"displayName": "Alice"},
+  "createdTime": "2024-06-02T14:15:00Z",
+  "quotedFileContent": {
+    "value": "the text I am anchoring to",
+    "mimeType": "text/html"
+  }
+}
