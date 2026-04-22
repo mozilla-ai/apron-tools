@@ -715,6 +715,10 @@ async def slack_download_file(
     base_url: str = _BASE_URL,  # noqa: ARG001
 ) -> DownloadFileResult:
     """Download a file from Slack using its private URL."""
+    url_error = _validate_slack_file_url(params.url)
+    if url_error:
+        return DownloadFileResult(success=False, error=f"Failed to download file: {url_error}")
+
     max_bytes = params.max_size_mb * 1024 * 1024
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -767,6 +771,10 @@ async def slack_save_file_for_upload(
 ) -> SaveFileForUploadResult:
     """Download a Slack file and return it as raw bytes for cross-tool upload."""
     from urllib.parse import unquote, urlparse
+
+    url_error = _validate_slack_file_url(params.url)
+    if url_error:
+        return SaveFileForUploadResult(success=False, error=f"Failed to save file: {url_error}")
 
     max_bytes = params.max_size_mb * 1024 * 1024
     headers = {"Authorization": f"Bearer {token}"}

@@ -805,6 +805,17 @@ class TestSlackDownloadFile:
         assert defn.name == "slack_download_file"
         assert defn.provider == "slack"
 
+    async def test_rejects_ssrf_url(self) -> None:
+        """slack_download_file returns an error for non-Slack URLs."""
+        result = await slack_download_file(
+            DownloadFileParams(url="http://169.254.169.254/latest/meta-data/"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "Failed to download file" in result.error
+
 
 # ---------------------------------------------------------------------------
 # slack_get_reactions
@@ -1013,6 +1024,16 @@ class TestSlackSaveFileForUpload:
         assert defn.name == "slack_save_file_for_upload"
         assert defn.provider == "slack"
         assert "files:read" in defn.scopes
+
+    async def test_rejects_ssrf_url(self) -> None:
+        """slack_save_file_for_upload returns an error for non-Slack URLs."""
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="http://169.254.169.254/latest/meta-data/"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "Failed to save file" in result.error
 
 
 # ---------------------------------------------------------------------------
