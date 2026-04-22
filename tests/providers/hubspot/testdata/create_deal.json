@@ -1,0 +1,13 @@
+{
+  "id": "1402",
+  "properties": {
+    "amount": "50000",
+    "createdate": "2024-03-01T10:00:00.000Z",
+    "dealname": "Q1 Enterprise Deal",
+    "dealstage": "appointmentscheduled",
+    "pipeline": "default"
+  },
+  "createdAt": "2024-03-01T10:00:00.000Z",
+  "updatedAt": "2024-03-01T10:00:00.000Z",
+  "archived": false
+}

@@ -10,13 +10,16 @@ from apron_tools.providers.hubspot.types import (
     Association,
     CreateCompanyParams,
     CreateContactParams,
+    CreateDealParams,
     CreateResult,
     CrmRecord,
     SearchCompaniesParams,
     SearchContactsParams,
+    SearchDealsParams,
     SearchResult,
     UpdateCompanyParams,
     UpdateContactParams,
+    UpdateDealParams,
     UpdateResult,
 )
 from apron_tools.tool import tool
@@ -272,6 +275,75 @@ async def hubspot_update_company(
     """Update an existing company in HubSpot."""
     return await _update_object(
         "companies",
+        params.record_id,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Deals
+# ---------------------------------------------------------------------------
+
+
+@tool(
+    scopes=SCOPES["hubspot_search_deals"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/search",
+    provider="hubspot",
+)
+async def hubspot_search_deals(
+    params: SearchDealsParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchResult:
+    """Search for deals in HubSpot using a text query."""
+    return await _search_objects(
+        "deals",
+        params.query,
+        params.limit,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_create_deal"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/deals",
+    provider="hubspot",
+)
+async def hubspot_create_deal(
+    params: CreateDealParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateResult:
+    """Create a new deal in HubSpot."""
+    return await _create_object(
+        "deals",
+        params.properties,
+        params.associations,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_update_deal"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/deals",
+    provider="hubspot",
+)
+async def hubspot_update_deal(
+    params: UpdateDealParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UpdateResult:
+    """Update an existing deal in HubSpot."""
+    return await _update_object(
+        "deals",
         params.record_id,
         params.properties,
         token=token,

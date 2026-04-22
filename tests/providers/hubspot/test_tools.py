@@ -10,20 +10,26 @@ from pytest_httpx import HTTPXMock
 from apron_tools.providers.hubspot.tools import (
     hubspot_create_company,
     hubspot_create_contact,
+    hubspot_create_deal,
     hubspot_search_companies,
     hubspot_search_contacts,
+    hubspot_search_deals,
     hubspot_update_company,
     hubspot_update_contact,
+    hubspot_update_deal,
 )
 from apron_tools.providers.hubspot.types import (
     CreateCompanyParams,
     CreateContactParams,
+    CreateDealParams,
     CreateResult,
     SearchCompaniesParams,
     SearchContactsParams,
+    SearchDealsParams,
     SearchResult,
     UpdateCompanyParams,
     UpdateContactParams,
+    UpdateDealParams,
     UpdateResult,
 )
 
@@ -504,3 +510,205 @@ class TestUpdateCompany:
         assert defn.name == "hubspot_update_company"
         assert defn.provider == "hubspot"
         assert defn.scopes == ["crm.objects.companies.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_search_deals
+# ---------------------------------------------------------------------------
+
+
+class TestSearchDeals:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals/search",
+            method="POST",
+            json=_load_json("search_deals.json"),
+        )
+
+        result = await hubspot_search_deals(
+            SearchDealsParams(query="enterprise"),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, SearchResult)
+        assert result.success is True
+        assert len(result.results) == 1
+        assert result.results[0].id == "1402"
+        assert result.results[0].properties["dealname"] == "Q1 Enterprise Deal"
+
+    async def test_sends_payload(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals/search",
+            method="POST",
+            json=_load_json("search_deals.json"),
+        )
+
+        await hubspot_search_deals(
+            SearchDealsParams(query="enterprise", limit=5),
+            token=_TOKEN,
+        )
+
+        body = json.loads(httpx_mock.get_requests()[-1].content)
+        assert body["query"] == "enterprise"
+        assert body["limit"] == 5
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals/search",
+            method="POST",
+            status_code=500,
+            text="Internal Server Error",
+        )
+
+        result = await hubspot_search_deals(
+            SearchDealsParams(query="enterprise"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "500" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_search_deals._tool_definition
+        assert defn.name == "hubspot_search_deals"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.deals.read"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_create_deal
+# ---------------------------------------------------------------------------
+
+
+class TestCreateDeal:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals",
+            method="POST",
+            status_code=201,
+            json=_load_json("create_deal.json"),
+        )
+
+        result = await hubspot_create_deal(
+            CreateDealParams(
+                properties={
+                    "dealname": "Q1 Enterprise Deal",
+                    "dealstage": "appointmentscheduled",
+                    "pipeline": "default",
+                    "amount": "50000",
+                },
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CreateResult)
+        assert result.success is True
+        assert result.id == "1402"
+        assert result.properties["dealname"] == "Q1 Enterprise Deal"
+
+    async def test_sends_properties_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals",
+            method="POST",
+            status_code=201,
+            json=_load_json("create_deal.json"),
+        )
+
+        await hubspot_create_deal(
+            CreateDealParams(properties={"dealname": "Q1 Enterprise Deal"}),
+            token=_TOKEN,
+        )
+
+        body = json.loads(httpx_mock.get_requests()[-1].content)
+        assert body == {"properties": {"dealname": "Q1 Enterprise Deal"}}
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals",
+            method="POST",
+            status_code=400,
+            text="Missing required property: pipeline",
+        )
+
+        result = await hubspot_create_deal(
+            CreateDealParams(properties={}),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "400" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_create_deal._tool_definition
+        assert defn.name == "hubspot_create_deal"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.deals.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_update_deal
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateDeal:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals/1402",
+            method="PATCH",
+            json=_load_json("update_deal.json"),
+        )
+
+        result = await hubspot_update_deal(
+            UpdateDealParams(
+                record_id="1402",
+                properties={"dealstage": "closedwon", "amount": "75000"},
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, UpdateResult)
+        assert result.success is True
+        assert result.id == "1402"
+
+    async def test_sends_patch_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals/1402",
+            method="PATCH",
+            json=_load_json("update_deal.json"),
+        )
+
+        await hubspot_update_deal(
+            UpdateDealParams(
+                record_id="1402",
+                properties={"dealstage": "closedwon"},
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_requests()[-1]
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {
+            "properties": {"dealstage": "closedwon"},
+        }
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/deals/missing",
+            method="PATCH",
+            status_code=404,
+            text="Not Found",
+        )
+
+        result = await hubspot_update_deal(
+            UpdateDealParams(record_id="missing", properties={"amount": "1"}),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_update_deal._tool_definition
+        assert defn.name == "hubspot_update_deal"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.deals.write"]
