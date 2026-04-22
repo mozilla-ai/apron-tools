@@ -195,7 +195,7 @@ class TestGetEvent:
 class TestCreateEvent:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events?sendUpdates=all",
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events?sendUpdates=all&conferenceDataVersion=1",
             json=_load_json("create_event.json"),
         )
 
@@ -301,6 +301,48 @@ class TestCreateEvent:
 
         request = httpx_mock.get_request()
         assert "sendUpdates" not in str(request.url)
+
+    async def test_default_generates_meet_link(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Auto Meet",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["conferenceData"]["createRequest"]["conferenceSolutionKey"] == {"type": "hangoutsMeet"}
+        assert "requestId" in body["conferenceData"]["createRequest"]
+        assert "conferenceDataVersion=1" in str(request.url)
+
+    async def test_opt_out_of_meet_link(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="No Meet",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                generate_meet_link=False,
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert "conferenceData" not in body
+        assert "conferenceDataVersion" not in str(request.url)
 
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
@@ -432,6 +474,30 @@ class TestUpdateEvent:
         assert result.success is True
         put_request = httpx_mock.get_requests()[1]
         assert "sendUpdates" not in str(put_request.url)
+
+    async def test_generate_meet_link_adds_conference_data(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}?conferenceDataVersion=1",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                generate_meet_link=True,
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        put_body = json.loads(put_request.content)
+        assert put_body["conferenceData"]["createRequest"]["conferenceSolutionKey"] == {"type": "hangoutsMeet"}
 
     async def test_get_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")

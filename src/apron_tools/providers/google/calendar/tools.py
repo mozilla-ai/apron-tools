@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from urllib.parse import quote
 
 import httpx
@@ -37,6 +38,21 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
     if content_type:
         h["Content-Type"] = "application/json"
     return h
+
+
+def _build_meet_conference_data() -> dict:
+    """Build conferenceData payload that requests a new Google Meet link.
+
+    The Calendar API only accepts conferenceData with an associated
+    conferenceSolution. Custom video URLs (Zoom, Teams, etc.) must be
+    handled separately rather than via bare entryPoints.
+    """
+    return {
+        "createRequest": {
+            "requestId": str(uuid.uuid4()),
+            "conferenceSolutionKey": {"type": "hangoutsMeet"},
+        }
+    }
 
 
 @tool(
@@ -192,6 +208,11 @@ async def google_calendar_create_event(
     if params.attendees:
         query_params["sendUpdates"] = "all"
 
+    # Request a Google Meet link via createRequest when enabled.
+    if params.generate_meet_link:
+        body["conferenceData"] = _build_meet_conference_data()
+        query_params["conferenceDataVersion"] = 1
+
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
@@ -263,6 +284,11 @@ async def google_calendar_update_event(
             query_params: dict[str, str | int] = {}
             if params.attendees is not None:
                 query_params["sendUpdates"] = "all"
+
+            # Request a Google Meet link when enabled.
+            if params.generate_meet_link:
+                body["conferenceData"] = _build_meet_conference_data()
+                query_params["conferenceDataVersion"] = 1
 
             resp = await client.put(
                 f"{base_url}/calendars/{encoded_cal}/events/{encoded_event}",

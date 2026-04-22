@@ -117,6 +117,7 @@ class CreateEventParams(BaseModel):
     start: EventDateTime
     end: EventDateTime
     attendees: list[str] | None = None
+    generate_meet_link: bool = True
 
 
 class UpdateEventParams(BaseModel):
@@ -130,6 +131,7 @@ class UpdateEventParams(BaseModel):
     start: EventDateTime | None = None
     end: EventDateTime | None = None
     attendees: list[str] | None = None
+    generate_meet_link: bool = False
 
 
 # ---------------------------------------------------------------------------
