@@ -1,0 +1,9 @@
+{
+  "id": "file-001",
+  "name": "Budget.xlsx",
+  "webUrl": "https://onedrive.live.com/view/folder-002/Budget.xlsx",
+  "parentReference": {
+    "id": "folder-002",
+    "path": "/drive/root:/Archive"
+  }
+}

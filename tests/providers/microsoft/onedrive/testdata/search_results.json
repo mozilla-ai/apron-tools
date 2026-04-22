@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "id": "0123456789abc!123",
+      "name": "Contoso Project",
+      "folder": {"childCount": 2},
+      "webUrl": "https://onedrive.live.com/view/0123456789abc!123"
+    },
+    {
+      "id": "0123456789abc!456",
+      "name": "Contoso Project 2016.xlsx",
+      "file": {"mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+      "webUrl": "https://onedrive.live.com/view/0123456789abc!456"
+    }
+  ]
+}
