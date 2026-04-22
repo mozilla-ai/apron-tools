@@ -6,6 +6,7 @@ import base64
 import contextlib
 import re
 from typing import Any, cast
+from urllib.parse import urlparse
 
 import httpx
 from slack_sdk.errors import SlackApiError
@@ -224,6 +225,43 @@ def _get_message_text(msg: dict) -> str:
     # to the empty string instead.
     fallback_text = msg.get("text")
     return fallback_text if isinstance(fallback_text, str) else ""
+
+
+# Allowed base domains for Slack private file download URLs (SSRF prevention).
+# Slack serves private files from subdomains of these three domains.
+_ALLOWED_SLACK_FILE_DOMAINS = ("slack.com", "slack-files.com", "slack-edge.com")
+
+
+def _validate_slack_file_url(url: str) -> str | None:
+    """Validate that *url* is a legitimate Slack file URL.
+
+    Returns ``None`` if the URL is valid, or an error string if it should be
+    rejected.  This prevents SSRF: without this check, an attacker who can
+    inject content into a Slack channel could supply an arbitrary URL and
+    cause the agent to make authenticated HTTP requests (with the user's Slack
+    OAuth token) to internal cloud metadata services or other private hosts.
+
+    Only ``https://`` URLs whose hostname is exactly one of the allowed base
+    domains, or a subdomain thereof, are accepted.  The subdomain check uses
+    a dot-prefix (``hostname.endswith("." + domain)``) to prevent
+    ``evil-slack.com`` from matching ``slack.com``.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return "Invalid URL."
+
+    if parsed.scheme != "https":
+        return "Only HTTPS Slack file URLs are supported."
+
+    hostname = (parsed.hostname or "").lower()
+    if not any(hostname == domain or hostname.endswith("." + domain) for domain in _ALLOWED_SLACK_FILE_DOMAINS):
+        return (
+            "URL is not a recognised Slack file host. "
+            "Only slack.com, slack-files.com, and slack-edge.com URLs are supported."
+        )
+
+    return None
 
 
 def _client(token: str, base_url: str) -> AsyncWebClient:
