@@ -13,6 +13,7 @@ class GmailScope(StrEnum):
     READONLY = "https://www.googleapis.com/auth/gmail.readonly"
     COMPOSE = "https://www.googleapis.com/auth/gmail.compose"
     MODIFY = "https://www.googleapis.com/auth/gmail.modify"
+    LABELS = "https://www.googleapis.com/auth/gmail.labels"
 
 
 SCOPES: dict[str, list[GmailScope]] = {
@@ -26,6 +27,10 @@ SCOPES: dict[str, list[GmailScope]] = {
     "gmail_list_labels": [GmailScope.READONLY],
     "gmail_add_label_to_email": [GmailScope.MODIFY],
     "gmail_remove_label_from_email": [GmailScope.MODIFY],
+    # Creating a label only needs gmail.labels, which is narrower than
+    # gmail.modify. Existing installations that already hold gmail.modify
+    # remain covered at the API level since modify implies labels access.
+    "gmail_create_label": [GmailScope.LABELS],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(
