@@ -1259,6 +1259,8 @@ class TestChannelIdBoundaryRejection:
         client.reactions_get.assert_not_called()
         assert result.success is False
         assert "not a valid Slack channel ID" in result.error
+
+
 # ---------------------------------------------------------------------------
 # Block Kit + attachment message-text extraction.
 #
@@ -1269,10 +1271,6 @@ class TestChannelIdBoundaryRejection:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Parser not yet wired in — will pass once _collect_text exists.",
-)
 class TestCollectText:
     """Unit tests for ``_collect_text`` — the recursive Slack text walker."""
 
@@ -1365,10 +1363,6 @@ class TestCollectText:
         assert "Discovered via recursion" in self._text(blocks)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Parser not yet wired in — will pass once _get_message_text exists.",
-)
 class TestGetMessageText:
     """Unit tests for ``_get_message_text`` — the blocks/attachments/text priority."""
 
@@ -1421,10 +1415,6 @@ class TestGetMessageText:
 class TestReadChannelMessagesBlocksAndAttachments:
     """``slack_read_channel_messages`` surfaces block/attachment content in message text."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Parser not yet wired into slack_read_channel_messages.",
-    )
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_message_with_blocks_surfaces_block_content(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
@@ -1499,10 +1489,6 @@ class TestReadChannelMessagesBlocksAndAttachments:
         assert result.success is True
         assert result.messages[0].text == "Just a plain text message"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Parser not yet wired into slack_read_channel_messages.",
-    )
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_message_with_legacy_attachments_surfaces_values(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
@@ -1545,10 +1531,6 @@ class TestReadChannelMessagesBlocksAndAttachments:
         assert "apron-tools" in text
         assert "alice" in text
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Parser not yet wired into slack_read_channel_messages.",
-    )
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_files_still_surfaced_alongside_block_text(self, mock_cls: AsyncMock) -> None:
         """Ports should not regress the existing ``files`` surfacing."""
@@ -1586,10 +1568,6 @@ class TestReadChannelMessagesBlocksAndAttachments:
 class TestReadThreadBlocksAndAttachments:
     """``slack_read_thread`` surfaces block/attachment content in message text."""
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Parser not yet wired into slack_read_thread.",
-    )
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_thread_parent_with_blocks(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
@@ -1633,10 +1611,6 @@ class TestReadThreadBlocksAndAttachments:
         assert "Detailed parent content" in result.messages[0].text
         assert result.messages[1].text == "Reply text"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Parser not yet wired into slack_read_thread.",
-    )
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_thread_reply_with_attachments(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
