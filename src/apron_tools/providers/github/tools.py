@@ -39,6 +39,8 @@ from .types import (
     GetPullRequestResult,
     GetRepositoryParams,
     GetRepositoryResult,
+    GetRepoTreeParams,
+    GetRepoTreeResult,
     IssueCommentSummary,
     IssueSummary,
     LabelSummary,
@@ -58,6 +60,7 @@ from .types import (
     ReleaseAsset,
     ReleaseSummary,
     RepositorySummary,
+    RepoTreeEntry,
     UpdateFileParams,
     UpdateFileResult,
     UserSummary,
@@ -971,6 +974,59 @@ async def github_fork_repository(
             )
         except GithubException as exc:
             return ForkRepositoryResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_get_repo_tree"],
+    api_docs="https://docs.github.com/en/rest/git/trees#get-a-tree",
+    provider="github",
+)
+async def github_get_repo_tree(
+    params: GetRepoTreeParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> GetRepoTreeResult:
+    """Return the recursive file tree of a repository for a ref or default branch."""
+
+    def _call() -> GetRepoTreeResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            commit_ref = params.ref or repo.default_branch
+            commit = repo.get_commit(commit_ref)
+            tree = repo.get_git_tree(commit.commit.tree.sha, recursive=True)
+            files: list[RepoTreeEntry] = []
+            for entry in tree.tree:
+                if entry.type != "blob":
+                    continue
+                if params.path_filter and not entry.path.startswith(params.path_filter):
+                    continue
+                files.append(
+                    RepoTreeEntry(
+                        path=entry.path,
+                        size=entry.size or 0,
+                        sha=entry.sha,
+                    )
+                )
+            return GetRepoTreeResult(
+                success=True,
+                owner=params.owner,
+                repo=params.repo,
+                ref=params.ref or None,
+                path_filter=params.path_filter or None,
+                files=files,
+                truncated=bool(getattr(tree, "truncated", False)),
+            )
+        except GithubException as exc:
+            return GetRepoTreeResult(
                 success=False,
                 error=f"GitHub API error {exc.status}: {exc.data}",
             )
