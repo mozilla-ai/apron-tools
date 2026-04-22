@@ -8,15 +8,21 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.hubspot.tools import (
+    hubspot_create_company,
     hubspot_create_contact,
+    hubspot_search_companies,
     hubspot_search_contacts,
+    hubspot_update_company,
     hubspot_update_contact,
 )
 from apron_tools.providers.hubspot.types import (
+    CreateCompanyParams,
     CreateContactParams,
     CreateResult,
+    SearchCompaniesParams,
     SearchContactsParams,
     SearchResult,
+    UpdateCompanyParams,
     UpdateContactParams,
     UpdateResult,
 )
@@ -294,3 +300,207 @@ class TestUpdateContact:
         assert defn.name == "hubspot_update_contact"
         assert defn.provider == "hubspot"
         assert defn.scopes == ["crm.objects.contacts.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_search_companies
+# ---------------------------------------------------------------------------
+
+
+class TestSearchCompanies:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies/search",
+            method="POST",
+            json=_load_json("search_companies.json"),
+        )
+
+        result = await hubspot_search_companies(
+            SearchCompaniesParams(query="acme"),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, SearchResult)
+        assert result.success is True
+        assert len(result.results) == 1
+        assert result.results[0].id == "801"
+        assert result.results[0].properties["name"] == "Acme Corp"
+
+    async def test_sends_payload(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies/search",
+            method="POST",
+            json=_load_json("search_companies.json"),
+        )
+
+        await hubspot_search_companies(
+            SearchCompaniesParams(
+                query="acme",
+                limit=50,
+                properties=["name", "industry"],
+            ),
+            token=_TOKEN,
+        )
+
+        body = json.loads(httpx_mock.get_requests()[-1].content)
+        assert body == {
+            "query": "acme",
+            "limit": 50,
+            "properties": ["name", "industry"],
+        }
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies/search",
+            method="POST",
+            status_code=403,
+            text="Forbidden",
+        )
+
+        result = await hubspot_search_companies(
+            SearchCompaniesParams(query="acme"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_search_companies._tool_definition
+        assert defn.name == "hubspot_search_companies"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.companies.read"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_create_company
+# ---------------------------------------------------------------------------
+
+
+class TestCreateCompany:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies",
+            method="POST",
+            status_code=201,
+            json=_load_json("create_company.json"),
+        )
+
+        result = await hubspot_create_company(
+            CreateCompanyParams(
+                properties={"name": "Acme Corp", "domain": "acme.com"},
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CreateResult)
+        assert result.success is True
+        assert result.id == "801"
+        assert result.properties["domain"] == "acme.com"
+
+    async def test_sends_properties_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies",
+            method="POST",
+            status_code=201,
+            json=_load_json("create_company.json"),
+        )
+
+        await hubspot_create_company(
+            CreateCompanyParams(properties={"name": "Acme Corp"}),
+            token=_TOKEN,
+        )
+
+        body = json.loads(httpx_mock.get_requests()[-1].content)
+        assert body == {"properties": {"name": "Acme Corp"}}
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies",
+            method="POST",
+            status_code=400,
+            text="Bad Request",
+        )
+
+        result = await hubspot_create_company(
+            CreateCompanyParams(properties={}),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "400" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_create_company._tool_definition
+        assert defn.name == "hubspot_create_company"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.companies.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_update_company
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateCompany:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies/801",
+            method="PATCH",
+            json=_load_json("update_company.json"),
+        )
+
+        result = await hubspot_update_company(
+            UpdateCompanyParams(
+                record_id="801",
+                properties={"industry": "Software"},
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, UpdateResult)
+        assert result.success is True
+        assert result.id == "801"
+
+    async def test_sends_patch_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies/801",
+            method="PATCH",
+            json=_load_json("update_company.json"),
+        )
+
+        await hubspot_update_company(
+            UpdateCompanyParams(
+                record_id="801",
+                properties={"industry": "Software"},
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_requests()[-1]
+        assert request.method == "PATCH"
+        assert json.loads(request.content) == {
+            "properties": {"industry": "Software"},
+        }
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/companies/missing",
+            method="PATCH",
+            status_code=404,
+            text="Not Found",
+        )
+
+        result = await hubspot_update_company(
+            UpdateCompanyParams(record_id="missing", properties={"industry": "x"}),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_update_company._tool_definition
+        assert defn.name == "hubspot_update_company"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.companies.write"]

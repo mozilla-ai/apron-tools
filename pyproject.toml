@@ -16,6 +16,7 @@ all = [
     "apron-tools[github]",
     "apron-tools[google]",
     "apron-tools[google-tasks]",
+    "apron-tools[hubspot]",
     "apron-tools[linear]",
     "apron-tools[microsoft]",
     "apron-tools[microsoft-onedrive]",
@@ -32,6 +33,7 @@ atlassian = ["atlassian-python-api>=3.0"]
 github = ["PyGithub>=2.0"]
 google = ["google-api-python-client>=2.0"]
 google-tasks = []
+hubspot = []
 linear = []
 microsoft = ["msgraph-sdk>=1.0"]
 microsoft-onedrive = []

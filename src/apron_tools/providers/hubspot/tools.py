@@ -8,11 +8,14 @@ import httpx
 
 from apron_tools.providers.hubspot.types import (
     Association,
+    CreateCompanyParams,
     CreateContactParams,
     CreateResult,
     CrmRecord,
+    SearchCompaniesParams,
     SearchContactsParams,
     SearchResult,
+    UpdateCompanyParams,
     UpdateContactParams,
     UpdateResult,
 )
@@ -200,6 +203,75 @@ async def hubspot_update_contact(
     """Update an existing contact in HubSpot."""
     return await _update_object(
         "contacts",
+        params.record_id,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Companies
+# ---------------------------------------------------------------------------
+
+
+@tool(
+    scopes=SCOPES["hubspot_search_companies"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/search",
+    provider="hubspot",
+)
+async def hubspot_search_companies(
+    params: SearchCompaniesParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchResult:
+    """Search for companies in HubSpot using a text query."""
+    return await _search_objects(
+        "companies",
+        params.query,
+        params.limit,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_create_company"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/companies",
+    provider="hubspot",
+)
+async def hubspot_create_company(
+    params: CreateCompanyParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateResult:
+    """Create a new company in HubSpot."""
+    return await _create_object(
+        "companies",
+        params.properties,
+        params.associations,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_update_company"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/companies",
+    provider="hubspot",
+)
+async def hubspot_update_company(
+    params: UpdateCompanyParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UpdateResult:
+    """Update an existing company in HubSpot."""
+    return await _update_object(
+        "companies",
         params.record_id,
         params.properties,
         token=token,
