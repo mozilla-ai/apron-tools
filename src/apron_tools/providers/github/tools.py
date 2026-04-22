@@ -16,8 +16,12 @@ from .types import (
     AddIssueCommentParams,
     AddIssueCommentResult,
     BranchSummary,
+    CreateBranchParams,
+    CreateBranchResult,
     CreateIssueParams,
     CreateIssueResult,
+    CreatePullRequestParams,
+    CreatePullRequestResult,
     ExploreReleasesParams,
     ExploreReleasesResult,
     FileContentEntry,
@@ -48,6 +52,8 @@ from .types import (
     ReleaseAsset,
     ReleaseSummary,
     RepositorySummary,
+    UpdateFileParams,
+    UpdateFileResult,
     UserSummary,
 )
 
@@ -161,6 +167,28 @@ def _pr_detail(pr: Any) -> PullRequestDetail:
         updated_at=pr.updated_at.isoformat() + "Z" if pr.updated_at else None,
         closed_at=pr.closed_at.isoformat() + "Z" if pr.closed_at else None,
     )
+
+
+def _resolve_existing_file_sha(repo: Any, path: str, branch: str) -> str | None:
+    """Return the blob SHA of an existing file, or None when the path is absent.
+
+    ``repo.get_contents`` raises ``GithubException`` with status 404 when the
+    file does not yet exist, which is the signal to create rather than update
+    the file. Any other error propagates to the caller.
+    """
+    try:
+        existing = repo.get_contents(path, ref=branch)
+    except GithubException as exc:
+        if exc.status == 404:
+            return None
+        raise
+    if isinstance(existing, list):
+        raise GithubException(
+            422,
+            {"message": f"'{path}' is a directory, not a file."},
+            None,
+        )
+    return cast(str, existing.sha)
 
 
 def _release_summary(release: Any) -> ReleaseSummary:
@@ -663,6 +691,130 @@ async def github_explore_releases(
             return ExploreReleasesResult(success=True, releases=items)
         except GithubException as exc:
             return ExploreReleasesResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_create_branch"],
+    api_docs="https://docs.github.com/en/rest/git/refs#create-a-reference",
+    provider="github",
+)
+async def github_create_branch(
+    params: CreateBranchParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateBranchResult:
+    """Create a new branch in a repository from an existing source branch."""
+
+    def _call() -> CreateBranchResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            source_ref = repo.get_git_ref(f"heads/{params.source_branch}")
+            sha = source_ref.object.sha
+            repo.create_git_ref(ref=f"refs/heads/{params.branch_name}", sha=sha)
+            url = f"https://github.com/{params.owner}/{params.repo}/tree/{params.branch_name}"
+            return CreateBranchResult(
+                success=True,
+                branch_name=params.branch_name,
+                source_branch=params.source_branch,
+                sha=sha,
+                url=url,
+            )
+        except GithubException as exc:
+            return CreateBranchResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_update_file"],
+    api_docs="https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents",
+    provider="github",
+)
+async def github_update_file(
+    params: UpdateFileParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UpdateFileResult:
+    """Create or update a file in a repository, committing directly to a branch."""
+
+    def _call() -> UpdateFileResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            existing_sha = _resolve_existing_file_sha(repo, params.path, params.branch)
+            if existing_sha is None:
+                result = repo.create_file(
+                    path=params.path,
+                    message=params.commit_message,
+                    content=params.content,
+                    branch=params.branch,
+                )
+            else:
+                result = repo.update_file(
+                    path=params.path,
+                    message=params.commit_message,
+                    content=params.content,
+                    sha=existing_sha,
+                    branch=params.branch,
+                )
+            content_file = result["content"]
+            commit = result["commit"]
+            return UpdateFileResult(
+                success=True,
+                path=params.path,
+                branch=params.branch,
+                commit_sha=commit.sha,
+                url=content_file.html_url,
+            )
+        except GithubException as exc:
+            return UpdateFileResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_create_pull_request"],
+    api_docs="https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request",
+    provider="github",
+)
+async def github_create_pull_request(
+    params: CreatePullRequestParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreatePullRequestResult:
+    """Create a pull request in a repository."""
+
+    def _call() -> CreatePullRequestResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {
+                "base": params.base,
+                "head": params.head,
+                "title": params.title,
+                "draft": params.draft,
+            }
+            if params.body:
+                kwargs["body"] = params.body
+            pr = repo.create_pull(**kwargs)
+            return CreatePullRequestResult(success=True, pull_request=_pr_detail(pr))
+        except GithubException as exc:
+            return CreatePullRequestResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
         finally:
             g.close()
 
