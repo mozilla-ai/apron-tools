@@ -1,0 +1,19 @@
+{
+  "total": 1,
+  "results": [
+    {
+      "id": "151",
+      "properties": {
+        "createdate": "2024-03-20T14:05:22.456Z",
+        "email": "ada@example.com",
+        "firstname": "Ada",
+        "lastmodifieddate": "2024-05-01T09:12:00.000Z",
+        "lastname": "Lovelace"
+      },
+      "createdAt": "2024-03-20T14:05:22.456Z",
+      "updatedAt": "2024-05-01T09:12:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": null
+}
