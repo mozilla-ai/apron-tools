@@ -11,15 +11,18 @@ from apron_tools.providers.hubspot.types import (
     CreateCompanyParams,
     CreateContactParams,
     CreateDealParams,
+    CreateNoteParams,
     CreateResult,
     CrmRecord,
     SearchCompaniesParams,
     SearchContactsParams,
     SearchDealsParams,
+    SearchNotesParams,
     SearchResult,
     UpdateCompanyParams,
     UpdateContactParams,
     UpdateDealParams,
+    UpdateNoteParams,
     UpdateResult,
 )
 from apron_tools.tool import tool
@@ -344,6 +347,75 @@ async def hubspot_update_deal(
     """Update an existing deal in HubSpot."""
     return await _update_object(
         "deals",
+        params.record_id,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+
+
+@tool(
+    scopes=SCOPES["hubspot_search_notes"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/search",
+    provider="hubspot",
+)
+async def hubspot_search_notes(
+    params: SearchNotesParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchResult:
+    """Search for note engagements in HubSpot using a text query."""
+    return await _search_objects(
+        "notes",
+        params.query,
+        params.limit,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_create_note"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/notes",
+    provider="hubspot",
+)
+async def hubspot_create_note(
+    params: CreateNoteParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateResult:
+    """Create a note engagement in HubSpot."""
+    return await _create_object(
+        "notes",
+        params.properties,
+        params.associations,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_update_note"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/notes",
+    provider="hubspot",
+)
+async def hubspot_update_note(
+    params: UpdateNoteParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UpdateResult:
+    """Update an existing note engagement in HubSpot."""
+    return await _update_object(
+        "notes",
         params.record_id,
         params.properties,
         token=token,
