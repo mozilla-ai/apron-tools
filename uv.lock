@@ -184,6 +184,7 @@ all = [
     { name = "python-pptx" },
     { name = "simple-salesforce" },
     { name = "slack-sdk", extra = ["optional"] },
+    { name = "tabstack" },
 ]
 atlassian = [
     { name = "atlassian-python-api" },
@@ -208,6 +209,9 @@ salesforce = [
 ]
 slack = [
     { name = "slack-sdk", extra = ["optional"] },
+]
+web-access = [
+    { name = "tabstack" },
 ]
 word = [
     { name = "python-docx" },
@@ -251,6 +255,7 @@ requires-dist = [
     { name = "apron-tools", extras = ["salesforce"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["slack"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["typeform"], marker = "extra == 'all'" },
+    { name = "apron-tools", extras = ["web-access"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["word"], marker = "extra == 'all'" },
     { name = "atlassian-python-api", marker = "extra == 'atlassian'", specifier = ">=3.0" },
     { name = "google-api-python-client", marker = "extra == 'google'", specifier = ">=2.0" },
@@ -263,8 +268,9 @@ requires-dist = [
     { name = "python-pptx", marker = "extra == 'powerpoint'", specifier = ">=1.0" },
     { name = "simple-salesforce", marker = "extra == 'salesforce'", specifier = ">=1.0" },
     { name = "slack-sdk", extras = ["optional"], marker = "extra == 'slack'", specifier = ">=3.0" },
+    { name = "tabstack", marker = "extra == 'web-access'", specifier = ">=2.2.0" },
 ]
-provides-extras = ["all", "atlassian", "github", "google", "google-tasks", "linear", "microsoft", "microsoft-onedrive", "notion", "powerpoint", "salesforce", "slack", "typeform", "word"]
+provides-extras = ["all", "atlassian", "github", "google", "google-tasks", "linear", "microsoft", "microsoft-onedrive", "notion", "powerpoint", "salesforce", "slack", "typeform", "web-access", "word"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -651,6 +657,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/96/8e/709914eb2b5749865801041647dc7f4e6d00b549cfe88b65ca192995f07c/distlib-0.4.0.tar.gz", hash = "sha256:feec40075be03a04501a973d81f633735b4b69f98b05450592310c0f401a4e0d", size = 614605, upload-time = "2025-07-17T16:52:00.465Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl", hash = "sha256:9659f7d87e46584a30b5780e43ac7a2143098441670ff0a49d5f9034c54a6c16", size = 469047, upload-time = "2025-07-17T16:51:58.613Z" },
+]
+
+[[package]]
+name = "distro"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
 ]
 
 [[package]]
@@ -2348,6 +2363,15 @@ optional = [
 ]
 
 [[package]]
+name = "sniffio"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
+]
+
+[[package]]
 name = "soupsieve"
 version = "2.8.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2416,6 +2440,23 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/93/62/61866776cd32df3f984ff2f79b1428e10700e0a33ca7a7536e3fcba3cf2a/std_uritemplate-2.0.8.tar.gz", hash = "sha256:138ceff2c5bfef18a650372a5e8c82fe7f780c87235513de6c342fb5f7e18347", size = 6018, upload-time = "2025-10-16T15:51:29.774Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/97/b4f2f442fee92a1406f08b4fbc990bd7d02dc84b3b5e6315a59fa9b2a9f4/std_uritemplate-2.0.8-py3-none-any.whl", hash = "sha256:839807a7f9d07f0bad1a88977c3428bd97b9ff0d229412a0bf36123d8c724257", size = 6512, upload-time = "2025-10-16T15:51:28.713Z" },
+]
+
+[[package]]
+name = "tabstack"
+version = "2.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/77/db/717858c84888fb1ee49234a9d863dfa301c04ee997ce29d5d7e76d44cc34/tabstack-2.5.0.tar.gz", hash = "sha256:a0757c1158c4bbe8831c31accc31e1e553a13962f15a009c070259a22356e89e", size = 248682, upload-time = "2026-04-23T00:25:18.7Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/29/23/cfbd91c5a7d02eac342935452f36692e2e21e3aa554145b1e6f4a06b1ec0/tabstack-2.5.0-py3-none-any.whl", hash = "sha256:4ebba5629e692b3b4e957fd11fc75f9568cbb496bd9c6c51bc4240833ea0d3cd", size = 102652, upload-time = "2026-04-23T00:25:19.907Z" },
 ]
 
 [[package]]
