@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.sheets.tools import (
@@ -275,6 +276,29 @@ class TestReadSpreadsheet:
         assert result.success is False
         assert "404" in result.error
 
+    @pytest.mark.xfail(
+        reason="issue #92: __str__ is not yet JSON; fix in following commit",
+        strict=True,
+    )
+    async def test_str_output_round_trips_through_json(self, httpx_mock: HTTPXMock) -> None:
+        """End-to-end: a successful read returns JSON that downstream agents can parse."""
+        httpx_mock.add_response(
+            url=f"{_SHEETS_BASE}/{_SPREADSHEET_ID}/values/Sheet1%21A1%3AD5",
+            json=_load_json("read_spreadsheet_values.json"),
+        )
+
+        result = await google_sheets_read_spreadsheet(
+            ReadSpreadsheetParams(
+                spreadsheet_id=_SPREADSHEET_ID,
+                range="Sheet1!A1:D5",
+            ),
+            token=_TOKEN,
+        )
+
+        parsed = json.loads(str(result))
+        assert isinstance(parsed, list)
+        assert parsed[0] == {"row": 1, "A": "Name", "B": "Age", "C": "City", "D": "Score"}
+
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_read_spreadsheet._tool_definition
         assert defn.name == "google_sheets_read_spreadsheet"
@@ -486,6 +510,29 @@ class TestFindRow:
 
         assert result.success is False
         assert "404" in result.error
+
+    @pytest.mark.xfail(
+        reason="issue #92: __str__ is not yet JSON; fix in following commit",
+        strict=True,
+    )
+    async def test_found_str_output_round_trips_as_json_integer(self, httpx_mock: HTTPXMock) -> None:
+        """End-to-end: a found row returns a bare integer that parses as JSON."""
+        httpx_mock.add_response(
+            url=f"{_SHEETS_BASE}/{_SPREADSHEET_ID}/values/Sheet1%21A%3AA",
+            json=_load_json("find_row_values.json"),
+        )
+
+        result = await google_sheets_find_row(
+            FindRowParams(
+                spreadsheet_id=_SPREADSHEET_ID,
+                sheet="Sheet1",
+                column="A",
+                value="Bob",
+            ),
+            token=_TOKEN,
+        )
+
+        assert json.loads(str(result)) == 3
 
     async def test_has_tool_definition(self) -> None:
         defn = google_sheets_find_row._tool_definition
