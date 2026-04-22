@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from apron_tools.providers.google.sheets.types import (
     AddSheetParams,
     AddSheetResult,
@@ -259,10 +257,6 @@ class TestReadSpreadsheetResult:
         assert len(result.values) == 4
         assert result.values[0] == ["Name", "Age", "City", "Score"]
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     def test_str_output_is_parseable_json(self):
         """``str(result)`` must round-trip through ``json.loads``.
 
@@ -283,10 +277,6 @@ class TestReadSpreadsheetResult:
         assert parsed[0] == {"row": 1, "A": "Name", "B": "Age", "C": "City", "D": "Score"}
         assert parsed[1] == {"row": 2, "A": "Alice", "B": "30", "C": "New York", "D": "95"}
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     def test_str_output_with_metadata_is_parseable_json(self):
         """With metadata, the output is a JSON object wrapping rows and metadata."""
         data = _load_json("read_spreadsheet_values.json")
@@ -312,10 +302,6 @@ class TestReadSpreadsheetResult:
             "D": "Score",
         }
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     def test_str_output_honors_range_offset(self):
         """Row numbers and column letters must reflect the returned range's origin."""
         result = ReadSpreadsheetResult(
@@ -329,10 +315,6 @@ class TestReadSpreadsheetResult:
         assert parsed[0] == {"row": 2, "B": "x", "C": "y"}
         assert parsed[1] == {"row": 3, "B": "z", "C": "w"}
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     def test_str_output_omits_empty_trailing_cells(self):
         """Sheets API returns ragged rows; only present cells should appear."""
         result = ReadSpreadsheetResult(
@@ -346,10 +328,6 @@ class TestReadSpreadsheetResult:
         assert parsed[0] == {"row": 1, "A": "Name", "B": "Age", "C": "City"}
         assert parsed[1] == {"row": 2, "A": "Alice"}
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     def test_str_empty(self):
         """An empty range serialises as an empty JSON list."""
         result = ReadSpreadsheetResult(success=True, range="Sheet1!A1:D5", values=[])
@@ -358,10 +336,6 @@ class TestReadSpreadsheetResult:
 
         assert parsed == []
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     def test_str_empty_with_metadata(self):
         """An empty range with metadata serialises to the wrapped JSON object."""
         result = ReadSpreadsheetResult(
@@ -492,10 +466,6 @@ class TestFindRowResult:
         assert result.success is True
         assert result.row_number == 3
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     def test_str_found_is_parseable_json_integer(self):
         """Found-row output must round-trip as a JSON integer so agents can parse it."""
         result = FindRowResult(

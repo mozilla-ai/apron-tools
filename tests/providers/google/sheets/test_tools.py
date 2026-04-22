@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.sheets.tools import (
@@ -276,10 +275,6 @@ class TestReadSpreadsheet:
         assert result.success is False
         assert "404" in result.error
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     async def test_str_output_round_trips_through_json(self, httpx_mock: HTTPXMock) -> None:
         """End-to-end: a successful read returns JSON that downstream agents can parse."""
         httpx_mock.add_response(
@@ -511,10 +506,6 @@ class TestFindRow:
         assert result.success is False
         assert "404" in result.error
 
-    @pytest.mark.xfail(
-        reason="issue #92: __str__ is not yet JSON; fix in following commit",
-        strict=True,
-    )
     async def test_found_str_output_round_trips_as_json_integer(self, httpx_mock: HTTPXMock) -> None:
         """End-to-end: a found row returns a bare integer that parses as JSON."""
         httpx_mock.add_response(
