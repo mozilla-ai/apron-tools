@@ -15,6 +15,10 @@ from apron_tools.providers.google.slides.types import (
     CopyPresentationResult,
     CreatePresentationParams,
     CreatePresentationResult,
+    DeleteShapeParams,
+    DeleteShapeResult,
+    DeleteSlideParams,
+    DeleteSlideResult,
     DuplicateSlideParams,
     DuplicateSlideResult,
     FormatTextParams,
@@ -29,6 +33,8 @@ from apron_tools.providers.google.slides.types import (
     ReadPresentationParams,
     ReadPresentationResult,
     SlideInfo,
+    UpdateSlideBackgroundParams,
+    UpdateSlideBackgroundResult,
     UpdateSlideTextParams,
     UpdateSlideTextResult,
     UpdateTableCellParams,
@@ -898,3 +904,239 @@ async def _cleanup_drive_file(file_id: str, token: str, *, client: httpx.AsyncCl
     """Best-effort cleanup of an uploaded Drive file after insert failure."""
     with contextlib.suppress(httpx.HTTPError):
         await delete_drive_file(file_id, token, client=client)
+
+
+def _find_slide_by_id(presentation: dict, slide_id: str) -> dict | None:
+    """Return the slide matching the given object ID, or None."""
+    for slide in presentation.get("slides", []):
+        if slide.get("objectId") == slide_id:
+            return slide
+    return None
+
+
+def _find_page_element_by_id(slide: dict, element_id: str) -> dict | None:
+    """Return the page element on a slide matching the given object ID, or None."""
+    for element in slide.get("pageElements", []):
+        if element.get("objectId") == element_id:
+            return element
+    return None
+
+
+def _build_rgb_color(hex_color: str) -> dict[str, float] | str:
+    """Build a Slides API rgbColor dict from a ``#RRGGBB`` hex string, or error."""
+    stripped = hex_color.lstrip("#")
+    if len(stripped) != 6:
+        return (
+            "Invalid hex color format. Expected 6 hexadecimal characters "
+            f"(excluding '#'). Color provided: '{hex_color}'"
+        )
+    try:
+        red = int(stripped[0:2], 16) / 255.0
+        green = int(stripped[2:4], 16) / 255.0
+        blue = int(stripped[4:6], 16) / 255.0
+    except ValueError:
+        return (
+            "Invalid hex color format. Color must contain only hexadecimal "
+            f"characters (0-9, A-F). Color provided: '{hex_color}'"
+        )
+    return {"red": red, "green": green, "blue": blue}
+
+
+def _build_page_background_fill(
+    *,
+    background_color: str | None,
+    theme_color: str | None,
+) -> dict | str:
+    """Build a pageBackgroundFill payload from either a hex or theme color.
+
+    The caller guarantees that exactly one of the two arguments is non-empty.
+    """
+    if background_color is not None:
+        rgb = _build_rgb_color(background_color)
+        if isinstance(rgb, str):
+            return rgb
+        return {"solidFill": {"color": {"rgbColor": rgb}}}
+    return {"solidFill": {"color": {"themeColor": theme_color}}}
+
+
+@tool(
+    scopes=SCOPES["google_slides_delete_shape"],
+    api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
+    provider="google",
+    service="google_slides",
+)
+async def google_slides_delete_shape(
+    params: DeleteShapeParams,
+    *,
+    token: str,
+    base_url: str = _SLIDES_BASE_URL,
+) -> DeleteShapeResult:
+    """Delete a shape or page element from a slide in a presentation."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            pres_resp = await client.get(
+                f"{base_url}/{params.presentation_id}",
+                headers=_headers(token),
+            )
+            if not pres_resp.is_success:
+                return DeleteShapeResult(
+                    success=False,
+                    error=f"Slides API error {pres_resp.status_code}: {pres_resp.text}",
+                )
+
+            slide = _find_slide_by_id(pres_resp.json(), params.slide_id)
+            if slide is None:
+                return DeleteShapeResult(
+                    success=False,
+                    error=f"Slide '{params.slide_id}' was not found.",
+                )
+            if _find_page_element_by_id(slide, params.shape_id) is None:
+                return DeleteShapeResult(
+                    success=False,
+                    error=(f"Shape '{params.shape_id}' was not found on slide '{params.slide_id}'."),
+                )
+
+            body = {"requests": [{"deleteObject": {"objectId": params.shape_id}}]}
+            resp = await client.post(
+                f"{base_url}/{params.presentation_id}:batchUpdate",
+                headers=_headers(token, content_type=True),
+                json=body,
+            )
+    except httpx.HTTPError as exc:
+        return DeleteShapeResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return DeleteShapeResult(
+            success=False,
+            error=f"Slides API error {resp.status_code}: {resp.text}",
+        )
+
+    return DeleteShapeResult(
+        success=True,
+        presentation_id=params.presentation_id,
+        slide_id=params.slide_id,
+        shape_id=params.shape_id,
+    )
+
+
+@tool(
+    scopes=SCOPES["google_slides_delete_slide"],
+    api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
+    provider="google",
+    service="google_slides",
+)
+async def google_slides_delete_slide(
+    params: DeleteSlideParams,
+    *,
+    token: str,
+    base_url: str = _SLIDES_BASE_URL,
+) -> DeleteSlideResult:
+    """Delete a slide from a presentation."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            pres_resp = await client.get(
+                f"{base_url}/{params.presentation_id}",
+                headers=_headers(token),
+            )
+            if not pres_resp.is_success:
+                return DeleteSlideResult(
+                    success=False,
+                    error=f"Slides API error {pres_resp.status_code}: {pres_resp.text}",
+                )
+
+            if _find_slide_by_id(pres_resp.json(), params.slide_id) is None:
+                return DeleteSlideResult(
+                    success=False,
+                    error=f"Slide '{params.slide_id}' was not found.",
+                )
+
+            body = {"requests": [{"deleteObject": {"objectId": params.slide_id}}]}
+            resp = await client.post(
+                f"{base_url}/{params.presentation_id}:batchUpdate",
+                headers=_headers(token, content_type=True),
+                json=body,
+            )
+    except httpx.HTTPError as exc:
+        return DeleteSlideResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return DeleteSlideResult(
+            success=False,
+            error=f"Slides API error {resp.status_code}: {resp.text}",
+        )
+
+    return DeleteSlideResult(
+        success=True,
+        presentation_id=params.presentation_id,
+        slide_id=params.slide_id,
+    )
+
+
+@tool(
+    scopes=SCOPES["google_slides_update_slide_background"],
+    api_docs="https://developers.google.com/workspace/slides/api/reference/rest/v1/presentations/batchUpdate",
+    provider="google",
+    service="google_slides",
+)
+async def google_slides_update_slide_background(
+    params: UpdateSlideBackgroundParams,
+    *,
+    token: str,
+    base_url: str = _SLIDES_BASE_URL,
+) -> UpdateSlideBackgroundResult:
+    """Update a slide's background fill using a hex color or theme color name."""
+    fill = _build_page_background_fill(
+        background_color=params.background_color,
+        theme_color=params.theme_color,
+    )
+    if isinstance(fill, str):
+        return UpdateSlideBackgroundResult(success=False, error=fill)
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            pres_resp = await client.get(
+                f"{base_url}/{params.presentation_id}",
+                headers=_headers(token),
+            )
+            if not pres_resp.is_success:
+                return UpdateSlideBackgroundResult(
+                    success=False,
+                    error=f"Slides API error {pres_resp.status_code}: {pres_resp.text}",
+                )
+
+            if _find_slide_by_id(pres_resp.json(), params.slide_id) is None:
+                return UpdateSlideBackgroundResult(
+                    success=False,
+                    error=f"Slide '{params.slide_id}' was not found.",
+                )
+
+            body = {
+                "requests": [
+                    {
+                        "updatePageProperties": {
+                            "objectId": params.slide_id,
+                            "pageProperties": {"pageBackgroundFill": fill},
+                            "fields": "pageBackgroundFill.solidFill.color",
+                        }
+                    }
+                ]
+            }
+            resp = await client.post(
+                f"{base_url}/{params.presentation_id}:batchUpdate",
+                headers=_headers(token, content_type=True),
+                json=body,
+            )
+    except httpx.HTTPError as exc:
+        return UpdateSlideBackgroundResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return UpdateSlideBackgroundResult(
+            success=False,
+            error=f"Slides API error {resp.status_code}: {resp.text}",
+        )
+
+    return UpdateSlideBackgroundResult(
+        success=True,
+        presentation_id=params.presentation_id,
+        slide_id=params.slide_id,
+    )
