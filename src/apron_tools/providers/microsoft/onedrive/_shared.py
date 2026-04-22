@@ -1,8 +1,8 @@
 """Shared OneDrive file operations via Microsoft Graph API.
 
 Provides async functions for searching, downloading, uploading, and
-querying file metadata in OneDrive. Used by PowerPoint (and eventually
-Word) tool functions as a shared infrastructure layer.
+querying file metadata in OneDrive. Used by the OneDrive, PowerPoint,
+and Word tool modules as a shared infrastructure layer.
 """
 
 from __future__ import annotations
