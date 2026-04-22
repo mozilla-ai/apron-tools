@@ -15,9 +15,19 @@ from apron_tools.providers.hubspot.types import (
     CreateResult,
     CreateTaskParams,
     CrmRecord,
+    ListOwnersParams,
+    ListOwnersResult,
+    ListPipelinesParams,
+    ListPipelinesResult,
+    LogActivityParams,
+    Owner,
+    Pipeline,
+    SearchCallsParams,
     SearchCompaniesParams,
     SearchContactsParams,
     SearchDealsParams,
+    SearchEmailsParams,
+    SearchMeetingsParams,
     SearchNotesParams,
     SearchResult,
     SearchTasksParams,
@@ -493,3 +503,186 @@ async def hubspot_update_task(
         token=token,
         base_url=base_url,
     )
+
+
+# ---------------------------------------------------------------------------
+# Activity: calls, emails, meetings, log_activity, pipelines, owners
+# ---------------------------------------------------------------------------
+
+
+# HubSpot activity engagement object types supported by hubspot_log_activity.
+_ACTIVITY_TYPES = frozenset({"calls", "emails", "meetings"})
+
+
+@tool(
+    scopes=SCOPES["hubspot_search_calls"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/search",
+    provider="hubspot",
+)
+async def hubspot_search_calls(
+    params: SearchCallsParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchResult:
+    """Search for call engagements in HubSpot using a text query."""
+    return await _search_objects(
+        "calls",
+        params.query,
+        params.limit,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_search_emails"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/search",
+    provider="hubspot",
+)
+async def hubspot_search_emails(
+    params: SearchEmailsParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchResult:
+    """Search for email engagements in HubSpot using a text query."""
+    return await _search_objects(
+        "emails",
+        params.query,
+        params.limit,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_search_meetings"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/search",
+    provider="hubspot",
+)
+async def hubspot_search_meetings(
+    params: SearchMeetingsParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchResult:
+    """Search for meeting engagements in HubSpot using a text query."""
+    return await _search_objects(
+        "meetings",
+        params.query,
+        params.limit,
+        params.properties,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_log_activity"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/calls",
+    provider="hubspot",
+)
+async def hubspot_log_activity(
+    params: LogActivityParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateResult:
+    """Log a call, email, or meeting engagement in HubSpot."""
+    activity_type = params.activity_type.strip().lower()
+    if activity_type not in _ACTIVITY_TYPES:
+        return CreateResult(
+            success=False,
+            error="activity_type must be one of calls, emails, or meetings.",
+        )
+    return await _create_object(
+        activity_type,
+        params.properties,
+        params.associations,
+        token=token,
+        base_url=base_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["hubspot_list_pipelines"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/pipelines",
+    provider="hubspot",
+)
+async def hubspot_list_pipelines(
+    params: ListPipelinesParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ListPipelinesResult:
+    """List CRM pipelines and their stages for an object type."""
+    object_type = (params.object_type or "deals").strip().lower() or "deals"
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            response = await client.get(
+                f"{base_url}/crm/v3/pipelines/{object_type}",
+                headers=_headers(token),
+            )
+    except httpx.HTTPError as exc:
+        return ListPipelinesResult(success=False, error=str(exc), object_type=object_type)
+
+    if not response.is_success:
+        return ListPipelinesResult(
+            success=False,
+            error=f"HubSpot API error {response.status_code}: {response.text}",
+            object_type=object_type,
+        )
+
+    data = response.json()
+    pipelines = [Pipeline.model_validate(p) for p in data.get("results", [])]
+    return ListPipelinesResult(success=True, object_type=object_type, pipelines=pipelines)
+
+
+@tool(
+    scopes=SCOPES["hubspot_list_owners"],
+    api_docs="https://developers.hubspot.com/docs/api/crm/owners",
+    provider="hubspot",
+)
+async def hubspot_list_owners(
+    params: ListOwnersParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ListOwnersResult:
+    """List HubSpot owners, optionally filtered by a case-insensitive query."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            response = await client.get(
+                f"{base_url}/crm/v3/owners",
+                headers=_headers(token),
+                params={"archived": "false"},
+            )
+    except httpx.HTTPError as exc:
+        return ListOwnersResult(success=False, error=str(exc))
+
+    if not response.is_success:
+        return ListOwnersResult(
+            success=False,
+            error=f"HubSpot API error {response.status_code}: {response.text}",
+        )
+
+    data = response.json()
+    owners = [Owner.model_validate(o) for o in data.get("results", [])]
+    query_text = params.query.strip().casefold()
+    if query_text:
+        owners = [o for o in owners if _owner_matches_query(o, query_text)]
+    return ListOwnersResult(success=True, owners=owners)
+
+
+def _owner_matches_query(owner: Owner, query_text: str) -> bool:
+    """Return True if a case-folded query substring matches owner fields."""
+    haystack = " ".join(
+        filter(
+            None,
+            [owner.email, owner.first_name, owner.last_name, owner.id],
+        )
+    ).casefold()
+    return query_text in haystack

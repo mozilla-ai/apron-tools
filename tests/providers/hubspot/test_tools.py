@@ -13,9 +13,15 @@ from apron_tools.providers.hubspot.tools import (
     hubspot_create_deal,
     hubspot_create_note,
     hubspot_create_task,
+    hubspot_list_owners,
+    hubspot_list_pipelines,
+    hubspot_log_activity,
+    hubspot_search_calls,
     hubspot_search_companies,
     hubspot_search_contacts,
     hubspot_search_deals,
+    hubspot_search_emails,
+    hubspot_search_meetings,
     hubspot_search_notes,
     hubspot_search_tasks,
     hubspot_update_company,
@@ -31,9 +37,17 @@ from apron_tools.providers.hubspot.types import (
     CreateNoteParams,
     CreateResult,
     CreateTaskParams,
+    ListOwnersParams,
+    ListOwnersResult,
+    ListPipelinesParams,
+    ListPipelinesResult,
+    LogActivityParams,
+    SearchCallsParams,
     SearchCompaniesParams,
     SearchContactsParams,
     SearchDealsParams,
+    SearchEmailsParams,
+    SearchMeetingsParams,
     SearchNotesParams,
     SearchResult,
     SearchTasksParams,
@@ -1011,3 +1025,291 @@ class TestUpdateTask:
         assert defn.name == "hubspot_update_task"
         assert defn.provider == "hubspot"
         assert defn.scopes == ["crm.objects.contacts.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_search_calls
+# ---------------------------------------------------------------------------
+
+
+class TestSearchCalls:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/calls/search",
+            method="POST",
+            json=_load_json("search_calls.json"),
+        )
+
+        result = await hubspot_search_calls(
+            SearchCallsParams(query="renewal"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert len(result.results) == 1
+        assert result.results[0].id == "4201"
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_search_calls._tool_definition
+        assert defn.name == "hubspot_search_calls"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.contacts.read"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_search_emails
+# ---------------------------------------------------------------------------
+
+
+class TestSearchEmails:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/emails/search",
+            method="POST",
+            json=_load_json("search_emails.json"),
+        )
+
+        result = await hubspot_search_emails(
+            SearchEmailsParams(query="proposal"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert len(result.results) == 1
+        assert result.results[0].id == "4301"
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_search_emails._tool_definition
+        assert defn.name == "hubspot_search_emails"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.contacts.read"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_search_meetings
+# ---------------------------------------------------------------------------
+
+
+class TestSearchMeetings:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/meetings/search",
+            method="POST",
+            json=_load_json("search_meetings.json"),
+        )
+
+        result = await hubspot_search_meetings(
+            SearchMeetingsParams(query="planning"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert len(result.results) == 1
+        assert result.results[0].id == "4401"
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_search_meetings._tool_definition
+        assert defn.name == "hubspot_search_meetings"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.contacts.read"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_log_activity
+# ---------------------------------------------------------------------------
+
+
+class TestLogActivity:
+    async def test_logs_call(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/calls",
+            method="POST",
+            status_code=201,
+            json=_load_json("log_activity_call.json"),
+        )
+
+        result = await hubspot_log_activity(
+            LogActivityParams(
+                activity_type="calls",
+                properties={
+                    "hs_call_title": "Q1 Review Call",
+                    "hs_call_duration": "1800000",
+                    "hs_call_status": "COMPLETED",
+                },
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CreateResult)
+        assert result.success is True
+        assert result.id == "4201"
+
+    async def test_normalizes_activity_type_casing(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/objects/emails",
+            method="POST",
+            status_code=201,
+            json={"id": "e1", "properties": {}},
+        )
+
+        result = await hubspot_log_activity(
+            LogActivityParams(
+                activity_type=" Emails ",
+                properties={"hs_email_subject": "hi"},
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.id == "e1"
+
+    async def test_rejects_invalid_activity_type(self, httpx_mock: HTTPXMock) -> None:
+        result = await hubspot_log_activity(
+            LogActivityParams(
+                activity_type="letters",
+                properties={"hs_call_title": "Intro call"},
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "activity_type must be one of calls, emails, or meetings." in result.error
+        assert httpx_mock.get_requests() == []
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_log_activity._tool_definition
+        assert defn.name == "hubspot_log_activity"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.contacts.write"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_list_pipelines
+# ---------------------------------------------------------------------------
+
+
+class TestListPipelines:
+    async def test_success_default_deals(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/pipelines/deals",
+            method="GET",
+            json=_load_json("list_pipelines.json"),
+        )
+
+        result = await hubspot_list_pipelines(
+            ListPipelinesParams(),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, ListPipelinesResult)
+        assert result.success is True
+        assert result.object_type == "deals"
+        assert len(result.pipelines) == 1
+        pipeline = result.pipelines[0]
+        assert pipeline.id == "default"
+        assert pipeline.label == "Sales Pipeline"
+        assert len(pipeline.stages) == 2
+        assert pipeline.stages[0].id == "appointmentscheduled"
+        assert pipeline.stages[0].label == "Appointment Scheduled"
+
+    async def test_respects_custom_object_type(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/pipelines/tickets",
+            method="GET",
+            json={"results": []},
+        )
+
+        result = await hubspot_list_pipelines(
+            ListPipelinesParams(object_type="tickets"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.object_type == "tickets"
+        assert result.pipelines == []
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/pipelines/deals",
+            method="GET",
+            status_code=403,
+            text="Forbidden",
+        )
+
+        result = await hubspot_list_pipelines(
+            ListPipelinesParams(),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_list_pipelines._tool_definition
+        assert defn.name == "hubspot_list_pipelines"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.deals.read"]
+
+
+# ---------------------------------------------------------------------------
+# hubspot_list_owners
+# ---------------------------------------------------------------------------
+
+
+class TestListOwners:
+    async def test_success_returns_all(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/owners?archived=false",
+            method="GET",
+            json=_load_json("list_owners.json"),
+        )
+
+        result = await hubspot_list_owners(
+            ListOwnersParams(),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, ListOwnersResult)
+        assert result.success is True
+        assert len(result.owners) == 2
+        assert result.owners[0].email == "owner@example.com"
+        assert result.owners[0].first_name == "Casey"
+        assert result.owners[0].user_id == 42
+
+    async def test_query_filters_case_insensitively(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/owners?archived=false",
+            method="GET",
+            json=_load_json("list_owners.json"),
+        )
+
+        result = await hubspot_list_owners(
+            ListOwnersParams(query="OWNER@example.com"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert len(result.owners) == 1
+        assert result.owners[0].email == "owner@example.com"
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_BASE_URL}/crm/v3/owners?archived=false",
+            method="GET",
+            status_code=401,
+            text="Unauthorized",
+        )
+
+        result = await hubspot_list_owners(
+            ListOwnersParams(),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "401" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = hubspot_list_owners._tool_definition
+        assert defn.name == "hubspot_list_owners"
+        assert defn.provider == "hubspot"
+        assert defn.scopes == ["crm.objects.owners.read"]
