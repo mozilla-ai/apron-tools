@@ -15,6 +15,7 @@ all = [
     "apron-tools[atlassian]",
     "apron-tools[github]",
     "apron-tools[google]",
+    "apron-tools[google-tasks]",
     "apron-tools[linear]",
     "apron-tools[microsoft]",
     "apron-tools[notion]",
@@ -28,6 +29,7 @@ all = [
 atlassian = ["atlassian-python-api>=3.0"]
 github = ["PyGithub>=2.0"]
 google = ["google-api-python-client>=2.0"]
+google-tasks = []
 linear = []
 microsoft = ["msgraph-sdk>=1.0"]
 notion = ["notion-client>=2.0"]
