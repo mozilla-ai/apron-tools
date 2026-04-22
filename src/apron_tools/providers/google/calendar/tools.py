@@ -187,11 +187,17 @@ async def google_calendar_create_event(
     if params.attendees is not None:
         body["attendees"] = [{"email": email} for email in params.attendees]
 
+    # Send email invitations when the event has attendees, so Google notifies them.
+    query_params: dict[str, str | int] = {}
+    if params.attendees:
+        query_params["sendUpdates"] = "all"
+
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
                 f"{base_url}/calendars/{encoded_cal}/events",
                 headers=_headers(token, content_type=True),
+                params=query_params,
                 json=body,
             )
     except httpx.HTTPError as exc:
@@ -252,9 +258,16 @@ async def google_calendar_update_event(
             if params.attendees is not None:
                 body["attendees"] = [{"email": email} for email in params.attendees]
 
+            # Notify attendees only when the attendee list is explicitly changed,
+            # avoiding noisy emails on title- or time-only edits.
+            query_params: dict[str, str | int] = {}
+            if params.attendees is not None:
+                query_params["sendUpdates"] = "all"
+
             resp = await client.put(
                 f"{base_url}/calendars/{encoded_cal}/events/{encoded_event}",
                 headers=_headers(token, content_type=True),
+                params=query_params,
                 json=body,
             )
     except httpx.HTTPError as exc:

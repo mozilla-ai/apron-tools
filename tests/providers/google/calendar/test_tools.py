@@ -195,7 +195,7 @@ class TestGetEvent:
 class TestCreateEvent:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events",
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events?sendUpdates=all",
             json=_load_json("create_event.json"),
         )
 
@@ -264,6 +264,43 @@ class TestCreateEvent:
         assert "description" not in body
         assert "location" not in body
         assert "attendees" not in body
+
+    async def test_with_attendees_sends_invites(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Team Sync",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                attendees=["alice@example.com"],
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        assert "sendUpdates=all" in str(request.url)
+
+    async def test_without_attendees_omits_send_updates(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Solo Focus",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        assert "sendUpdates" not in str(request.url)
 
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
@@ -349,6 +386,52 @@ class TestUpdateEvent:
         assert put_body["summary"] == "New Summary"
         # The description should be preserved from the original event.
         assert put_body["description"] == "Daily standup meeting"
+
+    async def test_with_attendees_sends_invites(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}?sendUpdates=all",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                attendees=["bob@example.com"],
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        assert "sendUpdates=all" in str(put_request.url)
+
+    async def test_without_attendees_omits_send_updates(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                summary="Only title change",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        assert "sendUpdates" not in str(put_request.url)
 
     async def test_get_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
