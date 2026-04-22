@@ -12,6 +12,8 @@ from apron_tools.providers.google.gmail.types import (
     AddLabelToEmailParams,
     CreateDraftParams,
     CreateDraftResult,
+    CreateLabelParams,
+    CreateLabelResult,
     EditDraftParams,
     EditDraftResult,
     EmailSummary,
@@ -624,3 +626,47 @@ async def gmail_remove_label_from_email(
         )
 
     return ModifyLabelsResult.model_validate(resp.json())
+
+
+@tool(
+    scopes=SCOPES["gmail_create_label"],
+    api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.labels/create",
+    provider="google",
+    service="gmail",
+)
+async def gmail_create_label(
+    params: CreateLabelParams,
+    *,
+    token: str,
+    base_url: str = _GMAIL_BASE_URL,
+) -> CreateLabelResult:
+    """Create a new user-defined Gmail label.
+
+    Gmail treats "/" as a display-nesting separator, so passing
+    "Projects/Acme" creates a single label that appears nested under
+    "Projects" in the Gmail UI. Label names must be unique per user.
+    """
+    label_name = params.name.strip()
+    if not label_name:
+        return CreateLabelResult(
+            success=False,
+            error="Label name must not be empty.",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{base_url}/labels",
+                headers=_headers(token, content_type=True),
+                json={"name": label_name},
+            )
+    except httpx.HTTPError as exc:
+        return CreateLabelResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return CreateLabelResult(
+            success=False,
+            error=f"Gmail API error {resp.status_code}: {resp.text}",
+        )
+
+    return CreateLabelResult.model_validate(resp.json())

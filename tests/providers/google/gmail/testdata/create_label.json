@@ -1,0 +1,7 @@
+{
+  "id": "Label_42",
+  "name": "Invoices",
+  "messageListVisibility": "show",
+  "labelListVisibility": "labelShow",
+  "type": "user"
+}

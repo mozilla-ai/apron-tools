@@ -9,6 +9,8 @@ from apron_tools.providers.google.gmail.types import (
     AddLabelToEmailParams,
     CreateDraftParams,
     CreateDraftResult,
+    CreateLabelParams,
+    CreateLabelResult,
     EditDraftParams,
     EditDraftResult,
     EmailSummary,
@@ -134,6 +136,19 @@ class TestRemoveLabelFromEmailParams:
         params = RemoveLabelFromEmailParams(message_id="msg-001", label_id="label-001")
         assert params.message_id == "msg-001"
         assert params.label_id == "label-001"
+
+
+class TestCreateLabelParams:
+    def test_required(self):
+        params = CreateLabelParams(name="Invoices")
+        assert params.name == "Invoices"
+
+    def test_rejects_empty_name(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            CreateLabelParams(name="")
 
 
 # ---------------------------------------------------------------------------
@@ -483,3 +498,30 @@ class TestModifyLabelsResult:
     def test_str_on_error(self):
         result = ModifyLabelsResult(success=False, error="Not found")
         assert str(result) == "Error: Not found"
+
+
+# ---------------------------------------------------------------------------
+# CreateLabelResult
+# ---------------------------------------------------------------------------
+
+
+class TestCreateLabelResult:
+    def test_parse_api_response(self):
+        data = _load_json("create_label.json")
+        result = CreateLabelResult.model_validate(data)
+
+        assert result.success is True
+        assert result.id == "Label_42"
+        assert result.name == "Invoices"
+        assert result.type == "user"
+
+    def test_str_output(self):
+        result = CreateLabelResult(success=True, id="Label_42", name="Invoices", type="user")
+        text = str(result)
+
+        assert "Label_42" in text
+        assert "Invoices" in text
+
+    def test_str_on_error(self):
+        result = CreateLabelResult(success=False, error="Label name exists")
+        assert str(result) == "Error: Label name exists"
