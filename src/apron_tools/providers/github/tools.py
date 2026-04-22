@@ -27,6 +27,8 @@ from .types import (
     ExploreReleasesParams,
     ExploreReleasesResult,
     FileContentEntry,
+    ForkRepositoryParams,
+    ForkRepositoryResult,
     GenerateReleaseNotesParams,
     GenerateReleaseNotesResult,
     GetFileContentParams,
@@ -927,6 +929,48 @@ async def github_generate_release_notes(
             )
         except GithubException as exc:
             return GenerateReleaseNotesResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_fork_repository"],
+    api_docs="https://docs.github.com/en/rest/repos/forks#create-a-fork",
+    provider="github",
+)
+async def github_fork_repository(
+    params: ForkRepositoryParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ForkRepositoryResult:
+    """Fork a repository into the authenticated user's account or an organization."""
+
+    def _call() -> ForkRepositoryResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {}
+            if params.organization:
+                kwargs["organization"] = params.organization
+            if params.name:
+                kwargs["name"] = params.name
+            if params.default_branch_only:
+                kwargs["default_branch_only"] = True
+            fork = repo.create_fork(**kwargs)
+            return ForkRepositoryResult(
+                success=True,
+                fork_full_name=fork.full_name,
+                source_full_name=f"{params.owner}/{params.repo}",
+                html_url=fork.html_url,
+            )
+        except GithubException as exc:
+            return ForkRepositoryResult(
                 success=False,
                 error=f"GitHub API error {exc.status}: {exc.data}",
             )
