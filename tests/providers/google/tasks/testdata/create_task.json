@@ -1,0 +1,12 @@
+{
+  "kind": "tasks#task",
+  "id": "task-042",
+  "etag": "\"LTExNzUwNjQ5MDA\"",
+  "title": "Follow up",
+  "updated": "2024-03-01T14:12:00.000Z",
+  "selfLink": "https://www.googleapis.com/tasks/v1/lists/MDAwMDAwMDAwMA/tasks/task-042",
+  "position": "00000000000000000010",
+  "notes": "ping next week",
+  "status": "needsAction",
+  "due": "2024-03-01T00:00:00.000Z"
+}
