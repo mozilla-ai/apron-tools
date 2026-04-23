@@ -37,20 +37,24 @@ def _make_client(token: str) -> AsyncTabstack:
     return AsyncTabstack(api_key=token, timeout=_CLIENT_TIMEOUT)
 
 
-def _report_from_extra(extra: dict) -> str | None:
-    """Pull a report/result string out of a ResearchEvent's model_extra.
+def _report_from_data(data: object) -> str | None:
+    """Extract a report/result string from a ResearchEvent.data payload.
 
-    Tabstack's completion event carries the final report in
-    ``model_extra["report"]`` — either as a plain string or a nested dict
-    with ``content``/``result`` fields. Intermediate events may supply a
-    ``result`` key instead. Returns None when no usable payload is present.
+    Tabstack's completion event exposes the final report at ``data.report`` as
+    a plain string. The dict / pydantic-submodel branches are defensive
+    fallbacks for SDK versions where ``report`` may surface as a structured
+    payload with ``content``/``result`` keys.
     """
-    report = extra.get("report")
+    report = getattr(data, "report", None)
     if isinstance(report, str) and report:
         return report
     if isinstance(report, dict):
         return report.get("content") or report.get("result") or json.dumps(report)
-    result = extra.get("result")
+    if hasattr(report, "model_dump"):
+        dumped = report.model_dump()
+        return dumped.get("content") or dumped.get("result") or json.dumps(dumped)
+
+    result = getattr(data, "result", None)
     if isinstance(result, str) and result:
         return result
     if isinstance(result, dict):
@@ -61,28 +65,33 @@ def _report_from_extra(extra: dict) -> str | None:
 async def _collect_research_report(stream) -> tuple[str, str | None]:
     """Consume a Tabstack research stream and return (report, error).
 
-    Iterates every event, treats any message containing the word "error" as
-    a terminal failure, and otherwise returns the first usable report payload
-    or — failing that — the payload of the last event.
+    Iterates every event, treats an ``event="error"`` discriminator (or any
+    message containing "error") as a terminal failure, and otherwise returns
+    the first usable report payload — or, failing that, the payload of the
+    last event.
     """
-    last_extra: dict = {}
+    last_data: object | None = None
     async for event in stream:
-        extra = event.model_extra or {}
-        msg = extra.get("message", "")
+        data = getattr(event, "data", None)
+        if data is None:
+            continue
+
+        msg = getattr(data, "message", "") or ""
         _log.debug("Tabstack research event: %s", msg)
 
-        if "error" in msg.lower():
-            return "", msg
+        if getattr(event, "event", None) == "error" or "error" in msg.lower():
+            return "", msg or "Research stream returned an error event."
 
-        report = _report_from_extra(extra)
+        report = _report_from_data(data)
         if report:
             return report, None
 
-        last_extra = extra
+        last_data = data
 
-    final = _report_from_extra(last_extra)
-    if final:
-        return final, None
+    if last_data is not None:
+        final = _report_from_data(last_data)
+        if final:
+            return final, None
     return "", None
 
 

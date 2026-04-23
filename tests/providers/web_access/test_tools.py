@@ -7,7 +7,14 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from tabstack.types import ResearchEvent
+from tabstack.types.research_event import (
+    V1ResearchEventComplete,
+    V1ResearchEventCompleteData,
+    V1ResearchEventError,
+    V1ResearchEventErrorData,
+    V1ResearchEventStart,
+    V1ResearchEventStartData,
+)
 
 from apron_tools.providers.web_access.tools import (
     web_access_extract_json,
@@ -23,23 +30,50 @@ from apron_tools.providers.web_access.types import (
 _TOKEN = "tbst_test_token_abc123"
 
 
-def _build_research_event(extra: dict[str, Any]) -> ResearchEvent:
-    """Construct a ResearchEvent with *extra* attached to model_extra."""
-    event = ResearchEvent.model_construct()
-    event.__pydantic_extra__ = extra
-    return event
+def _start_event(message: str, *, timestamp: float = 0.0) -> V1ResearchEventStart:
+    """Build an in-progress research event carrying *message*."""
+    data = V1ResearchEventStartData.model_construct(message=message, timestamp=timestamp)
+    return V1ResearchEventStart.model_construct(event="start", data=data)
+
+
+def _complete_event(
+    *,
+    message: str = "Research complete",
+    report: Any,
+    timestamp: float = 0.0,
+) -> V1ResearchEventComplete:
+    """Build a terminal ``complete`` research event with *report* payload."""
+    data = V1ResearchEventCompleteData.model_construct(
+        message=message,
+        report=report,
+        timestamp=timestamp,
+        metadata=None,
+    )
+    return V1ResearchEventComplete.model_construct(event="complete", data=data)
+
+
+def _error_event(message: str, *, timestamp: float = 0.0) -> V1ResearchEventError:
+    """Build a terminal ``error`` research event."""
+    data = V1ResearchEventErrorData.model_construct(
+        error=None,
+        message=message,
+        timestamp=timestamp,
+        activity=None,
+        iteration=None,
+    )
+    return V1ResearchEventError.model_construct(event="error", data=data)
 
 
 class _AsyncStream:
     """Minimal async iterator standing in for the Tabstack SSE stream."""
 
-    def __init__(self, events: list[ResearchEvent]):
+    def __init__(self, events: list[Any]):
         self._events = iter(events)
 
     def __aiter__(self) -> _AsyncStream:
         return self
 
-    async def __anext__(self) -> ResearchEvent:
+    async def __anext__(self) -> Any:
         try:
             return next(self._events)
         except StopIteration as exc:
@@ -78,13 +112,10 @@ class TestResearch:
     async def test_success_returns_final_report(self) -> None:
         stream = _AsyncStream(
             [
-                _build_research_event({"message": "Searching", "timestamp": 1}),
-                _build_research_event(
-                    {
-                        "message": "Research complete",
-                        "report": "Deep research result with citations.",
-                        "timestamp": 2,
-                    }
+                _start_event("Searching", timestamp=1.0),
+                _complete_event(
+                    report="Deep research result with citations.",
+                    timestamp=2.0,
                 ),
             ]
         )
@@ -105,7 +136,7 @@ class TestResearch:
         client.close.assert_not_called()
 
     async def test_mode_forwarded_to_sdk(self) -> None:
-        stream = _AsyncStream([_build_research_event({"message": "Research complete", "report": "x"})])
+        stream = _AsyncStream([_complete_event(report="x")])
         client = _mock_client(research_stream=stream)
 
         await web_access_research(
@@ -117,7 +148,7 @@ class TestResearch:
         client.agent.research.assert_awaited_once_with(query="q", mode="balanced")
 
     async def test_error_event_returns_failure(self) -> None:
-        stream = _AsyncStream([_build_research_event({"message": "Research error: upstream 503"})])
+        stream = _AsyncStream([_error_event("Research error: upstream 503")])
         client = _mock_client(research_stream=stream)
 
         result = await web_access_research(ResearchParams(query="q"), token=_TOKEN, client=client)
@@ -143,16 +174,7 @@ class TestResearch:
         assert "boom" in (result.error or "")
 
     async def test_report_extracted_from_nested_dict(self) -> None:
-        stream = _AsyncStream(
-            [
-                _build_research_event(
-                    {
-                        "message": "Research complete",
-                        "report": {"content": "nested dict content"},
-                    }
-                )
-            ]
-        )
+        stream = _AsyncStream([_complete_event(report={"content": "nested dict content"})])
         client = _mock_client(research_stream=stream)
 
         result = await web_access_research(ResearchParams(query="q"), token=_TOKEN, client=client)
@@ -162,9 +184,7 @@ class TestResearch:
 
     async def test_owned_client_is_closed(self) -> None:
         """When no client is injected, the tool must close the client it built."""
-        fake_client = _mock_client(
-            research_stream=_AsyncStream([_build_research_event({"message": "Research complete", "report": "ok"})])
-        )
+        fake_client = _mock_client(research_stream=_AsyncStream([_complete_event(report="ok")]))
 
         with patch(
             "apron_tools.providers.web_access.tools._make_client",
