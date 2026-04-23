@@ -567,7 +567,7 @@ async def google_docs_read_comments(
     params: ReadCommentsParams,
     *,
     token: str,
-    base_url: str = _DOCS_BASE_URL,
+    base_url: str = _DRIVE_BASE_URL,
 ) -> ReadCommentsResult:
     """List comments on a Google Docs document via the Drive Comments API."""
     page_size = min(max(1, params.max_results), 100)
@@ -579,20 +579,22 @@ async def google_docs_read_comments(
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            doc_resp = await client.get(
+            # Fetch the document title via the Drive Files API so this tool
+            # stays within the Drive-only scope.
+            meta_resp = await client.get(
                 f"{base_url}/{params.document_id}",
                 headers=_headers(token),
-                params={"fields": "title"},
+                params={"fields": "name", "supportsAllDrives": "true"},
             )
-            if not doc_resp.is_success:
+            if not meta_resp.is_success:
                 return ReadCommentsResult(
                     success=False,
-                    error=f"Docs API error {doc_resp.status_code}: {doc_resp.text}",
+                    error=f"Drive API error {meta_resp.status_code}: {meta_resp.text}",
                 )
-            title = doc_resp.json().get("title", "Untitled")
+            title = meta_resp.json().get("name", "Untitled")
 
             comments_resp = await client.get(
-                f"{_DRIVE_BASE_URL}/{params.document_id}/comments",
+                f"{base_url}/{params.document_id}/comments",
                 headers=_headers(token),
                 params={
                     "fields": comment_fields,

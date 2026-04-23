@@ -632,8 +632,8 @@ class TestUpdateTableCell:
 class TestReadComments:
     async def test_success_filters_resolved_by_default(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_DOCS_BASE}/{_DOCUMENT_ID}?fields=title",
-            json={"title": "Project Proposal"},
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}?fields=name&supportsAllDrives=true",
+            json={"name": "Project Proposal"},
         )
         httpx_mock.add_response(
             url=(
@@ -658,8 +658,8 @@ class TestReadComments:
 
     async def test_include_resolved_returns_all(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_DOCS_BASE}/{_DOCUMENT_ID}?fields=title",
-            json={"title": "Project Proposal"},
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}?fields=name&supportsAllDrives=true",
+            json={"name": "Project Proposal"},
         )
         httpx_mock.add_response(
             url=(
@@ -680,8 +680,8 @@ class TestReadComments:
 
     async def test_max_results_is_clamped_to_100(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_DOCS_BASE}/{_DOCUMENT_ID}?fields=title",
-            json={"title": "Project"},
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}?fields=name&supportsAllDrives=true",
+            json={"name": "Project"},
         )
         httpx_mock.add_response(json={"comments": []})
 
@@ -707,8 +707,8 @@ class TestReadComments:
 
     async def test_comments_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_DOCS_BASE}/{_DOCUMENT_ID}?fields=title",
-            json={"title": "Project"},
+            url=f"{_DRIVE_BASE}/{_DOCUMENT_ID}?fields=name&supportsAllDrives=true",
+            json={"name": "Project"},
         )
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
