@@ -8,10 +8,20 @@ from pathlib import Path
 from apron_tools.providers.github.types import (
     AddIssueCommentParams,
     AddIssueCommentResult,
+    CreateBranchParams,
+    CreateBranchResult,
     CreateIssueParams,
     CreateIssueResult,
+    CreatePullRequestParams,
+    CreatePullRequestResult,
+    CreateReleaseParams,
+    CreateReleaseResult,
     ExploreReleasesParams,
     ExploreReleasesResult,
+    ForkRepositoryParams,
+    ForkRepositoryResult,
+    GenerateReleaseNotesParams,
+    GenerateReleaseNotesResult,
     GetFileContentParams,
     GetFileContentResult,
     GetIssueParams,
@@ -20,6 +30,8 @@ from apron_tools.providers.github.types import (
     GetPullRequestResult,
     GetRepositoryParams,
     GetRepositoryResult,
+    GetRepoTreeParams,
+    GetRepoTreeResult,
     IssueCommentSummary,
     IssueSummary,
     ListBranchesParams,
@@ -35,6 +47,9 @@ from apron_tools.providers.github.types import (
     PullRequestDetail,
     ReleaseSummary,
     RepositorySummary,
+    RepoTreeEntry,
+    UpdateFileParams,
+    UpdateFileResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -142,6 +157,68 @@ class TestExploreReleasesParams:
         params = ExploreReleasesParams(owner="octocat", repo="Hello-World")
         assert params.tag is None
         assert params.limit == 30
+
+
+class TestCreateBranchParams:
+    def test_defaults(self):
+        params = CreateBranchParams(owner="octocat", repo="Hello-World", branch_name="feature/x")
+        assert params.source_branch == "main"
+
+
+class TestUpdateFileParams:
+    def test_defaults(self):
+        params = UpdateFileParams(
+            owner="octocat",
+            repo="Hello-World",
+            path="a.txt",
+            content="hi",
+            commit_message="add",
+        )
+        assert params.branch == "main"
+
+
+class TestCreatePullRequestParams:
+    def test_defaults(self):
+        params = CreatePullRequestParams(
+            owner="octocat",
+            repo="Hello-World",
+            title="t",
+            head="feat",
+        )
+        assert params.base == "main"
+        assert params.draft is False
+        assert params.body == ""
+
+
+class TestCreateReleaseParams:
+    def test_defaults(self):
+        params = CreateReleaseParams(owner="octocat", repo="Hello-World", tag_name="v1.0.0")
+        assert params.draft is False
+        assert params.prerelease is False
+        assert params.generate_release_notes is False
+
+
+class TestGenerateReleaseNotesParams:
+    def test_defaults(self):
+        params = GenerateReleaseNotesParams(owner="octocat", repo="Hello-World", tag_name="v1.0.0")
+        assert params.target_commitish == ""
+        assert params.previous_tag_name == ""
+        assert params.configuration_file_path == ""
+
+
+class TestForkRepositoryParams:
+    def test_defaults(self):
+        params = ForkRepositoryParams(owner="octocat", repo="Hello-World")
+        assert params.organization == ""
+        assert params.name == ""
+        assert params.default_branch_only is False
+
+
+class TestGetRepoTreeParams:
+    def test_defaults(self):
+        params = GetRepoTreeParams(owner="octocat", repo="Hello-World")
+        assert params.ref == ""
+        assert params.path_filter == ""
 
 
 # ---------------------------------------------------------------------------
@@ -621,3 +698,198 @@ class TestExploreReleasesResult:
     def test_str_on_error(self):
         result = ExploreReleasesResult(success=False, error="Not found")
         assert str(result) == "Error: Not found"
+
+
+# ---------------------------------------------------------------------------
+# CreateBranchResult
+# ---------------------------------------------------------------------------
+
+
+class TestCreateBranchResult:
+    def test_str_output(self):
+        result = CreateBranchResult(
+            success=True,
+            branch_name="feature/x",
+            source_branch="main",
+            sha="aa218f56",
+            url="https://github.com/octocat/Hello-World/tree/feature/x",
+        )
+        text = str(result)
+        assert "Branch created successfully!" in text
+        assert "feature/x" in text
+        assert "main" in text
+
+    def test_str_on_error(self):
+        result = CreateBranchResult(success=False, error="already exists")
+        assert str(result) == "Error: already exists"
+
+
+# ---------------------------------------------------------------------------
+# UpdateFileResult
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateFileResult:
+    def test_str_output(self):
+        result = UpdateFileResult(
+            success=True,
+            path="notes/hello.txt",
+            branch="main",
+            commit_sha="abcdef0123456789abcdef0123456789abcdef01",  # pragma: allowlist secret
+            url="https://github.com/octocat/Hello-World/blob/main/notes/hello.txt",
+        )
+        text = str(result)
+        assert "File updated successfully!" in text
+        assert "notes/hello.txt" in text
+        # Only the 8-char short form is surfaced, not the full 40-char SHA.
+        assert "abcdef0123456789" not in text
+        assert "abcdef01" in text
+
+    def test_str_on_error(self):
+        result = UpdateFileResult(success=False, error="Conflict")
+        assert str(result) == "Error: Conflict"
+
+
+# ---------------------------------------------------------------------------
+# CreatePullRequestResult
+# ---------------------------------------------------------------------------
+
+
+class TestCreatePullRequestResult:
+    def test_str_output(self):
+        data = _load_json("get_pull_request.json")
+        pr = PullRequestDetail.model_validate(data)
+        result = CreatePullRequestResult(success=True, pull_request=pr)
+        text = str(result)
+        assert "Pull request created successfully!" in text
+        assert "#1347" in text
+        assert "new-topic -> Base: master" in text
+
+    def test_str_on_error(self):
+        result = CreatePullRequestResult(success=False, error="Validation Failed")
+        assert str(result) == "Error: Validation Failed"
+
+
+# ---------------------------------------------------------------------------
+# CreateReleaseResult
+# ---------------------------------------------------------------------------
+
+
+class TestCreateReleaseResult:
+    def test_str_output(self):
+        data = _load_json("get_release_by_tag.json")
+        release = ReleaseSummary.model_validate(data)
+        result = CreateReleaseResult(
+            success=True,
+            release=release,
+            target_commitish="master",
+            notes_mode="manual",
+        )
+        text = str(result)
+        assert "Release created successfully!" in text
+        assert "v1.0.0" in text
+        assert "Target: master" in text
+        assert "Notes: manual" in text
+
+    def test_str_on_error(self):
+        result = CreateReleaseResult(success=False, error="already exists")
+        assert str(result) == "Error: already exists"
+
+
+# ---------------------------------------------------------------------------
+# GenerateReleaseNotesResult
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateReleaseNotesResult:
+    def test_str_output(self):
+        data = _load_json("generate_release_notes.json")
+        result = GenerateReleaseNotesResult(
+            success=True,
+            owner="octocat",
+            repo="Hello-World",
+            tag_name="v1.0.0",
+            release_title=data["name"],
+            previous_tag_name="v0.9.0",
+            notes=data["body"],
+        )
+        text = str(result)
+        assert "Generated Release Notes for octocat/Hello-World" in text
+        assert "**Tag:** v1.0.0" in text
+        assert "**Previous Tag:** v0.9.0" in text
+        assert "What's Changed" in text
+
+    def test_str_on_error(self):
+        result = GenerateReleaseNotesResult(success=False, error="Not found")
+        assert str(result) == "Error: Not found"
+
+
+# ---------------------------------------------------------------------------
+# ForkRepositoryResult
+# ---------------------------------------------------------------------------
+
+
+class TestForkRepositoryResult:
+    def test_str_output(self):
+        result = ForkRepositoryResult(
+            success=True,
+            fork_full_name="peter-forker/Hello-World",
+            source_full_name="octocat/Hello-World",
+            html_url="https://github.com/peter-forker/Hello-World",
+        )
+        text = str(result)
+        assert "Repository forked successfully!" in text
+        assert "peter-forker/Hello-World" in text
+        assert "octocat/Hello-World" in text
+
+    def test_str_on_error(self):
+        result = ForkRepositoryResult(success=False, error="forbidden")
+        assert str(result) == "Error: forbidden"
+
+
+# ---------------------------------------------------------------------------
+# GetRepoTreeResult
+# ---------------------------------------------------------------------------
+
+
+class TestGetRepoTreeResult:
+    def test_str_output(self):
+        entries = [
+            RepoTreeEntry(path="README.md", size=42, sha="aa"),
+            RepoTreeEntry(path="src/main.py", size=2048, sha="bb"),
+            RepoTreeEntry(path="assets/image.png", size=2_097_152, sha="cc"),
+        ]
+        result = GetRepoTreeResult(
+            success=True,
+            owner="octocat",
+            repo="Hello-World",
+            ref="develop",
+            path_filter=None,
+            files=entries,
+            truncated=False,
+        )
+        text = str(result)
+        assert "# Repository tree: octocat/Hello-World (ref: develop)" in text
+        assert "Found 3 files." in text
+        assert "README.md (42 B)" in text
+        assert "src/main.py (2.0 KB)" in text
+        assert "assets/image.png (2.0 MB)" in text
+
+    def test_str_output_default_ref_and_truncated(self):
+        result = GetRepoTreeResult(
+            success=True,
+            owner="octocat",
+            repo="Hello-World",
+            ref=None,
+            path_filter="src",
+            files=[RepoTreeEntry(path="src/main.py", size=10, sha="bb")],
+            truncated=True,
+        )
+        text = str(result)
+        assert "(ref: default branch)" in text
+        assert "Filtered to: src/" in text
+        assert "truncated" in text
+
+    def test_str_on_error(self):
+        result = GetRepoTreeResult(success=False, error="Not Found")
+        assert str(result) == "Error: Not Found"

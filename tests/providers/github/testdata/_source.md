@@ -13,7 +13,14 @@
   - List milestones: https://docs.github.com/en/rest/issues/milestones#list-milestones
   - Get repository content: https://docs.github.com/en/rest/repos/contents#get-repository-content
   - List branches: https://docs.github.com/en/rest/branches/branches#list-branches
+  - Create a reference (branch): https://docs.github.com/en/rest/git/refs#create-a-reference
+  - Create or update file contents: https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents
+  - Create a pull request: https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request
   - List releases: https://docs.github.com/en/rest/releases/releases#list-releases
   - Get a release by tag name: https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name
+  - Create a release: https://docs.github.com/en/rest/releases/releases#create-a-release
+  - Generate release notes content: https://docs.github.com/en/rest/releases/releases#generate-release-notes-content-for-a-release
+  - Create a fork: https://docs.github.com/en/rest/repos/forks#create-a-fork
+  - Get a tree: https://docs.github.com/en/rest/git/trees#get-a-tree
 - **Auth:** Bearer token (personal access token or OAuth)
 - **All JSON files:** Based on example responses from the GitHub REST API documentation.

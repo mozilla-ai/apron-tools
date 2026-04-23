@@ -9,25 +9,42 @@ from unittest.mock import MagicMock, patch
 
 from apron_tools.providers.github.tools import (
     github_add_issue_comment,
+    github_create_branch,
     github_create_issue,
+    github_create_pull_request,
+    github_create_release,
     github_explore_releases,
+    github_fork_repository,
+    github_generate_release_notes,
     github_get_file_content,
     github_get_issue,
     github_get_pull_request,
+    github_get_repo_tree,
     github_get_repository,
     github_list_branches,
     github_list_issues,
     github_list_milestones,
     github_list_pull_requests,
     github_list_repositories,
+    github_update_file,
 )
 from apron_tools.providers.github.types import (
     AddIssueCommentParams,
     AddIssueCommentResult,
+    CreateBranchParams,
+    CreateBranchResult,
     CreateIssueParams,
     CreateIssueResult,
+    CreatePullRequestParams,
+    CreatePullRequestResult,
+    CreateReleaseParams,
+    CreateReleaseResult,
     ExploreReleasesParams,
     ExploreReleasesResult,
+    ForkRepositoryParams,
+    ForkRepositoryResult,
+    GenerateReleaseNotesParams,
+    GenerateReleaseNotesResult,
     GetFileContentParams,
     GetFileContentResult,
     GetIssueParams,
@@ -36,6 +53,8 @@ from apron_tools.providers.github.types import (
     GetPullRequestResult,
     GetRepositoryParams,
     GetRepositoryResult,
+    GetRepoTreeParams,
+    GetRepoTreeResult,
     ListBranchesParams,
     ListBranchesResult,
     ListIssuesParams,
@@ -46,6 +65,8 @@ from apron_tools.providers.github.types import (
     ListPullRequestsResult,
     ListRepositoriesParams,
     ListRepositoriesResult,
+    UpdateFileParams,
+    UpdateFileResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -948,4 +969,659 @@ class TestExploreReleases:
     async def test_has_tool_definition(self) -> None:
         defn = github_explore_releases._tool_definition
         assert defn.name == "github_explore_releases"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_create_branch
+# ---------------------------------------------------------------------------
+
+
+def _mock_git_ref(data: dict) -> MagicMock:
+    """Build a mock PyGithub GitRef from testdata dict."""
+    ref = MagicMock()
+    ref.ref = data["ref"]
+    obj = MagicMock()
+    obj.sha = data["object"]["sha"]
+    ref.object = obj
+    return ref
+
+
+class TestCreateBranch:
+    async def test_success(self) -> None:
+        source_ref = _mock_git_ref(_load_json("create_branch_ref.json"))
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.get_git_ref.return_value = source_ref
+
+            result = await github_create_branch(
+                CreateBranchParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    branch_name="feature/x",
+                    source_branch="main",
+                ),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, CreateBranchResult)
+        assert result.success is True
+        assert result.branch_name == "feature/x"
+        assert result.source_branch == "main"
+        assert result.sha == "aa11bb22"
+        assert result.url == "https://github.com/octocat/Hello-World/tree/feature/x"
+        mock_repo.get_git_ref.assert_called_once_with("heads/main")
+        mock_repo.create_git_ref.assert_called_once_with(
+            ref="refs/heads/feature/x",
+            sha="aa11bb22",
+        )
+
+    async def test_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.get_git_ref.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_create_branch(
+                CreateBranchParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    branch_name="feature/x",
+                    source_branch="missing",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_create_branch._tool_definition
+        assert defn.name == "github_create_branch"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_update_file
+# ---------------------------------------------------------------------------
+
+
+def _mock_update_file_result(data: dict) -> dict:
+    """Build the dict PyGithub returns from create_file / update_file."""
+    content_file = MagicMock()
+    content_file.name = data["content"]["name"]
+    content_file.path = data["content"]["path"]
+    content_file.sha = data["content"]["sha"]
+    content_file.html_url = data["content"]["html_url"]
+    commit = MagicMock()
+    commit.sha = data["commit"]["sha"]
+    return {"content": content_file, "commit": commit}
+
+
+class TestUpdateFile:
+    async def test_success_creates_when_missing(self) -> None:
+        from github import GithubException
+
+        update_payload = _mock_update_file_result(_load_json("update_file.json"))
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            # Simulate a missing file so the tool picks the create path.
+            mock_repo.get_contents.side_effect = GithubException(404, {"message": "Not Found"}, None)
+            mock_repo.create_file.return_value = update_payload
+
+            result = await github_update_file(
+                UpdateFileParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    path="notes/hello.txt",
+                    content="Hello!",
+                    commit_message="Add hello.txt",
+                    branch="main",
+                ),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, UpdateFileResult)
+        assert result.success is True
+        assert result.path == "notes/hello.txt"
+        assert result.branch == "main"
+        assert result.commit_sha == "cc33dd44"
+        assert result.url.endswith("notes/hello.txt")
+        mock_repo.create_file.assert_called_once()
+        mock_repo.update_file.assert_not_called()
+
+    async def test_success_updates_when_present(self) -> None:
+        existing = MagicMock()
+        existing.sha = "existing-blob-sha"
+        update_payload = _mock_update_file_result(_load_json("update_file.json"))
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.get_contents.return_value = existing
+            mock_repo.update_file.return_value = update_payload
+
+            result = await github_update_file(
+                UpdateFileParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    path="notes/hello.txt",
+                    content="Hello!",
+                    commit_message="Update hello.txt",
+                    branch="main",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        mock_repo.update_file.assert_called_once()
+        assert mock_repo.update_file.call_args.kwargs["sha"] == "existing-blob-sha"
+        mock_repo.create_file.assert_not_called()
+
+    async def test_rejects_directory_path(self) -> None:
+        directory_contents = [MagicMock(), MagicMock()]
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.get_contents.return_value = directory_contents
+
+            result = await github_update_file(
+                UpdateFileParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    path="notes",
+                    content="Hello!",
+                    commit_message="x",
+                    branch="main",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "422" in result.error
+
+    async def test_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_update_file(
+                UpdateFileParams(
+                    owner="octocat",
+                    repo="missing",
+                    path="a.txt",
+                    content="x",
+                    commit_message="x",
+                    branch="main",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_update_file._tool_definition
+        assert defn.name == "github_update_file"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_create_pull_request
+# ---------------------------------------------------------------------------
+
+
+class TestCreatePullRequest:
+    async def test_success(self) -> None:
+        data = _load_json("get_pull_request.json")
+        mock_pr = _mock_pull_request(data)
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.create_pull.return_value = mock_pr
+
+            result = await github_create_pull_request(
+                CreatePullRequestParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    title="Amazing new feature",
+                    head="new-topic",
+                    base="master",
+                    body="Please pull these awesome changes in!",
+                ),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, CreatePullRequestResult)
+        assert result.success is True
+        assert result.pull_request is not None
+        assert result.pull_request.number == 1347
+        assert result.pull_request.title == "Amazing new feature"
+        mock_repo.create_pull.assert_called_once()
+        call_kwargs = mock_repo.create_pull.call_args.kwargs
+        assert call_kwargs["title"] == "Amazing new feature"
+        assert call_kwargs["head"] == "new-topic"
+        assert call_kwargs["base"] == "master"
+        assert call_kwargs["draft"] is False
+        assert call_kwargs["body"] == "Please pull these awesome changes in!"
+
+    async def test_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.create_pull.side_effect = GithubException(422, {"message": "Validation Failed"}, None)
+
+            result = await github_create_pull_request(
+                CreatePullRequestParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    title="bad",
+                    head="missing",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "422" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_create_pull_request._tool_definition
+        assert defn.name == "github_create_pull_request"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_create_release
+# ---------------------------------------------------------------------------
+
+
+class TestCreateRelease:
+    async def test_success_manual_notes(self) -> None:
+        data = _load_json("get_release_by_tag.json")
+        mock_release = _mock_release(data)
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.create_git_release.return_value = mock_release
+
+            result = await github_create_release(
+                CreateReleaseParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    tag_name="v1.0.0",
+                    release_title="v1.0.0",
+                    release_notes="Description of the release",
+                ),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, CreateReleaseResult)
+        assert result.success is True
+        assert result.release is not None
+        assert result.release.tag_name == "v1.0.0"
+        assert result.notes_mode == "manual"
+
+    async def test_success_auto_generated_notes(self) -> None:
+        data = _load_json("get_release_by_tag.json")
+        mock_release = _mock_release(data)
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.create_git_release.return_value = mock_release
+
+            result = await github_create_release(
+                CreateReleaseParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    tag_name="v1.0.0",
+                    generate_release_notes=True,
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        assert result.notes_mode == "auto-generated"
+        call_kwargs = mock_repo.create_git_release.call_args.kwargs
+        assert call_kwargs["generate_release_notes"] is True
+
+    async def test_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.create_git_release.side_effect = GithubException(422, {"message": "already_exists"}, None)
+
+            result = await github_create_release(
+                CreateReleaseParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    tag_name="v1.0.0",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "422" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_create_release._tool_definition
+        assert defn.name == "github_create_release"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_generate_release_notes
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateReleaseNotes:
+    async def test_success(self) -> None:
+        data = _load_json("generate_release_notes.json")
+        mock_notes = MagicMock()
+        mock_notes.name = data["name"]
+        mock_notes.body = data["body"]
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.generate_release_notes.return_value = mock_notes
+
+            result = await github_generate_release_notes(
+                GenerateReleaseNotesParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    tag_name="v1.0.0",
+                    previous_tag_name="v0.9.0",
+                ),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, GenerateReleaseNotesResult)
+        assert result.success is True
+        assert result.tag_name == "v1.0.0"
+        assert result.release_title == data["name"]
+        assert result.notes == data["body"]
+        assert result.previous_tag_name == "v0.9.0"
+        call_kwargs = mock_repo.generate_release_notes.call_args.kwargs
+        assert call_kwargs["tag_name"] == "v1.0.0"
+        assert call_kwargs["previous_tag_name"] == "v0.9.0"
+
+    async def test_falls_back_to_tag_name_when_title_empty(self) -> None:
+        mock_notes = MagicMock()
+        mock_notes.name = None
+        mock_notes.body = "body"
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.generate_release_notes.return_value = mock_notes
+
+            result = await github_generate_release_notes(
+                GenerateReleaseNotesParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    tag_name="v2.0.0",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        assert result.release_title == "v2.0.0"
+
+    async def test_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_generate_release_notes(
+                GenerateReleaseNotesParams(
+                    owner="octocat",
+                    repo="missing",
+                    tag_name="v1.0.0",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_generate_release_notes._tool_definition
+        assert defn.name == "github_generate_release_notes"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_fork_repository
+# ---------------------------------------------------------------------------
+
+
+class TestForkRepository:
+    async def test_success_default(self) -> None:
+        data = _load_json("fork_repository.json")
+        mock_fork = MagicMock()
+        mock_fork.full_name = data["full_name"]
+        mock_fork.html_url = data["html_url"]
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.create_fork.return_value = mock_fork
+
+            result = await github_fork_repository(
+                ForkRepositoryParams(owner="octocat", repo="Hello-World"),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, ForkRepositoryResult)
+        assert result.success is True
+        assert result.fork_full_name == "peter-forker/Hello-World"
+        assert result.source_full_name == "octocat/Hello-World"
+        assert result.html_url == "https://github.com/peter-forker/Hello-World"
+        assert mock_repo.create_fork.call_args.kwargs == {}
+
+    async def test_success_forwards_options(self) -> None:
+        mock_fork = MagicMock()
+        mock_fork.full_name = "my-org/Hello-World"
+        mock_fork.html_url = "https://github.com/my-org/Hello-World"
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.create_fork.return_value = mock_fork
+
+            await github_fork_repository(
+                ForkRepositoryParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    organization="my-org",
+                    name="Hello-World",
+                    default_branch_only=True,
+                ),
+                token=_TOKEN,
+            )
+
+        kwargs = mock_repo.create_fork.call_args.kwargs
+        assert kwargs["organization"] == "my-org"
+        assert kwargs["name"] == "Hello-World"
+        assert kwargs["default_branch_only"] is True
+
+    async def test_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_fork_repository(
+                ForkRepositoryParams(owner="octocat", repo="missing"),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_fork_repository._tool_definition
+        assert defn.name == "github_fork_repository"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_get_repo_tree
+# ---------------------------------------------------------------------------
+
+
+def _mock_tree_entry(data: dict) -> MagicMock:
+    """Build a mock PyGithub GitTreeElement from a tree entry dict."""
+    entry = MagicMock()
+    entry.path = data["path"]
+    entry.type = data["type"]
+    entry.sha = data["sha"]
+    entry.size = data.get("size")
+    return entry
+
+
+def _mock_git_tree(data: dict) -> MagicMock:
+    """Build a mock PyGithub GitTree from testdata dict."""
+    tree = MagicMock()
+    tree.tree = [_mock_tree_entry(e) for e in data["tree"]]
+    tree.truncated = data.get("truncated", False)
+    return tree
+
+
+def _mock_commit_with_tree(tree_sha: str) -> MagicMock:
+    """Build a mock PyGithub Commit whose commit.tree.sha is tree_sha."""
+    commit = MagicMock()
+    commit.commit.tree.sha = tree_sha
+    return commit
+
+
+class TestGetRepoTree:
+    async def test_success_default_branch(self) -> None:
+        data = _load_json("get_repo_tree.json")
+        git_tree = _mock_git_tree(data)
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.default_branch = "main"
+            mock_repo.get_commit.return_value = _mock_commit_with_tree(data["sha"])
+            mock_repo.get_git_tree.return_value = git_tree
+
+            result = await github_get_repo_tree(
+                GetRepoTreeParams(owner="octocat", repo="Hello-World"),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, GetRepoTreeResult)
+        assert result.success is True
+        # Only blob entries should be returned; the "tree" entry in src/ is dropped.
+        assert [f.path for f in result.files] == [
+            "README.md",
+            "src/main.py",
+            "docs/index.md",
+        ]
+        assert result.files[0].size == 42
+        assert result.truncated is False
+        mock_repo.get_commit.assert_called_once_with("main")
+        mock_repo.get_git_tree.assert_called_once_with(data["sha"], recursive=True)
+
+    async def test_success_with_ref_and_path_filter(self) -> None:
+        data = _load_json("get_repo_tree.json")
+        git_tree = _mock_git_tree(data)
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.get_commit.return_value = _mock_commit_with_tree(data["sha"])
+            mock_repo.get_git_tree.return_value = git_tree
+
+            result = await github_get_repo_tree(
+                GetRepoTreeParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    ref="develop",
+                    path_filter="src",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        assert [f.path for f in result.files] == ["src/main.py"]
+        assert result.ref == "develop"
+        assert result.path_filter == "src"
+        mock_repo.get_commit.assert_called_once_with("develop")
+
+    async def test_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_get_repo_tree(
+                GetRepoTreeParams(owner="octocat", repo="missing"),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_get_repo_tree._tool_definition
+        assert defn.name == "github_get_repo_tree"
         assert defn.provider == "github"
