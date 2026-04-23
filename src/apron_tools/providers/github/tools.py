@@ -16,11 +16,21 @@ from .types import (
     AddIssueCommentParams,
     AddIssueCommentResult,
     BranchSummary,
+    CreateBranchParams,
+    CreateBranchResult,
     CreateIssueParams,
     CreateIssueResult,
+    CreatePullRequestParams,
+    CreatePullRequestResult,
+    CreateReleaseParams,
+    CreateReleaseResult,
     ExploreReleasesParams,
     ExploreReleasesResult,
     FileContentEntry,
+    ForkRepositoryParams,
+    ForkRepositoryResult,
+    GenerateReleaseNotesParams,
+    GenerateReleaseNotesResult,
     GetFileContentParams,
     GetFileContentResult,
     GetIssueParams,
@@ -29,6 +39,8 @@ from .types import (
     GetPullRequestResult,
     GetRepositoryParams,
     GetRepositoryResult,
+    GetRepoTreeParams,
+    GetRepoTreeResult,
     IssueCommentSummary,
     IssueSummary,
     LabelSummary,
@@ -48,6 +60,9 @@ from .types import (
     ReleaseAsset,
     ReleaseSummary,
     RepositorySummary,
+    RepoTreeEntry,
+    UpdateFileParams,
+    UpdateFileResult,
     UserSummary,
 )
 
@@ -161,6 +176,28 @@ def _pr_detail(pr: Any) -> PullRequestDetail:
         updated_at=pr.updated_at.isoformat() + "Z" if pr.updated_at else None,
         closed_at=pr.closed_at.isoformat() + "Z" if pr.closed_at else None,
     )
+
+
+def _resolve_existing_file_sha(repo: Any, path: str, branch: str) -> str | None:
+    """Return the blob SHA of an existing file, or None when the path is absent.
+
+    ``repo.get_contents`` raises ``GithubException`` with status 404 when the
+    file does not yet exist, which is the signal to create rather than update
+    the file. Any other error propagates to the caller.
+    """
+    try:
+        existing = repo.get_contents(path, ref=branch)
+    except GithubException as exc:
+        if exc.status == 404:
+            return None
+        raise
+    if isinstance(existing, list):
+        raise GithubException(
+            422,
+            {"message": f"'{path}' is a directory, not a file."},
+            None,
+        )
+    return cast(str, existing.sha)
 
 
 def _release_summary(release: Any) -> ReleaseSummary:
@@ -663,6 +700,337 @@ async def github_explore_releases(
             return ExploreReleasesResult(success=True, releases=items)
         except GithubException as exc:
             return ExploreReleasesResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_create_branch"],
+    api_docs="https://docs.github.com/en/rest/git/refs#create-a-reference",
+    provider="github",
+)
+async def github_create_branch(
+    params: CreateBranchParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateBranchResult:
+    """Create a new branch in a repository from an existing source branch."""
+
+    def _call() -> CreateBranchResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            source_ref = repo.get_git_ref(f"heads/{params.source_branch}")
+            sha = source_ref.object.sha
+            repo.create_git_ref(ref=f"refs/heads/{params.branch_name}", sha=sha)
+            repo_html_url = str(repo.html_url).rstrip("/")
+            url = f"{repo_html_url}/tree/{params.branch_name}"
+            return CreateBranchResult(
+                success=True,
+                branch_name=params.branch_name,
+                source_branch=params.source_branch,
+                sha=sha,
+                url=url,
+            )
+        except GithubException as exc:
+            return CreateBranchResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_update_file"],
+    api_docs="https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents",
+    provider="github",
+)
+async def github_update_file(
+    params: UpdateFileParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> UpdateFileResult:
+    """Create or update a file in a repository, committing directly to a branch."""
+
+    def _call() -> UpdateFileResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            existing_sha = _resolve_existing_file_sha(repo, params.path, params.branch)
+            if existing_sha is None:
+                result = repo.create_file(
+                    path=params.path,
+                    message=params.commit_message,
+                    content=params.content,
+                    branch=params.branch,
+                )
+            else:
+                result = repo.update_file(
+                    path=params.path,
+                    message=params.commit_message,
+                    content=params.content,
+                    sha=existing_sha,
+                    branch=params.branch,
+                )
+            content_file = result["content"]
+            commit = result["commit"]
+            return UpdateFileResult(
+                success=True,
+                path=params.path,
+                branch=params.branch,
+                commit_sha=commit.sha,
+                url=content_file.html_url,
+            )
+        except GithubException as exc:
+            return UpdateFileResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_create_pull_request"],
+    api_docs="https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request",
+    provider="github",
+)
+async def github_create_pull_request(
+    params: CreatePullRequestParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreatePullRequestResult:
+    """Create a pull request in a repository."""
+
+    def _call() -> CreatePullRequestResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {
+                "base": params.base,
+                "head": params.head,
+                "title": params.title,
+                "draft": params.draft,
+            }
+            if params.body:
+                kwargs["body"] = params.body
+            pr = repo.create_pull(**kwargs)
+            return CreatePullRequestResult(success=True, pull_request=_pr_detail(pr))
+        except GithubException as exc:
+            return CreatePullRequestResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+def _release_notes_mode(generate: bool, body: str) -> str:
+    """Describe how notes were composed for a release.
+
+    GitHub prepends ``body`` to auto-generated notes when both are provided,
+    so we surface that combination explicitly for the tool caller.
+    """
+    if generate and body:
+        return "manual + auto-generated"
+    if generate:
+        return "auto-generated"
+    if body:
+        return "manual"
+    return "none"
+
+
+@tool(
+    scopes=SCOPES["github_create_release"],
+    api_docs="https://docs.github.com/en/rest/releases/releases#create-a-release",
+    provider="github",
+)
+async def github_create_release(
+    params: CreateReleaseParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> CreateReleaseResult:
+    """Create a GitHub release, optionally auto-generating release notes."""
+
+    def _call() -> CreateReleaseResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {
+                "tag": params.tag_name,
+                "draft": params.draft,
+                "prerelease": params.prerelease,
+                "generate_release_notes": params.generate_release_notes,
+            }
+            if params.release_title:
+                kwargs["name"] = params.release_title
+            if params.release_notes:
+                kwargs["message"] = params.release_notes
+            if params.target_commitish:
+                kwargs["target_commitish"] = params.target_commitish
+            release = repo.create_git_release(**kwargs)
+            return CreateReleaseResult(
+                success=True,
+                release=_release_summary(release),
+                target_commitish=params.target_commitish or None,
+                notes_mode=_release_notes_mode(
+                    params.generate_release_notes,
+                    params.release_notes,
+                ),
+            )
+        except GithubException as exc:
+            return CreateReleaseResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_generate_release_notes"],
+    api_docs=("https://docs.github.com/en/rest/releases/releases#generate-release-notes-content-for-a-release"),
+    provider="github",
+)
+async def github_generate_release_notes(
+    params: GenerateReleaseNotesParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> GenerateReleaseNotesResult:
+    """Preview auto-generated release notes without creating a release."""
+
+    def _call() -> GenerateReleaseNotesResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {"tag_name": params.tag_name}
+            if params.target_commitish:
+                kwargs["target_commitish"] = params.target_commitish
+            if params.previous_tag_name:
+                kwargs["previous_tag_name"] = params.previous_tag_name
+            if params.configuration_file_path:
+                kwargs["configuration_file_path"] = params.configuration_file_path
+            notes = repo.generate_release_notes(**kwargs)
+            return GenerateReleaseNotesResult(
+                success=True,
+                owner=params.owner,
+                repo=params.repo,
+                tag_name=params.tag_name,
+                release_title=notes.name or params.tag_name,
+                target_commitish=params.target_commitish or None,
+                previous_tag_name=params.previous_tag_name or None,
+                notes=notes.body,
+            )
+        except GithubException as exc:
+            return GenerateReleaseNotesResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_fork_repository"],
+    api_docs="https://docs.github.com/en/rest/repos/forks#create-a-fork",
+    provider="github",
+)
+async def github_fork_repository(
+    params: ForkRepositoryParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ForkRepositoryResult:
+    """Fork a repository into the authenticated user's account or an organization."""
+
+    def _call() -> ForkRepositoryResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            kwargs: dict[str, Any] = {}
+            if params.organization:
+                kwargs["organization"] = params.organization
+            if params.name:
+                kwargs["name"] = params.name
+            if params.default_branch_only:
+                kwargs["default_branch_only"] = True
+            fork = repo.create_fork(**kwargs)
+            return ForkRepositoryResult(
+                success=True,
+                fork_full_name=fork.full_name,
+                source_full_name=f"{params.owner}/{params.repo}",
+                html_url=fork.html_url,
+            )
+        except GithubException as exc:
+            return ForkRepositoryResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_get_repo_tree"],
+    api_docs="https://docs.github.com/en/rest/git/trees#get-a-tree",
+    provider="github",
+)
+async def github_get_repo_tree(
+    params: GetRepoTreeParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> GetRepoTreeResult:
+    """Return the recursive file tree of a repository for a ref or default branch."""
+
+    def _call() -> GetRepoTreeResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = cast(Any, g.get_repo(f"{params.owner}/{params.repo}"))
+            commit_ref = params.ref or repo.default_branch
+            commit = repo.get_commit(commit_ref)
+            tree = repo.get_git_tree(commit.commit.tree.sha, recursive=True)
+            files: list[RepoTreeEntry] = []
+            for entry in tree.tree:
+                if entry.type != "blob":
+                    continue
+                if params.path_filter and not entry.path.startswith(params.path_filter):
+                    continue
+                files.append(
+                    RepoTreeEntry(
+                        path=entry.path,
+                        size=entry.size or 0,
+                        sha=entry.sha,
+                    )
+                )
+            return GetRepoTreeResult(
+                success=True,
+                owner=params.owner,
+                repo=params.repo,
+                ref=params.ref or None,
+                path_filter=params.path_filter or None,
+                files=files,
+                truncated=bool(getattr(tree, "truncated", False)),
+            )
+        except GithubException as exc:
+            return GetRepoTreeResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
         finally:
             g.close()
 

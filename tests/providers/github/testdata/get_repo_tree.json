@@ -1,0 +1,38 @@
+{
+  "sha": "aa11bb22",
+  "url": "https://api.github.com/repos/octocat/Hello-World/git/trees/aa11bb22",
+  "tree": [
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "bb22cc33",
+      "size": 42,
+      "url": "https://api.github.com/repos/octocat/Hello-World/git/blobs/bb22cc33"
+    },
+    {
+      "path": "src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "cc33dd44",
+      "url": "https://api.github.com/repos/octocat/Hello-World/git/trees/cc33dd44"
+    },
+    {
+      "path": "src/main.py",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "dd44ee55",
+      "size": 120,
+      "url": "https://api.github.com/repos/octocat/Hello-World/git/blobs/dd44ee55"
+    },
+    {
+      "path": "docs/index.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ee55ff66",
+      "size": 256,
+      "url": "https://api.github.com/repos/octocat/Hello-World/git/blobs/ee55ff66"
+    }
+  ],
+  "truncated": false
+}

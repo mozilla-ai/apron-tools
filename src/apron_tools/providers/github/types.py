@@ -120,6 +120,90 @@ class ExploreReleasesParams(BaseModel):
     limit: int = 30
 
 
+class CreateBranchParams(BaseModel):
+    """Parameters for creating a new branch from an existing source branch."""
+
+    owner: str
+    repo: str
+    branch_name: str
+    source_branch: str = "main"
+
+
+class UpdateFileParams(BaseModel):
+    """Parameters for creating or updating a file in a repository."""
+
+    owner: str
+    repo: str
+    path: str
+    content: str
+    commit_message: str
+    branch: str = "main"
+
+
+class CreatePullRequestParams(BaseModel):
+    """Parameters for creating a pull request."""
+
+    owner: str
+    repo: str
+    title: str
+    head: str
+    base: str = "main"
+    body: str = ""
+    draft: bool = False
+
+
+class CreateReleaseParams(BaseModel):
+    """Parameters for creating a release.
+
+    When ``release_notes`` and ``generate_release_notes=True`` are both
+    provided, GitHub prepends the manual notes to the auto-generated notes.
+    """
+
+    owner: str
+    repo: str
+    tag_name: str
+    release_title: str = ""
+    target_commitish: str = ""
+    release_notes: str = ""
+    draft: bool = False
+    prerelease: bool = False
+    generate_release_notes: bool = False
+
+
+class GenerateReleaseNotesParams(BaseModel):
+    """Parameters for previewing auto-generated release notes."""
+
+    owner: str
+    repo: str
+    tag_name: str
+    target_commitish: str = ""
+    previous_tag_name: str = ""
+    configuration_file_path: str = ""
+
+
+class ForkRepositoryParams(BaseModel):
+    """Parameters for forking a repository.
+
+    ``organization`` forks into that org; leave empty to fork into the
+    authenticated user's account. ``name`` overrides the fork's name.
+    """
+
+    owner: str
+    repo: str
+    organization: str = ""
+    name: str = ""
+    default_branch_only: bool = False
+
+
+class GetRepoTreeParams(BaseModel):
+    """Parameters for retrieving the recursive file tree of a repository."""
+
+    owner: str
+    repo: str
+    ref: str = ""
+    path_filter: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Shared nested models
 # ---------------------------------------------------------------------------
@@ -746,4 +830,220 @@ class ExploreReleasesResult(ToolResult):
                 f" | Draft: {is_draft} | Prerelease: {is_prerelease}"
                 f" | Assets: {assets_count}"
             )
+        return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Results for branch, file, PR, release, fork, and tree write/read operations
+# ---------------------------------------------------------------------------
+
+
+class CreateBranchResult(ToolResult):
+    """Result of creating a new branch."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    branch_name: str | None = None
+    source_branch: str | None = None
+    sha: str | None = None
+    url: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the created branch."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return "\n".join(
+            [
+                "Branch created successfully!",
+                f"- Branch: {self.branch_name}",
+                f"- Source: {self.source_branch}",
+                f"- URL: {self.url}",
+            ]
+        )
+
+
+class UpdateFileResult(ToolResult):
+    """Result of creating or updating a file."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    path: str | None = None
+    branch: str | None = None
+    commit_sha: str | None = None
+    url: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the updated file."""
+        if not self.success:
+            return f"Error: {self.error}"
+        short_sha = (self.commit_sha or "")[:8]
+        return "\n".join(
+            [
+                "File updated successfully!",
+                f"- Path: {self.path}",
+                f"- Branch: {self.branch}",
+                f"- Commit: {short_sha}",
+                f"- URL: {self.url}",
+            ]
+        )
+
+
+class CreatePullRequestResult(ToolResult):
+    """Result of creating a pull request."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    pull_request: PullRequestDetail | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the created pull request."""
+        if not self.success:
+            return f"Error: {self.error}"
+        if self.pull_request is None:
+            return "Pull request created but no details available."
+        pr = self.pull_request
+        head_ref = pr.head.ref if pr.head else "unknown"
+        base_ref = pr.base.ref if pr.base else "unknown"
+        return "\n".join(
+            [
+                "Pull request created successfully!",
+                f"- PR #{pr.number}: {pr.title}",
+                f"- Head: {head_ref} -> Base: {base_ref}",
+                f"- URL: {pr.html_url}",
+            ]
+        )
+
+
+class CreateReleaseResult(ToolResult):
+    """Result of creating a release."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    release: ReleaseSummary | None = None
+    target_commitish: str | None = None
+    notes_mode: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the created release."""
+        if not self.success:
+            return f"Error: {self.error}"
+        if self.release is None:
+            return "Release created but no details available."
+        r = self.release
+        title = r.name or r.tag_name
+        target = self.target_commitish or "default branch"
+        is_draft = "Yes" if r.draft else "No"
+        is_prerelease = "Yes" if r.prerelease else "No"
+        return "\n".join(
+            [
+                "Release created successfully!",
+                f"- Release: {title}",
+                f"- Tag: {r.tag_name}",
+                f"- Target: {target}",
+                f"- Draft: {is_draft} | Prerelease: {is_prerelease}",
+                f"- Notes: {self.notes_mode or 'none'}",
+                f"- URL: {r.html_url}",
+            ]
+        )
+
+
+class GenerateReleaseNotesResult(ToolResult):
+    """Result of previewing auto-generated release notes."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    owner: str | None = None
+    repo: str | None = None
+    tag_name: str | None = None
+    release_title: str | None = None
+    target_commitish: str | None = None
+    previous_tag_name: str | None = None
+    notes: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the generated release notes."""
+        if not self.success:
+            return f"Error: {self.error}"
+        title = self.release_title or (self.tag_name or "")
+        lines = [
+            f"# Generated Release Notes for {self.owner}/{self.repo}",
+            f"**Tag:** {self.tag_name}",
+            f"**Release Title:** {title}",
+        ]
+        if self.target_commitish:
+            lines.append(f"**Target:** {self.target_commitish}")
+        if self.previous_tag_name:
+            lines.append(f"**Previous Tag:** {self.previous_tag_name}")
+        lines.extend(["", "## Release Notes", self.notes or "No release notes generated."])
+        return "\n".join(lines)
+
+
+class ForkRepositoryResult(ToolResult):
+    """Result of forking a repository."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    fork_full_name: str | None = None
+    source_full_name: str | None = None
+    html_url: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the created fork."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return "\n".join(
+            [
+                "Repository forked successfully!",
+                f"- Fork: {self.fork_full_name}",
+                f"- Source: {self.source_full_name}",
+                f"- URL: {self.html_url}",
+            ]
+        )
+
+
+class RepoTreeEntry(BaseModel):
+    """A single file entry in a repository tree listing."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    path: str
+    size: int = 0
+    sha: str | None = None
+
+
+class GetRepoTreeResult(ToolResult):
+    """Result of retrieving the recursive file tree of a repository."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    owner: str | None = None
+    repo: str | None = None
+    ref: str | None = None
+    path_filter: str | None = None
+    files: list[RepoTreeEntry] = []
+    truncated: bool = False
+
+    @staticmethod
+    def _fmt_size(size: int) -> str:
+        """Format a byte count as a short human-readable string."""
+        if size >= 1_048_576:
+            return f"{size / 1_048_576:.1f} MB"
+        if size >= 1024:
+            return f"{size / 1024:.1f} KB"
+        return f"{size} B"
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the repository tree."""
+        if not self.success:
+            return f"Error: {self.error}"
+        ref_label = self.ref or "default branch"
+        lines = [f"# Repository tree: {self.owner}/{self.repo} (ref: {ref_label})"]
+        if self.path_filter:
+            lines.append(f"Filtered to: {self.path_filter}/")
+        lines.append(f"Found {len(self.files)} files.")
+        if self.truncated:
+            lines.append("Note: tree was truncated by GitHub (repo is very large). Not all files may be listed.")
+        lines.append("")
+        for entry in self.files:
+            lines.append(f"{entry.path} ({self._fmt_size(entry.size)})")
         return "\n".join(lines)
