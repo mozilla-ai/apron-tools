@@ -144,10 +144,10 @@ async def web_access_extract_json(
 
     try:
         schema = json.loads(params.json_schema)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
         return ExtractJsonResult(
             success=False,
-            error=f"Invalid JSON schema: {params.json_schema}",
+            error=f"Invalid JSON schema: {exc.msg} (line {exc.lineno}, column {exc.colno})",
         )
 
     owns_client = client is None

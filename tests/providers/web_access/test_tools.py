@@ -273,19 +273,24 @@ class TestExtractJson:
 
     async def test_invalid_schema_is_reported(self) -> None:
         client = _mock_client(extract_result={})
+        bad_schema = "not json { with sentinel-XYZZY garbage"
 
         with patch(
             "apron_tools.providers.web_access.tools.validate_url",
             return_value=None,
         ):
             result = await web_access_extract_json(
-                ExtractJsonParams(url="https://example.com/", json_schema="not json {"),
+                ExtractJsonParams(url="https://example.com/", json_schema=bad_schema),
                 token=_TOKEN,
                 client=client,
             )
 
         assert result.success is False
-        assert "Invalid JSON schema" in (result.error or "")
+        error = result.error or ""
+        assert "Invalid JSON schema" in error
+        assert "line" in error and "column" in error
+        # Caller-supplied schema must NOT be echoed back into the error payload.
+        assert "sentinel-XYZZY" not in error
         client.extract.json.assert_not_called()
 
     async def test_sdk_exception_is_wrapped(self) -> None:
