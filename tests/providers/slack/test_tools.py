@@ -6,10 +6,12 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from pytest_httpx import HTTPXMock
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
+from apron_tools.providers.slack import tools as slack_tools
 from apron_tools.providers.slack.tools import (
     slack_add_reaction,
     slack_download_file,
@@ -91,12 +93,26 @@ def _slack_api_error(error: str) -> SlackApiError:
 
 
 class TestSlackExploreWorkspace:
+    """slack_explore_workspace fetches public and private channels in
+    separate conversations.list calls. This is load-bearing: a single
+    combined call (types=public_channel,private_channel) 403s with
+    missing_scope if EITHER channels:read or groups:read is absent, which
+    previously caused an OAuth re-consent loop because the agent had no
+    usable channel listing to work from.
+    """
+
+    _EMPTY_PRIVATE = {"ok": True, "channels": [], "response_metadata": {"next_cursor": ""}}
+
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
         client.team_info.return_value = _mock_response(_load_json("team_info.json"))
-        client.conversations_list.return_value = _mock_response(_load_json("conversations_list.json"))
+        # Split call: public_channel then private_channel.
+        client.conversations_list.side_effect = [
+            _mock_response(_load_json("conversations_list.json")),
+            _mock_response(self._EMPTY_PRIVATE),
+        ]
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_explore_workspace(ExploreWorkspaceParams(), token=_TOKEN, base_url=_BASE_URL)
@@ -114,7 +130,10 @@ class TestSlackExploreWorkspace:
         client = AsyncMock()
         mock_cls.return_value = client
         client.team_info.side_effect = _slack_api_error("missing_scope")
-        client.conversations_list.return_value = _mock_response(_load_json("conversations_list.json"))
+        client.conversations_list.side_effect = [
+            _mock_response(_load_json("conversations_list.json")),
+            _mock_response(self._EMPTY_PRIVATE),
+        ]
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_explore_workspace(ExploreWorkspaceParams(), token=_TOKEN, base_url=_BASE_URL)
@@ -123,11 +142,91 @@ class TestSlackExploreWorkspace:
         assert result.workspace_name == "Slack Workspace"
         assert len(result.channels) == 2
 
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_fetches_public_and_private_channels_separately(self, mock_cls: AsyncMock) -> None:
+        """Two separate conversations.list calls — one per channel type —
+        so a missing scope on one side does not block the other side."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.team_info.return_value = _mock_response(_load_json("team_info.json"))
+        client.conversations_list.side_effect = [
+            _mock_response(_load_json("conversations_list.json")),
+            _mock_response(self._EMPTY_PRIVATE),
+        ]
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        await slack_explore_workspace(ExploreWorkspaceParams(), token=_TOKEN, base_url=_BASE_URL)
+
+        assert client.conversations_list.call_count == 2
+        call_types = [call.kwargs.get("types") for call in client.conversations_list.call_args_list]
+        assert call_types == ["public_channel", "private_channel"]
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_missing_groups_read_still_lists_public_channels(self, mock_cls: AsyncMock) -> None:
+        """The OAuth re-consent loop bug: a user with channels:read but NOT
+        groups:read previously got an empty channel listing because the
+        single combined conversations.list call 403'd with missing_scope.
+        After the fix, public channels are fetched separately and the
+        missing groups:read scope doesn't block the public listing."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.team_info.return_value = _mock_response(_load_json("team_info.json"))
+        client.conversations_list.side_effect = [
+            _mock_response(_load_json("conversations_list.json")),
+            _slack_api_error("missing_scope"),
+        ]
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_explore_workspace(ExploreWorkspaceParams(), token=_TOKEN, base_url=_BASE_URL)
+
+        # Public channels still make it through despite the private-side failure.
+        assert result.success is True
+        assert len(result.channels) == 2
+        assert any(c.name == "general" for c in result.channels)
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_missing_channels_read_still_lists_private_channels(self, mock_cls: AsyncMock) -> None:
+        """Symmetric case: a user with groups:read but NOT channels:read
+        still gets the private channel listing."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.team_info.return_value = _mock_response(_load_json("team_info.json"))
+        private_response = {
+            "ok": True,
+            "channels": [
+                {
+                    "id": "G0AKFJBEU",
+                    "name": "secret-project",
+                    "is_private": True,
+                    "num_members": 3,
+                }
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+        client.conversations_list.side_effect = [
+            _slack_api_error("missing_scope"),
+            _mock_response(private_response),
+        ]
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_explore_workspace(ExploreWorkspaceParams(), token=_TOKEN, base_url=_BASE_URL)
+
+        assert result.success is True
+        assert len(result.channels) == 1
+        assert result.channels[0].name == "secret-project"
+        assert result.channels[0].is_private is True
+
     async def test_has_tool_definition(self) -> None:
         defn = slack_explore_workspace._tool_definition
         assert defn.name == "slack_explore_workspace"
         assert defn.provider == "slack"
         assert "team:read" in defn.scopes
+        # groups:read must be listed so the missing-scope modal recommends
+        # it — without this, a user missing only groups:read re-consents to
+        # nothing new and loops back into the same missing_scope error.
+        assert "groups:read" in defn.scopes
+        assert "channels:read" in defn.scopes
+        assert "users:read" in defn.scopes
 
 
 # ---------------------------------------------------------------------------
@@ -177,19 +276,29 @@ class TestSlackSendChannelMessage:
         client.chat_postMessage.side_effect = _slack_api_error("channel_not_found")
 
         result = await slack_send_channel_message(
-            SendChannelMessageParams(channel_id="C000", message="test"),
+            SendChannelMessageParams(channel_id="C01234ABCD", message="test"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
         assert result.success is False
-        assert result.error == "channel_not_found"
+        # channel_not_found is a non-permissions error: the formatter wraps
+        # it with an explicit disclaimer so the agent does not loop into
+        # request_app_connection.
+        assert "channel_not_found" in result.error
+        assert "NOT a permissions error" in result.error
+        assert "channel C01234ABCD" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_send_channel_message._tool_definition
         assert defn.name == "slack_send_channel_message"
         assert defn.provider == "slack"
-        assert "chat:write" in defn.scopes
+        assert defn.scopes == ["chat:write"]
+        # channels:join is a Slack bot-only scope and must not be listed on
+        # this tool — listing it caused the agent to loop into
+        # request_app_connection on unrelated failures because the
+        # missing-scope modal recommended a scope the user cannot grant.
+        assert "channels:join" not in defn.scopes
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +337,9 @@ class TestSlackSendUserMessage:
         )
 
         assert result.success is False
-        assert result.error == "user_not_found"
+        assert "user_not_found" in result.error
+        assert "NOT a permissions error" in result.error
+        assert "user UBAD" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_send_user_message._tool_definition
@@ -300,13 +411,14 @@ class TestSlackReadChannelMessages:
         client.conversations_history.side_effect = _slack_api_error("channel_not_found")
 
         result = await slack_read_channel_messages(
-            ReadChannelMessagesParams(channel_id="C000"),
+            ReadChannelMessagesParams(channel_id="C01234ABCD"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
         assert result.success is False
-        assert result.error == "channel_not_found"
+        assert "channel_not_found" in result.error
+        assert "NOT a permissions error" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_read_channel_messages._tool_definition
@@ -347,13 +459,14 @@ class TestSlackGetChannelInfo:
         client.conversations_info.side_effect = _slack_api_error("channel_not_found")
 
         result = await slack_get_channel_info(
-            GetChannelInfoParams(channel_id="C000"),
+            GetChannelInfoParams(channel_id="C01234ABCD"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
         assert result.success is False
-        assert result.error == "channel_not_found"
+        assert "channel_not_found" in result.error
+        assert "NOT a permissions error" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_get_channel_info._tool_definition
@@ -399,7 +512,8 @@ class TestSlackReadThread:
         )
 
         assert result.success is False
-        assert result.error == "thread_not_found"
+        assert "thread_not_found" in result.error
+        assert "NOT a permissions error" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_read_thread._tool_definition
@@ -437,13 +551,14 @@ class TestSlackJoinChannel:
         client.conversations_join.side_effect = _slack_api_error("is_archived")
 
         result = await slack_join_channel(
-            JoinChannelParams(channel_id="C000"),
+            JoinChannelParams(channel_id="C01234ABCD"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
         assert result.success is False
-        assert result.error == "is_archived"
+        assert "is_archived" in result.error
+        assert "NOT a permissions error" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_join_channel._tool_definition
@@ -482,12 +597,15 @@ class TestSlackEditMessage:
         client.chat_update.side_effect = _slack_api_error("cant_update_message")
 
         result = await slack_edit_message(
-            EditMessageParams(channel_id="C000", message_ts="000", new_text="x"),
+            EditMessageParams(channel_id="C01234ABCD", message_ts="000", new_text="x"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
         assert result.success is False
+        # cant_update_message is not in the non-permissions frozenset, so
+        # the formatter falls back to the bare code — the existing
+        # missing-scope recovery path handles this unchanged.
         assert result.error == "cant_update_message"
 
     async def test_has_tool_definition(self) -> None:
@@ -525,13 +643,14 @@ class TestSlackGetPermalink:
         client.chat_getPermalink.side_effect = _slack_api_error("message_not_found")
 
         result = await slack_get_permalink(
-            GetPermalinkParams(channel_id="C000", message_ts="000"),
+            GetPermalinkParams(channel_id="C01234ABCD", message_ts="000"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
         assert result.success is False
-        assert result.error == "message_not_found"
+        assert "message_not_found" in result.error
+        assert "NOT a permissions error" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_get_permalink._tool_definition
@@ -578,7 +697,9 @@ class TestSlackGetFileInfo:
         )
 
         assert result.success is False
-        assert result.error == "file_not_found"
+        assert "file_not_found" in result.error
+        assert "NOT a permissions error" in result.error
+        assert "file FBAD" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_get_file_info._tool_definition
@@ -892,3 +1013,249 @@ class TestSlackSaveFileForUpload:
         assert defn.name == "slack_save_file_for_upload"
         assert defn.provider == "slack"
         assert "files:read" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# OAuth re-consent loop regressions
+#
+# Tools returning bare Slack error codes for non-permissions failures
+# (e.g. ``channel_not_found`` when a channel name was passed as channel_id)
+# were historically misread by the agent as missing-scope errors, which
+# triggered an OAuth re-consent loop. The two helpers below break that
+# loop: ``_validate_slack_channel_id`` rejects names at the tool boundary,
+# and ``_format_slack_error`` wraps non-permissions error codes with an
+# explicit disclaimer. Genuine 401/403/``missing_scope`` errors must still
+# pass through unchanged so the existing missing-scopes recovery path keeps
+# working.
+# ---------------------------------------------------------------------------
+
+
+class TestValidateSlackChannelId:
+    """Catch channel names passed as channel_id before the API call fires."""
+
+    @pytest.mark.parametrize(
+        "valid_id",
+        [
+            "C01234ABCD",  # pragma: allowlist secret
+            "C0123456789",  # pragma: allowlist secret
+            "GABCDEFGHIJ",  # pragma: allowlist secret
+            "D0123456789",  # pragma: allowlist secret
+        ],
+    )
+    def test_accepts_valid_channel_ids(self, valid_id: str) -> None:
+        assert slack_tools._validate_slack_channel_id(valid_id) is None
+
+    @pytest.mark.parametrize(
+        "invalid_id",
+        [
+            "any-forge-test",
+            "general",
+            "#general",
+            "C123",
+            "c01234abcd",  # pragma: allowlist secret
+            "X01234ABCD",  # pragma: allowlist secret
+            "",
+        ],
+    )
+    def test_rejects_names_and_malformed_ids(self, invalid_id: str) -> None:
+        error = slack_tools._validate_slack_channel_id(invalid_id)
+        assert error is not None
+        assert "NOT a permissions error" in error or "non-empty" in error
+
+    def test_lowercased_valid_id_suggests_case_fix_not_name_lookup(self) -> None:
+        """A lowercased ``c01234abcd`` is a case mistake, not a channel
+        name. The hint must tell the agent to retry with the uppercase
+        version, not search for a channel called ``#c01234abcd``."""
+        error = slack_tools._validate_slack_channel_id("c01234abcd")  # pragma: allowlist secret
+        assert error is not None
+        assert "case-sensitive" in error
+        assert "C01234ABCD" in error  # pragma: allowlist secret
+        # Must not prefix the lowercased form with '#' as if it were a name.
+        assert "#c01234abcd" not in error
+
+    def test_malformed_id_uses_generic_lookup_hint(self) -> None:
+        """An ID with a wrong prefix letter must not be treated as a
+        channel name to look up — there is no channel called
+        ``#X01234ABCD``."""
+        error = slack_tools._validate_slack_channel_id("X01234ABCD")
+        assert error is not None
+        assert "#X01234ABCD" not in error
+        assert "find the correct channel ID" in error
+
+
+class TestFormatSlackError:
+    @pytest.mark.parametrize(
+        "error_code",
+        [
+            "channel_not_found",
+            "not_in_channel",
+            "is_archived",
+            "user_not_found",
+            "message_not_found",
+            "file_not_found",
+            "invalid_arguments",
+        ],
+    )
+    def test_non_permission_codes_get_disclaimer(self, error_code: str) -> None:
+        """Known non-permissions error codes must carry the explicit
+        disclaimer so the agent stops looping into request_app_connection."""
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", error_code)
+        assert error_code in result
+        assert "NOT a permissions error" in result
+        assert "slack_explore_workspace" in result
+
+    @pytest.mark.parametrize(
+        "error_code",
+        ["missing_scope", "invalid_auth", "not_authed", "token_revoked"],
+    )
+    def test_genuine_permission_codes_pass_through(self, error_code: str) -> None:
+        """Real auth/scope errors must not get the disclaimer — they still
+        need to flow through the missing-scopes recovery path."""
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", error_code)
+        assert error_code in result
+        assert "NOT a permissions error" not in result
+
+
+class TestChannelIdBoundaryRejection:
+    """Tools that take a channel_id reject names without hitting the API."""
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_send_channel_message_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_send_channel_message(
+            SendChannelMessageParams(channel_id="any-forge-test", message="hi"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.chat_postMessage.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+        assert "slack_explore_workspace" in result.error
+        assert "do not call request_app_connection" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_read_channel_messages_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_read_channel_messages(
+            ReadChannelMessagesParams(channel_id="any-forge-test"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.conversations_history.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_get_channel_info_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_get_channel_info(
+            GetChannelInfoParams(channel_id="general"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.conversations_info.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_read_thread_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_read_thread(
+            ReadThreadParams(channel_id="general", thread_ts="1512085950.000216"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.conversations_replies.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_join_channel_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_join_channel(
+            JoinChannelParams(channel_id="general"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.conversations_join.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_edit_message_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_edit_message(
+            EditMessageParams(channel_id="general", message_ts="000", new_text="x"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.chat_update.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_get_permalink_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_get_permalink(
+            GetPermalinkParams(channel_id="general", message_ts="000"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.chat_getPermalink.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_add_reaction_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_add_reaction(
+            AddReactionParams(
+                channel_id="general",
+                timestamp="1512085950.000216",
+                reaction_name="thumbsup",
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.reactions_add.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_get_reactions_rejects_name(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_get_reactions(
+            GetReactionsParams(channel_id="general", timestamp="1512085950.000216"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.reactions_get.assert_not_called()
+        assert result.success is False
+        assert "not a valid Slack channel ID" in result.error
