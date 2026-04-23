@@ -805,6 +805,17 @@ class TestSlackDownloadFile:
         assert defn.name == "slack_download_file"
         assert defn.provider == "slack"
 
+    async def test_rejects_ssrf_url(self) -> None:
+        """slack_download_file returns an error for non-Slack URLs."""
+        result = await slack_download_file(
+            DownloadFileParams(url="http://169.254.169.254/latest/meta-data/"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "Failed to download file" in result.error
+
 
 # ---------------------------------------------------------------------------
 # slack_get_reactions
@@ -1013,6 +1024,16 @@ class TestSlackSaveFileForUpload:
         assert defn.name == "slack_save_file_for_upload"
         assert defn.provider == "slack"
         assert "files:read" in defn.scopes
+
+    async def test_rejects_ssrf_url(self) -> None:
+        """slack_save_file_for_upload returns an error for non-Slack URLs."""
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="http://169.254.169.254/latest/meta-data/"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "Failed to save file" in result.error
 
 
 # ---------------------------------------------------------------------------
@@ -1532,3 +1553,74 @@ class TestReadThreadBlocksAndAttachments:
 
         assert result.success is True
         assert "Build failed on main" in result.messages[1].text
+
+
+# ---------------------------------------------------------------------------
+# SSRF prevention — _validate_slack_file_url
+# ---------------------------------------------------------------------------
+
+
+class TestValidateSlackFileUrl:
+    """CWE-918: Server-Side Request Forgery (SSRF) prevention.
+
+    slack_download_file and slack_save_file_for_upload make authenticated
+    HTTP requests using the user's Slack OAuth token.  Without URL validation
+    a malicious actor who can inject content into a Slack channel (prompt
+    injection) could redirect those requests to internal cloud metadata
+    services (e.g. http://169.254.169.254/) or other private hosts.
+    """
+
+    def test_valid_files_slack_com_url(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        assert _validate_slack_file_url("https://files.slack.com/files-pri/T123/F456/img.png") is None
+
+    def test_valid_slack_files_com_url(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        assert _validate_slack_file_url("https://files.slack-files.com/files-pri/T123/F456/img.png") is None
+
+    def test_valid_slack_edge_com_url(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        assert _validate_slack_file_url("https://a.slack-edge.com/T123/img-thumb.png") is None
+
+    def test_rejects_cloud_metadata_endpoint(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        error = _validate_slack_file_url("http://169.254.169.254/latest/meta-data/")
+        assert error is not None
+        assert "HTTPS" in error or "Slack" in error
+
+    def test_rejects_http_scheme(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        error = _validate_slack_file_url("http://files.slack.com/files-pri/T123/F456/img.png")
+        assert error is not None
+        assert "HTTPS" in error
+
+    def test_rejects_internal_ip(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        error = _validate_slack_file_url("https://10.0.0.1/secret")
+        assert error is not None
+
+    def test_rejects_arbitrary_external_host(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        error = _validate_slack_file_url("https://evil.example.com/slack.com/file")
+        assert error is not None
+
+    def test_rejects_slack_com_lookalike(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        # hostname is ``evil-slack.com`` — suffix check must use dot-prefix.
+        error = _validate_slack_file_url("https://evil-slack.com/file")
+        assert error is not None
+
+    def test_rejects_slack_com_prefix_lookalike(self) -> None:
+        from apron_tools.providers.slack.tools import _validate_slack_file_url
+
+        # hostname is ``evilslack.com`` — suffix check must use dot-prefix.
+        error = _validate_slack_file_url("https://evilslack.com/file")
+        assert error is not None
