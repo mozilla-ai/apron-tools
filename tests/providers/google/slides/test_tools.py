@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.slides.tools import (
@@ -60,6 +61,14 @@ _TOKEN = "test_oauth_token_abc123"
 _SLIDES_BASE = "https://slides.googleapis.com/v1/presentations"
 _DRIVE_BASE = "https://www.googleapis.com/drive/v3/files"
 _PRES_ID = "pres-001"
+_DELETE_SHAPE_GET_URL = httpx.URL(
+    f"{_SLIDES_BASE}/{_PRES_ID}",
+    params={"fields": "slides(objectId,pageElements(objectId))"},
+)
+_SLIDE_ONLY_GET_URL = httpx.URL(
+    f"{_SLIDES_BASE}/{_PRES_ID}",
+    params={"fields": "slides(objectId)"},
+)
 
 
 def _load_json(filename: str) -> dict | list:
@@ -955,7 +964,7 @@ class TestGoogleSlidesInsertImage:
 class TestDeleteShape:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_DELETE_SHAPE_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
         httpx_mock.add_response(
@@ -987,7 +996,7 @@ class TestDeleteShape:
 
     async def test_slide_not_found(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_DELETE_SHAPE_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
 
@@ -1005,7 +1014,7 @@ class TestDeleteShape:
 
     async def test_shape_not_found(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_DELETE_SHAPE_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
 
@@ -1038,7 +1047,7 @@ class TestDeleteShape:
 
     async def test_batch_update_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_DELETE_SHAPE_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
         httpx_mock.add_response(
@@ -1075,7 +1084,7 @@ class TestDeleteShape:
 class TestDeleteSlide:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_SLIDE_ONLY_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
         httpx_mock.add_response(
@@ -1101,7 +1110,7 @@ class TestDeleteSlide:
 
     async def test_slide_not_found(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_SLIDE_ONLY_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
 
@@ -1126,7 +1135,7 @@ class TestDeleteSlide:
 
     async def test_batch_update_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_SLIDE_ONLY_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
         httpx_mock.add_response(
@@ -1159,7 +1168,7 @@ class TestDeleteSlide:
 class TestUpdateSlideBackground:
     async def test_success_hex_color(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_SLIDE_ONLY_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
         httpx_mock.add_response(
@@ -1192,7 +1201,7 @@ class TestUpdateSlideBackground:
 
     async def test_success_theme_color(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_SLIDE_ONLY_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
         httpx_mock.add_response(
@@ -1245,9 +1254,22 @@ class TestUpdateSlideBackground:
         assert result.success is False
         assert "Invalid hex color" in result.error
 
+    async def test_multi_hash_hex_color_returns_error(self) -> None:
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                background_color="##FFFFFF",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "Invalid hex color" in result.error
+
     async def test_slide_not_found(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_SLIDE_ONLY_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
 
@@ -1280,7 +1302,7 @@ class TestUpdateSlideBackground:
 
     async def test_batch_update_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            url=_SLIDE_ONLY_GET_URL,
             json=_load_json("presentation_with_shape.json"),
         )
         httpx_mock.add_response(

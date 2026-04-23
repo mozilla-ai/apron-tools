@@ -924,7 +924,7 @@ def _find_page_element_by_id(slide: dict, element_id: str) -> dict | None:
 
 def _build_rgb_color(hex_color: str) -> dict[str, float] | str:
     """Build a Slides API rgbColor dict from a ``#RRGGBB`` hex string, or error."""
-    stripped = hex_color.lstrip("#")
+    stripped = hex_color.removeprefix("#")
     if len(stripped) != 6:
         return (
             "Invalid hex color format. Expected 6 hexadecimal characters "
@@ -977,6 +977,7 @@ async def google_slides_delete_shape(
             pres_resp = await client.get(
                 f"{base_url}/{params.presentation_id}",
                 headers=_headers(token),
+                params={"fields": "slides(objectId,pageElements(objectId))"},
             )
             if not pres_resp.is_success:
                 return DeleteShapeResult(
@@ -1037,6 +1038,7 @@ async def google_slides_delete_slide(
             pres_resp = await client.get(
                 f"{base_url}/{params.presentation_id}",
                 headers=_headers(token),
+                params={"fields": "slides(objectId)"},
             )
             if not pres_resp.is_success:
                 return DeleteSlideResult(
@@ -1097,6 +1099,7 @@ async def google_slides_update_slide_background(
             pres_resp = await client.get(
                 f"{base_url}/{params.presentation_id}",
                 headers=_headers(token),
+                params={"fields": "slides(objectId)"},
             )
             if not pres_resp.is_success:
                 return UpdateSlideBackgroundResult(
