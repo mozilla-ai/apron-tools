@@ -195,7 +195,7 @@ class TestGetEvent:
 class TestCreateEvent:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events",
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events?sendUpdates=all&conferenceDataVersion=1",
             json=_load_json("create_event.json"),
         )
 
@@ -264,6 +264,195 @@ class TestCreateEvent:
         assert "description" not in body
         assert "location" not in body
         assert "attendees" not in body
+
+    async def test_with_attendees_sends_invites(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Team Sync",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                attendees=["alice@example.com"],
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        assert "sendUpdates=all" in str(request.url)
+
+    async def test_without_attendees_omits_send_updates(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Solo Focus",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        assert "sendUpdates" not in str(request.url)
+
+    async def test_default_generates_meet_link(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Auto Meet",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["conferenceData"]["createRequest"]["conferenceSolutionKey"] == {"type": "hangoutsMeet"}
+        assert "requestId" in body["conferenceData"]["createRequest"]
+        assert "conferenceDataVersion=1" in str(request.url)
+
+    async def test_opt_out_of_meet_link(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="No Meet",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                generate_meet_link=False,
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert "conferenceData" not in body
+        assert "conferenceDataVersion" not in str(request.url)
+
+    async def test_video_call_url_appended_to_description(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Zoom Meeting",
+                description="Quarterly review",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                video_call_url="https://zoom.us/j/12345",
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert "Quarterly review" in body["description"]
+        assert "https://zoom.us/j/12345" in body["description"]
+
+    async def test_video_call_url_takes_precedence_over_meet(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Zoom Meeting",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                video_call_url="https://zoom.us/j/12345",
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert "conferenceData" not in body
+        assert "conferenceDataVersion" not in str(request.url)
+        assert "https://zoom.us/j/12345" in body["description"]
+
+    async def test_video_call_url_without_existing_description(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Teams Meeting",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                video_call_url="https://teams.microsoft.com/l/meetup-join/abc",
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["description"] == "Video Call: https://teams.microsoft.com/l/meetup-join/abc"
+
+    async def test_invalid_video_call_url_not_appended(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Bad URL",
+                description="Existing notes",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                video_call_url="not-a-real-url",
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["description"] == "Existing notes"
+        # Invalid URL must not disable Meet generation — otherwise the event
+        # ends up with neither a Meet link nor a usable custom URL.
+        assert "conferenceData" in body
+        assert request.url.params.get("conferenceDataVersion") == "1"
+
+    async def test_video_call_url_not_duplicated_in_description(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            json=_load_json("create_event.json"),
+        )
+
+        await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Zoom Meeting",
+                description="Join here: https://zoom.us/j/12345",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+                video_call_url="https://zoom.us/j/12345",
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["description"].count("https://zoom.us/j/12345") == 1
 
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
@@ -349,6 +538,130 @@ class TestUpdateEvent:
         assert put_body["summary"] == "New Summary"
         # The description should be preserved from the original event.
         assert put_body["description"] == "Daily standup meeting"
+
+    async def test_with_attendees_sends_invites(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}?sendUpdates=all",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                attendees=["bob@example.com"],
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        assert "sendUpdates=all" in str(put_request.url)
+
+    async def test_without_attendees_omits_send_updates(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                summary="Only title change",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        assert "sendUpdates" not in str(put_request.url)
+
+    async def test_generate_meet_link_adds_conference_data(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}?conferenceDataVersion=1",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                generate_meet_link=True,
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        put_body = json.loads(put_request.content)
+        assert put_body["conferenceData"]["createRequest"]["conferenceSolutionKey"] == {"type": "hangoutsMeet"}
+
+    async def test_video_call_url_appended_to_existing_description(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                video_call_url="https://zoom.us/j/99999",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        put_body = json.loads(put_request.content)
+        # The existing description from get_event.json is "Daily standup meeting".
+        assert "Daily standup meeting" in put_body["description"]
+        assert "https://zoom.us/j/99999" in put_body["description"]
+        assert "conferenceData" not in put_body or "createRequest" not in put_body.get("conferenceData", {})
+
+    async def test_video_call_url_on_update_suppresses_meet(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("update_event.json"),
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(
+                calendar_id=_CALENDAR_ID,
+                event_id=_EVENT_ID,
+                video_call_url="https://zoom.us/j/11111",
+                generate_meet_link=True,
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        put_request = httpx_mock.get_requests()[1]
+        put_body = json.loads(put_request.content)
+        assert "conferenceDataVersion" not in str(put_request.url)
+        # Custom video URL is appended to description; meet link is suppressed.
+        assert "https://zoom.us/j/11111" in put_body["description"]
 
     async def test_get_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")

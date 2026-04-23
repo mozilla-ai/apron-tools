@@ -117,6 +117,8 @@ class CreateEventParams(BaseModel):
     start: EventDateTime
     end: EventDateTime
     attendees: list[str] | None = None
+    generate_meet_link: bool = True
+    video_call_url: str | None = None
 
 
 class UpdateEventParams(BaseModel):
@@ -130,6 +132,8 @@ class UpdateEventParams(BaseModel):
     start: EventDateTime | None = None
     end: EventDateTime | None = None
     attendees: list[str] | None = None
+    generate_meet_link: bool = False
+    video_call_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
