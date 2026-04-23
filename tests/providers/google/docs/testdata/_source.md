@@ -15,3 +15,8 @@
 - **update_document.json:** Based on Docs documents.batchUpdate response.
 - **copy_document.json:** Drive files.copy response.
 - **copy_document_meta.json:** Drive file metadata response for the original document.
+- **update_table_cell_doc.json:** Minimal Docs documents.get response with a single 2x2 table, using the partial-fields mask the tool requests.
+- **update_table_cell_batch.json:** Docs documents.batchUpdate response for the deleteContentRange + insertText pair used to replace a cell.
+- **read_comments.json:** Drive comments.list response including one open comment with a reply and one resolved comment, exercising the ``include_resolved`` filter.
+- **create_comment.json:** Drive comments.create response including ``quotedFileContent``.
+- **reply_to_comment.json:** Drive replies.create response.

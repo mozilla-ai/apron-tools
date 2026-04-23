@@ -1,0 +1,7 @@
+{
+  "documentId": "doc-001",
+  "replies": [{}, {}],
+  "writeControl": {
+    "requiredRevisionId": "revision-003"
+  }
+}

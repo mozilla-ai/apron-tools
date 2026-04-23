@@ -6,17 +6,26 @@ import json
 from pathlib import Path
 
 from apron_tools.providers.google.docs.types import (
+    Comment,
     CopyDocumentParams,
     CopyDocumentResult,
+    CreateCommentParams,
+    CreateCommentResult,
     CreateDocumentParams,
     CreateDocumentResult,
     DocumentFile,
     ListDocumentsParams,
     ListDocumentsResult,
+    ReadCommentsParams,
+    ReadCommentsResult,
     ReadDocumentParams,
     ReadDocumentResult,
+    ReplyToCommentParams,
+    ReplyToCommentResult,
     UpdateDocumentParams,
     UpdateDocumentResult,
+    UpdateTableCellParams,
+    UpdateTableCellResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -268,4 +277,172 @@ class TestCopyDocumentResult:
 
     def test_str_on_error(self):
         result = CopyDocumentResult(success=False, error="Not found")
+        assert str(result) == "Error: Not found"
+
+
+# ---------------------------------------------------------------------------
+# UpdateTableCell
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateTableCellParams:
+    def test_defaults(self):
+        params = UpdateTableCellParams(document_id="doc-001", table_index=0, row=0, column=0)
+        assert params.text == ""
+
+    def test_rejects_negative_indices(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            UpdateTableCellParams(document_id="doc-001", table_index=-1, row=0, column=0)
+        with pytest.raises(ValidationError):
+            UpdateTableCellParams(document_id="doc-001", table_index=0, row=-1, column=0)
+        with pytest.raises(ValidationError):
+            UpdateTableCellParams(document_id="doc-001", table_index=0, row=0, column=-1)
+
+
+class TestUpdateTableCellResult:
+    def test_str_success(self):
+        result = UpdateTableCellResult(
+            success=True,
+            document_id="doc-001",
+            title="Weekly Report",
+            table_index=0,
+            row=1,
+            column=2,
+        )
+        text = str(result)
+        assert "row: 1" in text
+        assert "column: 2" in text
+        assert "Weekly Report" in text
+
+    def test_str_on_error(self):
+        result = UpdateTableCellResult(success=False, error="not found")
+        assert str(result) == "Error: not found"
+
+
+# ---------------------------------------------------------------------------
+# ReadComments
+# ---------------------------------------------------------------------------
+
+
+class TestReadCommentsParams:
+    def test_defaults(self):
+        params = ReadCommentsParams(document_id="doc-001")
+        assert params.max_results == 20
+        assert params.include_resolved is False
+
+
+class TestReadCommentsResult:
+    def test_parse_and_render_comments(self):
+        data = _load_json("read_comments.json")
+        comments = [Comment.model_validate(c) for c in data["comments"]]
+        result = ReadCommentsResult(
+            success=True,
+            document_id="doc-001",
+            title="Project Proposal",
+            comments=comments,
+        )
+        text = str(result)
+        assert "Project Proposal" in text
+        assert "cmt-001" in text
+        assert "Alice" in text
+        assert "Bob" in text
+        assert "Quoted text" in text
+
+    def test_str_on_error(self):
+        result = ReadCommentsResult(success=False, error="Forbidden")
+        assert str(result) == "Error: Forbidden"
+
+    def test_str_empty_open(self):
+        result = ReadCommentsResult(success=True, document_id="doc-001", title="Project")
+        assert "No open comments" in str(result)
+
+    def test_str_empty_include_resolved(self):
+        result = ReadCommentsResult(
+            success=True,
+            document_id="doc-001",
+            title="Project",
+            include_resolved=True,
+        )
+        assert "No comments" in str(result)
+
+    def test_has_more_notice(self):
+        data = _load_json("read_comments.json")
+        comments = [Comment.model_validate(c) for c in data["comments"]]
+        result = ReadCommentsResult(
+            success=True,
+            document_id="doc-001",
+            title="Project",
+            comments=comments,
+            has_more=True,
+        )
+        assert "More comments exist" in str(result)
+
+
+# ---------------------------------------------------------------------------
+# CreateComment
+# ---------------------------------------------------------------------------
+
+
+class TestCreateCommentParams:
+    def test_required_only(self):
+        params = CreateCommentParams(document_id="doc-001", comment="Hi")
+        assert params.quoted_text == ""
+
+
+class TestCreateCommentResult:
+    def test_parse_real_api_response(self):
+        data = _load_json("create_comment.json")
+        result = CreateCommentResult.model_validate(data)
+
+        assert result.success is True
+        assert result.id == "cmt-003"
+        assert result.author.display_name == "Alice"
+        assert result.quoted_file_content is not None
+        assert result.quoted_file_content.value == "the text I am anchoring to"
+
+    def test_str_output_includes_anchor(self):
+        data = _load_json("create_comment.json")
+        result = CreateCommentResult.model_validate(data)
+        text = str(result)
+        assert "cmt-003" in text
+        assert "Alice" in text
+        assert "Anchored to" in text
+
+    def test_str_on_error(self):
+        result = CreateCommentResult(success=False, error="Forbidden")
+        assert str(result) == "Error: Forbidden"
+
+
+# ---------------------------------------------------------------------------
+# ReplyToComment
+# ---------------------------------------------------------------------------
+
+
+class TestReplyToCommentParams:
+    def test_required(self):
+        params = ReplyToCommentParams(document_id="doc-001", comment_id="cmt-001", reply="Thanks")
+        assert params.reply == "Thanks"
+
+
+class TestReplyToCommentResult:
+    def test_parse_real_api_response(self):
+        data = _load_json("reply_to_comment.json")
+        result = ReplyToCommentResult.model_validate(data)
+
+        assert result.success is True
+        assert result.id == "rep-002"
+        assert result.author.display_name == "Bob"
+
+    def test_str_output(self):
+        data = _load_json("reply_to_comment.json")
+        result = ReplyToCommentResult.model_validate(data)
+        text = str(result)
+        assert "rep-002" in text
+        assert "Bob" in text
+
+    def test_str_on_error(self):
+        result = ReplyToCommentResult(success=False, error="Not found")
         assert str(result) == "Error: Not found"

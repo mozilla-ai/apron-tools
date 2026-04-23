@@ -1,0 +1,25 @@
+{
+  "title": "Weekly Report",
+  "body": {
+    "content": [
+      {
+        "table": {
+          "tableRows": [
+            {
+              "tableCells": [
+                {"startIndex": 10, "endIndex": 20},
+                {"startIndex": 20, "endIndex": 30}
+              ]
+            },
+            {
+              "tableCells": [
+                {"startIndex": 30, "endIndex": 40},
+                {"startIndex": 40, "endIndex": 50}
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
