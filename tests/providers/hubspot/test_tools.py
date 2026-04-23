@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.hubspot.tools import (
@@ -1212,21 +1214,9 @@ class TestListPipelines:
         assert pipeline.stages[0].id == "appointmentscheduled"
         assert pipeline.stages[0].label == "Appointment Scheduled"
 
-    async def test_respects_custom_object_type(self, httpx_mock: HTTPXMock) -> None:
-        httpx_mock.add_response(
-            url=f"{_BASE_URL}/crm/v3/pipelines/tickets",
-            method="GET",
-            json={"results": []},
-        )
-
-        result = await hubspot_list_pipelines(
-            ListPipelinesParams(object_type="tickets"),
-            token=_TOKEN,
-        )
-
-        assert result.success is True
-        assert result.object_type == "tickets"
-        assert result.pipelines == []
+    async def test_rejects_non_deal_object_types(self) -> None:
+        with pytest.raises(ValidationError):
+            ListPipelinesParams(object_type="tickets")  # type: ignore[arg-type]
 
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(

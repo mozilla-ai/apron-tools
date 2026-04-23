@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -226,9 +226,14 @@ class LogActivityParams(BaseModel):
 
 
 class ListPipelinesParams(BaseModel):
-    """Parameters for listing CRM pipelines for an object type."""
+    """Parameters for listing CRM pipelines.
 
-    object_type: str = "deals"
+    Restricted to ``deals`` because the tool's declared OAuth scope is
+    ``crm.objects.deals.read``; other pipeline object types (e.g. ``tickets``)
+    require different scopes not currently modelled by this provider.
+    """
+
+    object_type: Literal["deals"] = "deals"
 
 
 class ListOwnersParams(BaseModel):

@@ -582,7 +582,7 @@ async def hubspot_search_meetings(
 
 @tool(
     scopes=SCOPES["hubspot_log_activity"],
-    api_docs="https://developers.hubspot.com/docs/api/crm/calls",
+    api_docs="https://developers.hubspot.com/docs/api/crm/engagements",
     provider="hubspot",
 )
 async def hubspot_log_activity(
@@ -618,8 +618,8 @@ async def hubspot_list_pipelines(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ListPipelinesResult:
-    """List CRM pipelines and their stages for an object type."""
-    object_type = (params.object_type or "deals").strip().lower() or "deals"
+    """List CRM deal pipelines and their stages."""
+    object_type = params.object_type
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             response = await client.get(
