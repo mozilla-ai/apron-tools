@@ -1134,7 +1134,7 @@ class TestChannelIdBoundaryRejection:
         assert result.success is False
         assert "not a valid Slack channel ID" in result.error
         assert "slack_explore_workspace" in result.error
-        assert "request_app_connection" in result.error
+        assert "do not call request_app_connection" in result.error
 
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_read_channel_messages_rejects_name(self, mock_cls: AsyncMock) -> None:

@@ -82,7 +82,17 @@ SCOPES: dict[str, list[SlackScope]] = {
     ],
     "slack_join_channel": [SlackScope.CHANNELS_JOIN],
     "slack_edit_message": [SlackScope.CHAT_WRITE],
-    "slack_get_permalink": [SlackScope.CHANNELS_READ],
+    # slack_get_permalink accepts a channel_id of any type (C/G/D). Slack's
+    # chat.getPermalink resolves the channel server-side and can return
+    # missing_scope for a private channel, DM, or group DM if the
+    # corresponding read scope isn't granted, so list all four here to let
+    # the re-consent modal recommend the one the user actually needs.
+    "slack_get_permalink": [
+        SlackScope.CHANNELS_READ,
+        SlackScope.GROUPS_READ,
+        SlackScope.IM_READ,
+        SlackScope.MPIM_READ,
+    ],
     "slack_get_file_info": [SlackScope.FILES_READ],
     "slack_download_file": [SlackScope.FILES_READ],
     "slack_save_file_for_upload": [SlackScope.FILES_READ],
