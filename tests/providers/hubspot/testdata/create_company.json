@@ -1,0 +1,11 @@
+{
+  "id": "801",
+  "properties": {
+    "createdate": "2024-02-10T08:00:00.000Z",
+    "domain": "acme.com",
+    "name": "Acme Corp"
+  },
+  "createdAt": "2024-02-10T08:00:00.000Z",
+  "updatedAt": "2024-02-10T08:00:00.000Z",
+  "archived": false
+}

@@ -1,0 +1,12 @@
+{
+  "id": "3101",
+  "properties": {
+    "hs_createdate": "2024-04-05T09:00:00.000Z",
+    "hs_task_priority": "HIGH",
+    "hs_task_status": "NOT_STARTED",
+    "hs_task_subject": "Follow up on proposal"
+  },
+  "createdAt": "2024-04-05T09:00:00.000Z",
+  "updatedAt": "2024-04-05T09:00:00.000Z",
+  "archived": false
+}

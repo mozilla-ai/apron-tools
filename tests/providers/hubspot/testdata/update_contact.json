@@ -1,0 +1,12 @@
+{
+  "id": "151",
+  "properties": {
+    "email": "ada@example.com",
+    "firstname": "Ada",
+    "jobtitle": "Senior Engineer",
+    "lastname": "Lovelace"
+  },
+  "createdAt": "2024-03-20T14:05:22.456Z",
+  "updatedAt": "2024-05-02T10:00:00.000Z",
+  "archived": false
+}

@@ -1,0 +1,19 @@
+{
+  "total": 1,
+  "results": [
+    {
+      "id": "4201",
+      "properties": {
+        "hs_call_body": "Reviewed renewal options and pricing tiers.",
+        "hs_call_duration": "1800000",
+        "hs_call_status": "COMPLETED",
+        "hs_call_title": "Q1 Review Call",
+        "hs_timestamp": "2024-04-01T14:00:00.000Z"
+      },
+      "createdAt": "2024-04-01T14:05:00.000Z",
+      "updatedAt": "2024-04-01T14:05:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": null
+}

@@ -1,0 +1,20 @@
+{
+  "total": 1,
+  "results": [
+    {
+      "id": "4401",
+      "properties": {
+        "hs_meeting_body": "Agenda: Q1 roadmap, budget, hiring plan.",
+        "hs_meeting_end_time": "2024-04-03T16:00:00.000Z",
+        "hs_meeting_outcome": "COMPLETED",
+        "hs_meeting_start_time": "2024-04-03T15:00:00.000Z",
+        "hs_meeting_title": "Q1 Planning Meeting",
+        "hs_timestamp": "2024-04-03T15:00:00.000Z"
+      },
+      "createdAt": "2024-04-03T15:05:00.000Z",
+      "updatedAt": "2024-04-03T16:05:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": null
+}
