@@ -1,0 +1,39 @@
+{
+  "kind": "tasks#tasks",
+  "etag": "\"LTExNzUwNjQ4MDA\"",
+  "items": [
+    {
+      "kind": "tasks#task",
+      "id": "task-001",
+      "etag": "\"LTExNzUwNjQ4MDE\"",
+      "title": "Buy groceries",
+      "updated": "2024-01-15T08:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/MDAwMDAwMDAwMA/tasks/task-001",
+      "position": "00000000000000000000",
+      "notes": "pick up milk and eggs",
+      "status": "needsAction",
+      "due": "2024-01-16T00:00:00.000Z"
+    },
+    {
+      "kind": "tasks#task",
+      "id": "task-002",
+      "etag": "\"LTExNzUwNjQ4MDI\"",
+      "title": "Email design review",
+      "updated": "2024-01-14T17:30:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/MDAwMDAwMDAwMA/tasks/task-002",
+      "position": "00000000000000000001",
+      "status": "needsAction"
+    },
+    {
+      "kind": "tasks#task",
+      "id": "task-003",
+      "etag": "\"LTExNzUwNjQ4MDM\"",
+      "title": "Ship it",
+      "updated": "2024-01-12T10:00:00.000Z",
+      "selfLink": "https://www.googleapis.com/tasks/v1/lists/MDAwMDAwMDAwMA/tasks/task-003",
+      "position": "00000000000000000002",
+      "status": "completed",
+      "completed": "2024-01-12T10:00:00.000Z"
+    }
+  ]
+}

@@ -242,6 +242,7 @@ requires-dist = [
     { name = "apron-tools", extras = ["atlassian"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["github"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["google"], marker = "extra == 'all'" },
+    { name = "apron-tools", extras = ["google-tasks"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["linear"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["microsoft"], marker = "extra == 'all'" },
     { name = "apron-tools", extras = ["notion"], marker = "extra == 'all'" },
@@ -262,7 +263,7 @@ requires-dist = [
     { name = "simple-salesforce", marker = "extra == 'salesforce'", specifier = ">=1.0" },
     { name = "slack-sdk", extras = ["optional"], marker = "extra == 'slack'", specifier = ">=3.0" },
 ]
-provides-extras = ["all", "atlassian", "github", "google", "linear", "microsoft", "notion", "powerpoint", "salesforce", "slack", "typeform", "word"]
+provides-extras = ["all", "atlassian", "github", "google", "google-tasks", "linear", "microsoft", "notion", "powerpoint", "salesforce", "slack", "typeform", "word"]
 
 [package.metadata.requires-dev]
 dev = [

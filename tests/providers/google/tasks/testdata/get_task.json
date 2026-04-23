@@ -1,0 +1,12 @@
+{
+  "kind": "tasks#task",
+  "id": "task-001",
+  "etag": "\"LTExNzUwNjQ4MDE\"",
+  "title": "Buy groceries",
+  "updated": "2024-01-15T08:00:00.000Z",
+  "selfLink": "https://www.googleapis.com/tasks/v1/lists/MDAwMDAwMDAwMA/tasks/task-001",
+  "position": "00000000000000000000",
+  "notes": "pick up milk and eggs",
+  "status": "needsAction",
+  "due": "2024-01-16T00:00:00.000Z"
+}
