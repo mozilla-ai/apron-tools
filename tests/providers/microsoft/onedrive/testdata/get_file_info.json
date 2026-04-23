@@ -1,0 +1,9 @@
+{
+  "id": "file-001",
+  "name": "Budget.xlsx",
+  "size": 48332,
+  "lastModifiedDateTime": "2024-03-15T10:30:00Z",
+  "webUrl": "https://onedrive.live.com/view/file-001",
+  "file": {"mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+  "@microsoft.graph.downloadUrl": "https://graph.microsoft.com/download/file-001"
+}
