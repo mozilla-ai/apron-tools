@@ -1,0 +1,15 @@
+{
+  "presentationId": "pres-001",
+  "title": "Cleanup Deck",
+  "slides": [
+    {
+      "objectId": "slide-001",
+      "pageElements": [
+        {
+          "objectId": "shape-001",
+          "shape": {"shapeType": "TEXT_BOX"}
+        }
+      ]
+    }
+  ]
+}

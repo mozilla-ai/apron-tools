@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from apron_tools.providers.google.slides.types import (
     AddSlideParams,
     AddSlideResult,
@@ -12,6 +14,10 @@ from apron_tools.providers.google.slides.types import (
     CopyPresentationResult,
     CreatePresentationParams,
     CreatePresentationResult,
+    DeleteShapeParams,
+    DeleteShapeResult,
+    DeleteSlideParams,
+    DeleteSlideResult,
     DuplicateSlideParams,
     DuplicateSlideResult,
     FormatTextParams,
@@ -24,6 +30,8 @@ from apron_tools.providers.google.slides.types import (
     ReadPresentationParams,
     ReadPresentationResult,
     SlideInfo,
+    UpdateSlideBackgroundParams,
+    UpdateSlideBackgroundResult,
     UpdateSlideTextParams,
     UpdateSlideTextResult,
     UpdateTableCellParams,
@@ -543,3 +551,117 @@ class TestFormatTextResult:
     def test_str_on_error(self):
         result = FormatTextResult(success=False, error="Object not found")
         assert str(result) == "Error: Object not found"
+
+
+# ---------------------------------------------------------------------------
+# DeleteShapeParams / DeleteShapeResult
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteShapeParams:
+    def test_required(self):
+        params = DeleteShapeParams(
+            presentation_id="pres-001",
+            slide_id="slide-001",
+            shape_id="shape-001",
+        )
+        assert params.presentation_id == "pres-001"
+        assert params.slide_id == "slide-001"
+        assert params.shape_id == "shape-001"
+
+
+class TestDeleteShapeResult:
+    def test_success_str(self):
+        result = DeleteShapeResult(
+            success=True,
+            presentation_id="pres-001",
+            slide_id="slide-001",
+            shape_id="shape-001",
+        )
+        assert "shape-001" in str(result)
+        assert "slide-001" in str(result)
+
+    def test_str_on_error(self):
+        result = DeleteShapeResult(success=False, error="Shape not found")
+        assert str(result) == "Error: Shape not found"
+
+
+# ---------------------------------------------------------------------------
+# DeleteSlideParams / DeleteSlideResult
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteSlideParams:
+    def test_required(self):
+        params = DeleteSlideParams(presentation_id="pres-001", slide_id="slide-001")
+        assert params.presentation_id == "pres-001"
+        assert params.slide_id == "slide-001"
+
+
+class TestDeleteSlideResult:
+    def test_success_str(self):
+        result = DeleteSlideResult(
+            success=True,
+            presentation_id="pres-001",
+            slide_id="slide-001",
+        )
+        assert "slide-001" in str(result)
+
+    def test_str_on_error(self):
+        result = DeleteSlideResult(success=False, error="Slide not found")
+        assert str(result) == "Error: Slide not found"
+
+
+# ---------------------------------------------------------------------------
+# UpdateSlideBackgroundParams / UpdateSlideBackgroundResult
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateSlideBackgroundParams:
+    def test_hex_color(self):
+        params = UpdateSlideBackgroundParams(
+            presentation_id="pres-001",
+            slide_id="slide-001",
+            background_color="#FFFFFF",
+        )
+        assert params.background_color == "#FFFFFF"
+        assert params.theme_color is None
+
+    def test_theme_color(self):
+        params = UpdateSlideBackgroundParams(
+            presentation_id="pres-001",
+            slide_id="slide-001",
+            theme_color="ACCENT1",
+        )
+        assert params.theme_color == "ACCENT1"
+        assert params.background_color is None
+
+    def test_requires_one_color(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            UpdateSlideBackgroundParams(
+                presentation_id="pres-001",
+                slide_id="slide-001",
+            )
+
+    def test_rejects_both_colors(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            UpdateSlideBackgroundParams(
+                presentation_id="pres-001",
+                slide_id="slide-001",
+                background_color="#FFFFFF",
+                theme_color="ACCENT1",
+            )
+
+
+class TestUpdateSlideBackgroundResult:
+    def test_success_str(self):
+        result = UpdateSlideBackgroundResult(
+            success=True,
+            presentation_id="pres-001",
+            slide_id="slide-001",
+        )
+        assert "slide-001" in str(result)
+
+    def test_str_on_error(self):
+        result = UpdateSlideBackgroundResult(success=False, error="Slide not found")
+        assert str(result) == "Error: Slide not found"

@@ -6,18 +6,22 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import httpx
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.slides.tools import (
     google_slides_add_slide,
     google_slides_copy_presentation,
     google_slides_create_presentation,
+    google_slides_delete_shape,
+    google_slides_delete_slide,
     google_slides_duplicate_slide,
     google_slides_format_text,
     google_slides_insert_element,
     google_slides_insert_image,
     google_slides_list_presentations,
     google_slides_read_presentation,
+    google_slides_update_slide_background,
     google_slides_update_slide_text,
     google_slides_update_table_cell,
 )
@@ -28,6 +32,10 @@ from apron_tools.providers.google.slides.types import (
     CopyPresentationResult,
     CreatePresentationParams,
     CreatePresentationResult,
+    DeleteShapeParams,
+    DeleteShapeResult,
+    DeleteSlideParams,
+    DeleteSlideResult,
     DuplicateSlideParams,
     DuplicateSlideResult,
     FormatTextParams,
@@ -40,6 +48,8 @@ from apron_tools.providers.google.slides.types import (
     ListPresentationsResult,
     ReadPresentationParams,
     ReadPresentationResult,
+    UpdateSlideBackgroundParams,
+    UpdateSlideBackgroundResult,
     UpdateSlideTextParams,
     UpdateSlideTextResult,
     UpdateTableCellParams,
@@ -51,6 +61,14 @@ _TOKEN = "test_oauth_token_abc123"
 _SLIDES_BASE = "https://slides.googleapis.com/v1/presentations"
 _DRIVE_BASE = "https://www.googleapis.com/drive/v3/files"
 _PRES_ID = "pres-001"
+_DELETE_SHAPE_GET_URL = httpx.URL(
+    f"{_SLIDES_BASE}/{_PRES_ID}",
+    params={"fields": "slides(objectId,pageElements(objectId))"},
+)
+_SLIDE_ONLY_GET_URL = httpx.URL(
+    f"{_SLIDES_BASE}/{_PRES_ID}",
+    params={"fields": "slides(objectId)"},
+)
 
 
 def _load_json(filename: str) -> dict | list:
@@ -935,4 +953,379 @@ class TestGoogleSlidesInsertImage:
         assert defn.provider == "google"
         assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
+        assert "https://www.googleapis.com/auth/presentations" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# delete_shape
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteShape:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_DELETE_SHAPE_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            json=_load_json("batch_update_generic.json"),
+        )
+
+        result = await google_slides_delete_shape(
+            DeleteShapeParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                shape_id="shape-001",
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, DeleteShapeResult)
+        assert result.success is True
+        assert result.presentation_id == _PRES_ID
+        assert result.slide_id == "slide-001"
+        assert result.shape_id == "shape-001"
+
+        # The batchUpdate body should contain a single deleteObject request.
+        batch_request = httpx_mock.get_requests(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+        )[0]
+        body = json.loads(batch_request.content)
+        assert body["requests"] == [{"deleteObject": {"objectId": "shape-001"}}]
+
+    async def test_slide_not_found(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_DELETE_SHAPE_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+
+        result = await google_slides_delete_shape(
+            DeleteShapeParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-missing",
+                shape_id="shape-001",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "slide-missing" in result.error
+
+    async def test_shape_not_found(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_DELETE_SHAPE_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+
+        result = await google_slides_delete_shape(
+            DeleteShapeParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                shape_id="shape-missing",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "shape-missing" in result.error
+
+    async def test_read_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
+
+        result = await google_slides_delete_shape(
+            DeleteShapeParams(
+                presentation_id="bad_id",
+                slide_id="slide-001",
+                shape_id="shape-001",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_batch_update_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_DELETE_SHAPE_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            status_code=400,
+            text="Bad Request",
+        )
+
+        result = await google_slides_delete_shape(
+            DeleteShapeParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                shape_id="shape-001",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "400" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = google_slides_delete_shape._tool_definition
+        assert defn.name == "google_slides_delete_shape"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
+        assert "https://www.googleapis.com/auth/presentations" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# delete_slide
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteSlide:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_SLIDE_ONLY_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            json=_load_json("batch_update_generic.json"),
+        )
+
+        result = await google_slides_delete_slide(
+            DeleteSlideParams(presentation_id=_PRES_ID, slide_id="slide-001"),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, DeleteSlideResult)
+        assert result.success is True
+        assert result.presentation_id == _PRES_ID
+        assert result.slide_id == "slide-001"
+
+        batch_request = httpx_mock.get_requests(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+        )[0]
+        body = json.loads(batch_request.content)
+        assert body["requests"] == [{"deleteObject": {"objectId": "slide-001"}}]
+
+    async def test_slide_not_found(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_SLIDE_ONLY_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+
+        result = await google_slides_delete_slide(
+            DeleteSlideParams(presentation_id=_PRES_ID, slide_id="slide-missing"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "slide-missing" in result.error
+
+    async def test_read_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
+
+        result = await google_slides_delete_slide(
+            DeleteSlideParams(presentation_id="bad_id", slide_id="slide-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_batch_update_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_SLIDE_ONLY_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            status_code=400,
+            text="Bad Request",
+        )
+
+        result = await google_slides_delete_slide(
+            DeleteSlideParams(presentation_id=_PRES_ID, slide_id="slide-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "400" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = google_slides_delete_slide._tool_definition
+        assert defn.name == "google_slides_delete_slide"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
+        assert "https://www.googleapis.com/auth/presentations" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# update_slide_background
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateSlideBackground:
+    async def test_success_hex_color(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_SLIDE_ONLY_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            json=_load_json("batch_update_generic.json"),
+        )
+
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                background_color="#202124",
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, UpdateSlideBackgroundResult)
+        assert result.success is True
+        assert result.slide_id == "slide-001"
+
+        batch_request = httpx_mock.get_requests(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+        )[0]
+        body = json.loads(batch_request.content)
+        update_request = body["requests"][0]["updatePageProperties"]
+        assert update_request["objectId"] == "slide-001"
+        rgb = update_request["pageProperties"]["pageBackgroundFill"]["solidFill"]["color"]["rgbColor"]
+        # ``0x24`` = 36 decimal, the blue channel of ``#202124``.
+        assert rgb["blue"] == 36 / 255
+
+    async def test_success_theme_color(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_SLIDE_ONLY_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            json=_load_json("batch_update_generic.json"),
+        )
+
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                theme_color="ACCENT1",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+
+        batch_request = httpx_mock.get_requests(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+        )[0]
+        body = json.loads(batch_request.content)
+        update_request = body["requests"][0]["updatePageProperties"]
+        color = update_request["pageProperties"]["pageBackgroundFill"]["solidFill"]["color"]
+        assert color == {"themeColor": "ACCENT1"}
+
+    async def test_invalid_hex_color_returns_error(self) -> None:
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                background_color="#ZZZZZZ",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "Invalid hex color" in result.error
+
+    async def test_short_hex_color_returns_error(self) -> None:
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                background_color="#FFF",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "Invalid hex color" in result.error
+
+    async def test_multi_hash_hex_color_returns_error(self) -> None:
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                background_color="##FFFFFF",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "Invalid hex color" in result.error
+
+    async def test_slide_not_found(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_SLIDE_ONLY_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-missing",
+                background_color="#000000",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "slide-missing" in result.error
+
+    async def test_read_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
+
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id="bad_id",
+                slide_id="slide-001",
+                background_color="#000000",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_batch_update_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=_SLIDE_ONLY_GET_URL,
+            json=_load_json("presentation_with_shape.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            status_code=400,
+            text="Bad Request",
+        )
+
+        result = await google_slides_update_slide_background(
+            UpdateSlideBackgroundParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                background_color="#000000",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "400" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = google_slides_update_slide_background._tool_definition
+        assert defn.name == "google_slides_update_slide_background"
+        assert defn.provider == "google"
+        assert defn.service == "google_slides"
         assert "https://www.googleapis.com/auth/presentations" in defn.scopes

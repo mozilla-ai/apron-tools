@@ -116,6 +116,42 @@ class FormatTextParams(BaseModel):
     end_index: int | None = None
 
 
+class DeleteShapeParams(BaseModel):
+    """Parameters for deleting a shape or page element from a slide."""
+
+    presentation_id: str
+    slide_id: str
+    shape_id: str
+
+
+class DeleteSlideParams(BaseModel):
+    """Parameters for deleting a slide from a presentation."""
+
+    presentation_id: str
+    slide_id: str
+
+
+class UpdateSlideBackgroundParams(BaseModel):
+    """Parameters for updating a slide's background fill.
+
+    Exactly one of ``background_color`` or ``theme_color`` must be supplied.
+    ``background_color`` is a ``#RRGGBB`` hex string. ``theme_color`` is a
+    Slides API ``ThemeColorType`` value (e.g. ``DARK1``, ``ACCENT1``).
+    """
+
+    presentation_id: str
+    slide_id: str
+    background_color: str | None = None
+    theme_color: str | None = None
+
+    @model_validator(mode="after")
+    def _require_exactly_one_color(self) -> UpdateSlideBackgroundParams:
+        """Enforce that exactly one color source is provided."""
+        if bool(self.background_color) == bool(self.theme_color):
+            raise ValueError("Provide exactly one of background_color or theme_color when updating a slide background.")
+        return self
+
+
 # ---------------------------------------------------------------------------
 # Shared nested models
 # ---------------------------------------------------------------------------
@@ -443,3 +479,49 @@ class InsertImageResult(ToolResult):
             return f"Error: {self.error}"
         url = f"https://docs.google.com/presentation/d/{self.presentation_id}/edit"
         return f"Image '{self.filename}' inserted (id={self.image_id}).\nPresentation URL: {url}"
+
+
+class DeleteShapeResult(ToolResult):
+    """Result of deleting a shape from a slide."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    presentation_id: str = ""
+    slide_id: str = ""
+    shape_id: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the shape deletion."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Shape {self.shape_id} deleted from slide {self.slide_id}."
+
+
+class DeleteSlideResult(ToolResult):
+    """Result of deleting a slide from a presentation."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    presentation_id: str = ""
+    slide_id: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the slide deletion."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Slide {self.slide_id} deleted."
+
+
+class UpdateSlideBackgroundResult(ToolResult):
+    """Result of updating a slide's background fill."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    presentation_id: str = ""
+    slide_id: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the background update."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Background updated for slide {self.slide_id}."

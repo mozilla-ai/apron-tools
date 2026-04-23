@@ -21,3 +21,4 @@
 - **batch_update_add_slide.json:** Slides presentations.batchUpdate response for createSlide.
 - **batch_update_duplicate.json:** Slides presentations.batchUpdate response for duplicateObject.
 - **batch_update_generic.json:** Generic batchUpdate response for text/element operations.
+- **presentation_with_shape.json:** Minimal Slides presentations.get response containing a single slide with a single page element; used by delete/background tools that verify targets exist before batch-updating.
