@@ -995,6 +995,7 @@ class TestCreateBranch:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
+            mock_repo.html_url = "https://github.com/octocat/Hello-World"
             mock_g.get_repo.return_value = mock_repo
             mock_repo.get_git_ref.return_value = source_ref
 

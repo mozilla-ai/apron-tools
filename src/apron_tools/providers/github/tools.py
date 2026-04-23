@@ -726,7 +726,8 @@ async def github_create_branch(
             source_ref = repo.get_git_ref(f"heads/{params.source_branch}")
             sha = source_ref.object.sha
             repo.create_git_ref(ref=f"refs/heads/{params.branch_name}", sha=sha)
-            url = f"https://github.com/{params.owner}/{params.repo}/tree/{params.branch_name}"
+            repo_html_url = str(repo.html_url).rstrip("/")
+            url = f"{repo_html_url}/tree/{params.branch_name}"
             return CreateBranchResult(
                 success=True,
                 branch_name=params.branch_name,
