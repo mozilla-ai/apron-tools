@@ -258,12 +258,20 @@ class ReadPresentationResult(ToolResult):
 
 
 class AddSlideResult(ToolResult):
-    """Result of adding a slide to a presentation."""
+    """Result of adding a slide to a presentation.
+
+    Attributes:
+        fallback_reason: Populated when the requested layout could not be
+            resolved to a layout object on the presentation and the tool fell
+            back to the Slides API's predefined layout enum. ``None`` when the
+            requested layout matched a layout object on the presentation.
+    """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     presentation_id: str = Field(default="", alias="presentationId")
     slide_id: str = ""
+    fallback_reason: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -280,7 +288,10 @@ class AddSlideResult(ToolResult):
         """Return an LLM-readable summary of the added slide."""
         if not self.success:
             return f"Error: {self.error}"
-        return f"Slide added (id={self.slide_id})."
+        summary = f"Slide added (id={self.slide_id})."
+        if self.fallback_reason:
+            summary += f" Layout fallback: {self.fallback_reason}"
+        return summary
 
 
 class UpdateSlideTextResult(ToolResult):

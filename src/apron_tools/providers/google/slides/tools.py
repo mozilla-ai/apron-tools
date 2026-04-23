@@ -66,6 +66,37 @@ def _extract_slide_text(slide: dict) -> list[str]:
     return texts
 
 
+def _find_layout_by_name(layouts: list[dict], requested_layout: str) -> dict | None:
+    """Return the layout object whose name matches the requested layout.
+
+    The match is case-insensitive because the Slides API uses uppercase
+    predefined layout names (BLANK, TITLE_AND_BODY, ...) but callers may pass
+    any case.
+    """
+    normalized = requested_layout.upper()
+    for layout in layouts:
+        name = layout.get("layoutProperties", {}).get("name", "").upper()
+        if name == normalized:
+            return layout
+    return None
+
+
+async def _read_presentation_raw(
+    presentation_id: str, token: str, base_url: str, client: httpx.AsyncClient
+) -> tuple[dict | None, str | None]:
+    """Fetch the raw presentations.get payload or return an error string."""
+    try:
+        resp = await client.get(
+            f"{base_url}/{presentation_id}",
+            headers=_headers(token),
+        )
+    except httpx.HTTPError as exc:
+        return None, str(exc)
+    if not resp.is_success:
+        return None, f"Slides API error {resp.status_code}: {resp.text}"
+    return resp.json(), None
+
+
 @tool(
     scopes=SCOPES["google_slides_list_presentations"],
     api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/list",
@@ -262,26 +293,53 @@ async def google_slides_add_slide(
     token: str,
     base_url: str = _SLIDES_BASE_URL,
 ) -> AddSlideResult:
-    """Add a new slide to a Google Slides presentation."""
+    """Add a new slide to a Google Slides presentation.
+
+    The tool first reads the presentation to resolve ``params.layout`` to a
+    concrete layout object (referenced by ``layoutId``) when one is present.
+    If the presentation does not expose a matching layout, the tool falls back
+    to the Slides API's ``predefinedLayout`` enum and records the fallback on
+    the result so the caller can surface it.
+    """
     slide_id = f"slide_{uuid.uuid4().hex[:8]}"
-    create_slide: dict = {
-        "objectId": slide_id,
-        "slideLayoutReference": {"predefinedLayout": params.layout},
-    }
-    if params.insertion_index is not None:
-        create_slide["insertionIndex"] = params.insertion_index
+    normalized_layout = params.layout.upper()
 
-    body = {"requests": [{"createSlide": create_slide}]}
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        presentation, err = await _read_presentation_raw(params.presentation_id, token, base_url, client)
+        if err is not None:
+            return AddSlideResult(success=False, error=err)
 
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        layouts = presentation.get("layouts", []) if presentation else []
+        matched_layout = _find_layout_by_name(layouts, params.layout)
+
+        create_slide: dict = {"objectId": slide_id}
+        fallback_reason: str | None = None
+        if matched_layout is not None:
+            create_slide["slideLayoutReference"] = {"layoutId": matched_layout["objectId"]}
+        else:
+            create_slide["slideLayoutReference"] = {"predefinedLayout": normalized_layout}
+            # BLANK is always available as a predefined layout, so a missing
+            # layout object is not a surprising fallback and does not need a
+            # user-facing note.
+            if normalized_layout != "BLANK":
+                fallback_reason = (
+                    f"requested layout '{normalized_layout}' was not found on the "
+                    "presentation; fell back to the predefined layout enum."
+                )
+
+        if params.insertion_index is not None:
+            create_slide["insertionIndex"] = params.insertion_index
+
+        body = {"requests": [{"createSlide": create_slide}]}
+
+        try:
             resp = await client.post(
                 f"{base_url}/{params.presentation_id}:batchUpdate",
                 headers=_headers(token, content_type=True),
                 json=body,
             )
-    except httpx.HTTPError as exc:
-        return AddSlideResult(success=False, error=str(exc))
+        except httpx.HTTPError as exc:
+            return AddSlideResult(success=False, error=str(exc))
 
     if not resp.is_success:
         return AddSlideResult(
@@ -291,6 +349,7 @@ async def google_slides_add_slide(
 
     result = AddSlideResult.model_validate(resp.json())
     result.presentation_id = params.presentation_id
+    result.fallback_reason = fallback_reason
     return result
 
 
