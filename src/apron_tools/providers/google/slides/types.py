@@ -295,12 +295,19 @@ class AddSlideResult(ToolResult):
 
 
 class UpdateSlideTextResult(ToolResult):
-    """Result of updating text in a slide."""
+    """Result of updating text in a slide.
+
+    Attributes:
+        fallback_reason: Populated when the caller-supplied ``shape_id`` was
+            not found on the slide and the tool created a new text box
+            instead. ``None`` when the shape existed (or was never requested).
+    """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     presentation_id: str = Field(default="", alias="presentationId")
     shape_id: str = ""
+    fallback_reason: str | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -314,7 +321,10 @@ class UpdateSlideTextResult(ToolResult):
         """Return an LLM-readable summary of the text update."""
         if not self.success:
             return f"Error: {self.error}"
-        return f"Text updated in shape {self.shape_id}."
+        summary = f"Text updated in shape {self.shape_id}."
+        if self.fallback_reason:
+            summary += f" {self.fallback_reason}"
+        return summary
 
 
 class DuplicateSlideResult(ToolResult):

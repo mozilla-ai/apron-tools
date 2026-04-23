@@ -400,7 +400,11 @@ class TestAddSlide:
 
 
 class TestUpdateSlideText:
-    async def test_success_existing_shape(self, httpx_mock: HTTPXMock) -> None:
+    async def test_success_existing_shape_with_text(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            json=_load_json("read_presentation_with_layouts.json"),
+        )
         httpx_mock.add_response(
             url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
             json=_load_json("batch_update_generic.json"),
@@ -411,16 +415,115 @@ class TestUpdateSlideText:
                 presentation_id=_PRES_ID,
                 slide_id="slide-001",
                 text="Updated text",
-                shape_id="elem-001",
+                shape_id="shape-with-text",
             ),
             token=_TOKEN,
         )
 
         assert isinstance(result, UpdateSlideTextResult)
         assert result.success is True
-        assert result.shape_id == "elem-001"
+        assert result.shape_id == "shape-with-text"
+        assert result.fallback_reason is None
+
+        batch_req = next(r for r in httpx_mock.get_requests() if r.url.path.endswith(":batchUpdate"))
+        body = json.loads(batch_req.content)
+        requests = body["requests"]
+        assert len(requests) == 2
+        assert "deleteText" in requests[0]
+        assert requests[1]["insertText"]["text"] == "Updated text"
+
+    async def test_skips_delete_text_for_empty_shape(self, httpx_mock: HTTPXMock) -> None:
+        # The Slides API rejects deleteText when the shape has no text. The
+        # tool must detect that and send only an insertText request.
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            json=_load_json("read_presentation_with_layouts.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            json=_load_json("batch_update_generic.json"),
+        )
+
+        result = await google_slides_update_slide_text(
+            UpdateSlideTextParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                text="Fresh text",
+                shape_id="shape-empty",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.shape_id == "shape-empty"
+
+        batch_req = next(r for r in httpx_mock.get_requests() if r.url.path.endswith(":batchUpdate"))
+        body = json.loads(batch_req.content)
+        requests = body["requests"]
+        assert len(requests) == 1
+        assert "deleteText" not in requests[0]
+        assert requests[0]["insertText"]["text"] == "Fresh text"
+
+    async def test_missing_shape_falls_back_to_new_textbox(self, httpx_mock: HTTPXMock) -> None:
+        # If the caller-supplied shape_id is not present on the slide, the
+        # tool creates a replacement text box and notes the fallback.
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            json=_load_json("read_presentation_with_layouts.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            json=_load_json("batch_update_generic.json"),
+        )
+
+        with patch("apron_tools.providers.google.slides.tools.uuid.uuid4") as mock_uuid:
+            mock_uuid.return_value.hex = "deadbeef11223344"  # pragma: allowlist secret
+            result = await google_slides_update_slide_text(
+                UpdateSlideTextParams(
+                    presentation_id=_PRES_ID,
+                    slide_id="slide-001",
+                    text="Replacement",
+                    shape_id="shape-missing",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        assert result.shape_id == "textbox_deadbeef"
+        assert result.fallback_reason is not None
+        assert "shape-missing" in result.fallback_reason
+
+        batch_req = next(r for r in httpx_mock.get_requests() if r.url.path.endswith(":batchUpdate"))
+        body = json.loads(batch_req.content)
+        requests = body["requests"]
+        assert len(requests) == 2
+        assert requests[0]["createShape"]["objectId"] == "textbox_deadbeef"
+        assert requests[1]["insertText"]["objectId"] == "textbox_deadbeef"
+
+    async def test_missing_slide_returns_error(self, httpx_mock: HTTPXMock) -> None:
+        # An unknown slide_id must short-circuit before the batchUpdate call.
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            json=_load_json("read_presentation_with_layouts.json"),
+        )
+
+        result = await google_slides_update_slide_text(
+            UpdateSlideTextParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-does-not-exist",
+                text="test",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "slide-does-not-exist" in result.error
 
     async def test_success_new_textbox(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            json=_load_json("read_presentation_with_layouts.json"),
+        )
         httpx_mock.add_response(
             url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
             json=_load_json("batch_update_generic.json"),
@@ -440,8 +543,8 @@ class TestUpdateSlideText:
         assert result.success is True
         assert result.shape_id == "textbox_aabbccdd"
 
-    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
-        httpx_mock.add_response(status_code=400, text="Bad Request")
+    async def test_read_error_propagates(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
 
         result = await google_slides_update_slide_text(
             UpdateSlideTextParams(
@@ -449,6 +552,30 @@ class TestUpdateSlideText:
                 slide_id="slide-001",
                 text="test",
                 shape_id="elem-001",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_batch_update_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}",
+            json=_load_json("read_presentation_with_layouts.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_SLIDES_BASE}/{_PRES_ID}:batchUpdate",
+            status_code=400,
+            text="Bad Request",
+        )
+
+        result = await google_slides_update_slide_text(
+            UpdateSlideTextParams(
+                presentation_id=_PRES_ID,
+                slide_id="slide-001",
+                text="test",
+                shape_id="shape-with-text",
             ),
             token=_TOKEN,
         )

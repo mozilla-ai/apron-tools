@@ -81,6 +81,37 @@ def _find_layout_by_name(layouts: list[dict], requested_layout: str) -> dict | N
     return None
 
 
+def _find_slide_by_id(presentation: dict, slide_id: str) -> dict | None:
+    """Return the slide matching the given object ID, if present."""
+    for slide in presentation.get("slides", []):
+        if slide.get("objectId") == slide_id:
+            return slide
+    return None
+
+
+def _find_shape_by_id(slide: dict, shape_id: str) -> dict | None:
+    """Return the shape matching the given object ID on a slide, if present."""
+    for element in slide.get("pageElements", []):
+        if element.get("objectId") == shape_id:
+            return element.get("shape")
+    return None
+
+
+def _shape_has_text(shape: dict | None) -> bool:
+    """Return True when a shape contains non-whitespace text content.
+
+    The Slides API rejects deleteText on a shape that has no text, so we must
+    probe the shape's textElements before emitting a deleteText request.
+    """
+    if not shape:
+        return False
+    for text_element in shape.get("text", {}).get("textElements", []):
+        content = text_element.get("textRun", {}).get("content", "")
+        if content.strip():
+            return True
+    return False
+
+
 async def _read_presentation_raw(
     presentation_id: str, token: str, base_url: str, client: httpx.AsyncClient
 ) -> tuple[dict | None, str | None]:
@@ -95,6 +126,87 @@ async def _read_presentation_raw(
     if not resp.is_success:
         return None, f"Slides API error {resp.status_code}: {resp.text}"
     return resp.json(), None
+
+
+def _build_text_box_request(slide_id: str, shape_id: str) -> dict:
+    """Build a createShape request for a default-sized text box."""
+    return {
+        "createShape": {
+            "objectId": shape_id,
+            "shapeType": "TEXT_BOX",
+            "elementProperties": {
+                "pageObjectId": slide_id,
+                "size": {
+                    "width": {"magnitude": 400, "unit": "PT"},
+                    "height": {"magnitude": 50, "unit": "PT"},
+                },
+                "transform": {
+                    "scaleX": 1,
+                    "scaleY": 1,
+                    "translateX": 100,
+                    "translateY": 100,
+                    "unit": "PT",
+                },
+            },
+        }
+    }
+
+
+def _build_update_slide_text_requests(
+    *,
+    slide_id: str,
+    text: str,
+    target_shape_id: str | None,
+    existing_shape: dict | None,
+) -> list[dict]:
+    """Build batchUpdate requests to write ``text`` onto ``slide_id``.
+
+    When ``target_shape_id`` is provided the request list reuses the existing
+    shape, emitting a ``deleteText`` only when the shape has content (the
+    Slides API rejects ``deleteText`` on an empty shape). Otherwise a new
+    text box is created and populated.
+    """
+    if target_shape_id:
+        requests: list[dict] = []
+        if _shape_has_text(existing_shape):
+            requests.append({"deleteText": {"objectId": target_shape_id, "textRange": {"type": "ALL"}}})
+        requests.append(
+            {
+                "insertText": {
+                    "objectId": target_shape_id,
+                    "insertionIndex": 0,
+                    "text": text,
+                }
+            }
+        )
+        return requests
+
+    new_shape_id = f"textbox_{uuid.uuid4().hex[:8]}"
+    return [
+        _build_text_box_request(slide_id, new_shape_id),
+        {
+            "insertText": {
+                "objectId": new_shape_id,
+                "insertionIndex": 0,
+                "text": text,
+            }
+        },
+    ]
+
+
+def _resolve_update_target_shape_id(requests: list[dict]) -> str:
+    """Return the object ID that the update_slide_text batch writes into.
+
+    For existing-shape updates the first request is either ``deleteText`` or
+    ``insertText`` on the caller-supplied shape. For new text boxes the first
+    request is ``createShape`` and subsequent ``insertText`` targets that ID.
+    """
+    for key in ("createShape", "insertText", "deleteText"):
+        for request in requests:
+            payload = request.get(key)
+            if payload is not None:
+                return payload["objectId"]
+    return ""
 
 
 @tool(
@@ -365,68 +477,62 @@ async def google_slides_update_slide_text(
     token: str,
     base_url: str = _SLIDES_BASE_URL,
 ) -> UpdateSlideTextResult:
-    """Update text content in a slide shape or text box."""
-    requests: list[dict] = []
-    target_shape_id = params.shape_id
+    """Update text content in a slide shape or text box.
 
-    if target_shape_id:
-        # Replace text in an existing shape.
-        requests.append({"deleteText": {"objectId": target_shape_id, "textRange": {"type": "ALL"}}})
-        requests.append(
-            {
-                "insertText": {
-                    "objectId": target_shape_id,
-                    "insertionIndex": 0,
-                    "text": params.text,
-                }
-            }
-        )
-    else:
-        # Create a new text box on the slide.
-        target_shape_id = f"textbox_{uuid.uuid4().hex[:8]}"
-        requests.append(
-            {
-                "createShape": {
-                    "objectId": target_shape_id,
-                    "shapeType": "TEXT_BOX",
-                    "elementProperties": {
-                        "pageObjectId": params.slide_id,
-                        "size": {
-                            "width": {"magnitude": 400, "unit": "PT"},
-                            "height": {"magnitude": 50, "unit": "PT"},
-                        },
-                        "transform": {
-                            "scaleX": 1,
-                            "scaleY": 1,
-                            "translateX": 100,
-                            "translateY": 100,
-                            "unit": "PT",
-                        },
-                    },
-                }
-            }
-        )
-        requests.append(
-            {
-                "insertText": {
-                    "objectId": target_shape_id,
-                    "insertionIndex": 0,
-                    "text": params.text,
-                }
-            }
-        )
+    The tool reads the presentation first so it can validate the target slide
+    and shape. Three edge cases are handled explicitly:
 
-    body = {"requests": requests}
+    * Unknown ``slide_id`` returns an error before any mutation.
+    * A caller-supplied ``shape_id`` that is not present on the slide triggers
+      a fallback that creates a new text box and reports the substitution via
+      ``fallback_reason``.
+    * An existing shape that contains no text skips the ``deleteText`` request
+      because the Slides API rejects it on an empty shape.
+    """
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        presentation, err = await _read_presentation_raw(params.presentation_id, token, base_url, client)
+        if err is not None or presentation is None:
+            return UpdateSlideTextResult(success=False, error=err or "Failed to read presentation.")
 
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        slide = _find_slide_by_id(presentation, params.slide_id)
+        if slide is None:
+            return UpdateSlideTextResult(
+                success=False,
+                error=f"Slide '{params.slide_id}' was not found in the presentation.",
+            )
+
+        target_shape_id = params.shape_id
+        fallback_reason: str | None = None
+        existing_shape: dict | None = None
+
+        if target_shape_id:
+            existing_shape = _find_shape_by_id(slide, target_shape_id)
+            if existing_shape is None:
+                fallback_reason = (
+                    f"Requested shape_id '{target_shape_id}' was not found on slide "
+                    f"'{params.slide_id}'; created a new text box instead."
+                )
+                target_shape_id = None
+
+        requests = _build_update_slide_text_requests(
+            slide_id=params.slide_id,
+            text=params.text,
+            target_shape_id=target_shape_id,
+            existing_shape=existing_shape,
+        )
+        # _build_update_slide_text_requests assigns a fresh text box ID when
+        # the shape is missing, so re-read the target shape ID from the
+        # resulting request payload.
+        target_shape_id = _resolve_update_target_shape_id(requests)
+
+        try:
             resp = await client.post(
                 f"{base_url}/{params.presentation_id}:batchUpdate",
                 headers=_headers(token, content_type=True),
-                json=body,
+                json={"requests": requests},
             )
-    except httpx.HTTPError as exc:
-        return UpdateSlideTextResult(success=False, error=str(exc))
+        except httpx.HTTPError as exc:
+            return UpdateSlideTextResult(success=False, error=str(exc))
 
     if not resp.is_success:
         return UpdateSlideTextResult(
@@ -438,6 +544,7 @@ async def google_slides_update_slide_text(
         success=True,
         presentation_id=params.presentation_id,
         shape_id=target_shape_id,
+        fallback_reason=fallback_reason,
     )
 
 
