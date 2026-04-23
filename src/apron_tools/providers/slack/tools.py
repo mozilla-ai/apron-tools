@@ -86,10 +86,13 @@ _SLACK_NON_PERMISSION_ERRORS = frozenset(
 # anything else is treated as a container and walked recursively.
 _TEXT_NODE_TYPES = frozenset({"mrkdwn", "plain_text", "text"})
 
-# Keys on legacy Slack attachment dicts that carry raw human-readable strings.
-# ``fallback`` and ``pretext`` wrap the attachment, ``title``/``value`` come
-# from ``fields``, and ``text`` is the attachment body itself.
-_RAW_TEXT_KEYS = ("text", "pretext", "fallback", "title", "value")
+# Keys on legacy Slack attachment dicts that carry raw human-readable strings,
+# listed in the order Slack renders them so the extracted text preserves the
+# author's intended reading order: ``pretext`` sits above the attachment body,
+# the attachment ``title`` sits above ``text`` (body), ``value`` pairs with
+# each field's ``title`` inside ``fields`` children, and ``fallback`` is the
+# last-resort alternative for clients that can't render attachments.
+_RAW_TEXT_KEYS = ("pretext", "title", "text", "value", "fallback")
 
 
 def _validate_slack_channel_id(channel_id: str) -> str | None:
@@ -215,7 +218,12 @@ def _get_message_text(msg: dict) -> str:
             if text.strip():
                 return text
 
-    return msg.get("text", "")
+    # Slack occasionally returns ``text=None`` or omits it entirely for
+    # blocks-only messages, which would propagate into ``SlackMessage.text``
+    # (declared as ``str``) and fail validation. Coerce non-string fallbacks
+    # to the empty string instead.
+    fallback_text = msg.get("text")
+    return fallback_text if isinstance(fallback_text, str) else ""
 
 
 def _client(token: str, base_url: str) -> AsyncWebClient:
