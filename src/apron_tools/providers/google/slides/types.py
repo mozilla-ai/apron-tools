@@ -264,7 +264,10 @@ class AddSlideResult(ToolResult):
         fallback_reason: Populated when the requested layout could not be
             resolved to a layout object on the presentation and the tool fell
             back to the Slides API's predefined layout enum. ``None`` when the
-            requested layout matched a layout object on the presentation.
+            requested layout matched a layout object on the presentation, and
+            also for the intentional ``BLANK`` predefined-layout fallback
+            (``BLANK`` is always available, so the silent fallback carries no
+            caller-actionable signal).
     """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)

@@ -410,8 +410,11 @@ async def google_slides_add_slide(
     The tool first reads the presentation to resolve ``params.layout`` to a
     concrete layout object (referenced by ``layoutId``) when one is present.
     If the presentation does not expose a matching layout, the tool falls back
-    to the Slides API's ``predefinedLayout`` enum and records the fallback on
-    the result so the caller can surface it.
+    to the Slides API's ``predefinedLayout`` enum. For most layouts the tool
+    records that fallback on the result so the caller can surface it; when
+    the requested layout is ``BLANK`` it intentionally does not set
+    ``fallback_reason`` because ``BLANK`` is always available as a predefined
+    layout.
     """
     slide_id = f"slide_{uuid.uuid4().hex[:8]}"
     normalized_layout = params.layout.upper()
