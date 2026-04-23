@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import re
 
 import httpx
@@ -52,6 +53,100 @@ _BASE_URL = "https://slack.com/api/"
 
 _REACTION_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_+-]+(?:::[A-Za-z0-9_+-]+)*$")
 
+# Slack channel/conversation IDs start with C (public channel), G (private
+# channel/group), or D (direct message), followed by 8+ uppercase alphanumerics.
+# Real Slack IDs are 9-11 characters total. Channel names are lowercase with
+# hyphens/underscores/periods/digits and so can never match — that's what lets
+# us distinguish a name like ``any-forge-test`` from an ID like ``C01234ABCD``.
+_SLACK_CHANNEL_ID_PATTERN = re.compile(r"^[CGD][A-Z0-9]{8,}$")
+
+# Slack API error codes that are NOT permissions/scope failures. Returning them
+# via the bare error code caused agents to misdiagnose them as missing-scope
+# problems and loop into an OAuth re-consent flow. The error formatter below
+# appends an explicit "NOT a permissions error" disclaimer for these codes so
+# the agent stops re-consenting and corrects its inputs instead.
+_SLACK_NON_PERMISSION_ERRORS = frozenset(
+    {
+        "channel_not_found",
+        "not_in_channel",
+        "is_archived",
+        "user_not_found",
+        "user_not_visible",
+        "message_not_found",
+        "thread_not_found",
+        "file_not_found",
+        "invalid_channel",
+        "invalid_arguments",
+        "invalid_arg_name",
+    }
+)
+
+
+def _validate_slack_channel_id(channel_id: str) -> str | None:
+    """Return an error string if *channel_id* is not a valid Slack ID.
+
+    Slack's ``chat.postMessage`` and related endpoints require a real
+    channel ID (e.g. ``C01234ABCD``) — not the human-readable name
+    (e.g. ``any-forge-test``). When passed a name they return
+    ``channel_not_found``, which is easily misread as a permissions
+    failure and triggers an OAuth re-consent loop. Catch the mistake at
+    the tool boundary with an actionable message that points the agent
+    at ``slack_explore_workspace`` to look the ID up. Returns ``None``
+    when the value looks like a valid ID.
+    """
+    if not isinstance(channel_id, str) or not channel_id:
+        return "Error: channel_id must be a non-empty Slack channel ID."
+    if _SLACK_CHANNEL_ID_PATTERN.fullmatch(channel_id):
+        return None
+    # Pick the most actionable hint based on what the input looks like. The
+    # order matters: a lowercased real-looking ID (e.g. ``c01234abcd``) is a
+    # case mistake, not a name lookup.
+    upper = channel_id.upper()
+    if _SLACK_CHANNEL_ID_PATTERN.fullmatch(upper):
+        lookup_clause = f"Slack channel IDs are case-sensitive — retry with {upper!r}. "
+    elif (
+        channel_id.startswith("#")
+        or "-" in channel_id
+        or all(c.isalpha() and c.islower() for c in channel_id)
+        or channel_id.replace("-", "").replace("_", "").replace(".", "").islower()
+    ):
+        # Input plausibly IS a channel name — suggest looking up the ID.
+        name_hint = channel_id.removeprefix("#")
+        lookup_clause = (
+            f"Call slack_explore_workspace to look up the ID for #{name_hint}, then retry with the resolved ID. "
+        )
+    else:
+        # Malformed in some other way (wrong prefix letter, too short, etc).
+        lookup_clause = "Use slack_explore_workspace to find the correct channel ID and retry. "
+    return (
+        f"Error: {channel_id!r} is not a valid Slack channel ID. "
+        "Slack channel IDs start with C, G, or D followed by uppercase "
+        "alphanumerics (e.g. 'C01234ABCD'), not the channel name. "  # pragma: allowlist secret
+        + lookup_clause
+        + "This is NOT a permissions error — do not call request_app_connection."
+    )
+
+
+def _format_slack_error(verb: str, subject: str | None, error_code: str) -> str:
+    """Format a Slack API error for return to the agent.
+
+    For known non-permissions errors (channel/user/message/file not found,
+    not in channel, malformed args), append an explicit disclaimer plus a
+    pointer at ``slack_explore_workspace`` so the agent does not loop into
+    ``request_app_connection``. For everything else, fall back to the bare
+    error code so genuine 401/403/scope errors still flow through the
+    existing missing-scope path.
+    """
+    if error_code in _SLACK_NON_PERMISSION_ERRORS:
+        target = f"{subject} " if subject else ""
+        return (
+            f"Failed to {verb}: {error_code} ({target}not found, not visible, "
+            "or input is malformed). Verify the IDs you passed with "
+            "slack_explore_workspace and retry. "
+            "This is NOT a permissions error — do not call request_app_connection."
+        )
+    return error_code
+
 
 def _client(token: str, base_url: str) -> AsyncWebClient:
     """Build an AsyncWebClient for the given token and base URL."""
@@ -95,10 +190,18 @@ async def slack_explore_workspace(
     except SlackApiError:
         pass
 
-    try:
-        cursor = None
+    # Slack's conversations.list checks scopes against the union of types in
+    # the request: ``public_channel`` requires ``channels:read`` and
+    # ``private_channel`` requires ``groups:read``. Combining both in one
+    # request means the call 403s with ``missing_scope`` if EITHER scope is
+    # absent — so a user with only ``channels:read`` would get zero channels
+    # and the agent would loop into request_app_connection. Fetch the two
+    # sides separately so a missing scope on one side only loses that side's
+    # channels — the agent still gets a usable listing of the other side.
+    async def _list_channels_of_type(channel_type: str) -> None:
+        cursor: str | None = None
         while True:
-            kwargs: dict = {"types": "public_channel,private_channel", "limit": 1000}
+            kwargs: dict = {"types": channel_type, "limit": 1000}
             if cursor:
                 kwargs["cursor"] = cursor
             ch_resp = await client.conversations_list(**kwargs)
@@ -113,9 +216,12 @@ async def slack_explore_workspace(
                 )
             cursor = ch_resp.get("response_metadata", {}).get("next_cursor")
             if not cursor:
-                break
-    except SlackApiError:
-        pass
+                return
+
+    with contextlib.suppress(SlackApiError):
+        await _list_channels_of_type("public_channel")
+    with contextlib.suppress(SlackApiError):
+        await _list_channels_of_type("private_channel")
 
     try:
         users_resp = await client.users_list(limit=1000)
@@ -151,6 +257,8 @@ async def slack_send_channel_message(
     base_url: str = _BASE_URL,
 ) -> SendChannelMessageResult:
     """Send a message to a Slack channel."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return SendChannelMessageResult(success=False, error=id_error)
     client = _client(token, base_url)
     try:
         kwargs: dict = {"channel": params.channel_id, "text": params.message}
@@ -164,7 +272,11 @@ async def slack_send_channel_message(
             message=resp.get("message"),
         )
     except SlackApiError as exc:
-        return SendChannelMessageResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return SendChannelMessageResult(
+            success=False,
+            error=_format_slack_error("send message", f"channel {params.channel_id}", code),
+        )
 
 
 @tool(
@@ -191,7 +303,11 @@ async def slack_send_user_message(
             message=resp.get("message"),
         )
     except SlackApiError as exc:
-        return SendUserMessageResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return SendUserMessageResult(
+            success=False,
+            error=_format_slack_error("send message", f"user {params.user_id}", code),
+        )
 
 
 @tool(
@@ -206,6 +322,8 @@ async def slack_read_channel_messages(
     base_url: str = _BASE_URL,
 ) -> ReadChannelMessagesResult:
     """Read recent messages from a Slack channel."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return ReadChannelMessagesResult(success=False, error=id_error)
     client = _client(token, base_url)
     limit = min(params.limit, 100)
     try:
@@ -239,7 +357,11 @@ async def slack_read_channel_messages(
             user_map=user_map,
         )
     except SlackApiError as exc:
-        return ReadChannelMessagesResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return ReadChannelMessagesResult(
+            success=False,
+            error=_format_slack_error("read messages", f"channel {params.channel_id}", code),
+        )
 
 
 @tool(
@@ -254,6 +376,8 @@ async def slack_get_channel_info(
     base_url: str = _BASE_URL,
 ) -> GetChannelInfoResult:
     """Get information about a Slack channel."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return GetChannelInfoResult(success=False, error=id_error)
     client = _client(token, base_url)
     try:
         resp = await client.conversations_info(channel=params.channel_id)
@@ -271,7 +395,11 @@ async def slack_get_channel_info(
             purpose=ch.get("purpose", {}).get("value", ""),
         )
     except SlackApiError as exc:
-        return GetChannelInfoResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return GetChannelInfoResult(
+            success=False,
+            error=_format_slack_error("get channel info", f"channel {params.channel_id}", code),
+        )
 
 
 @tool(
@@ -286,6 +414,8 @@ async def slack_read_thread(
     base_url: str = _BASE_URL,
 ) -> ReadThreadResult:
     """Read replies in a Slack thread."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return ReadThreadResult(success=False, error=id_error)
     client = _client(token, base_url)
     try:
         kwargs: dict = {
@@ -316,7 +446,11 @@ async def slack_read_thread(
 
         return ReadThreadResult(success=True, messages=messages, user_map=user_map)
     except SlackApiError as exc:
-        return ReadThreadResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return ReadThreadResult(
+            success=False,
+            error=_format_slack_error("read thread", f"channel {params.channel_id}", code),
+        )
 
 
 @tool(
@@ -331,6 +465,8 @@ async def slack_join_channel(
     base_url: str = _BASE_URL,
 ) -> JoinChannelResult:
     """Join a Slack channel."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return JoinChannelResult(success=False, error=id_error)
     client = _client(token, base_url)
     try:
         resp = await client.conversations_join(channel=params.channel_id)
@@ -341,7 +477,11 @@ async def slack_join_channel(
             channel_name=ch.get("name", params.channel_id),
         )
     except SlackApiError as exc:
-        return JoinChannelResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return JoinChannelResult(
+            success=False,
+            error=_format_slack_error("join channel", f"channel {params.channel_id}", code),
+        )
 
 
 @tool(
@@ -356,6 +496,8 @@ async def slack_edit_message(
     base_url: str = _BASE_URL,
 ) -> EditMessageResult:
     """Edit a previously sent Slack message."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return EditMessageResult(success=False, error=id_error)
     client = _client(token, base_url)
     try:
         resp = await client.chat_update(
@@ -369,7 +511,11 @@ async def slack_edit_message(
             ts=resp.get("ts", ""),
         )
     except SlackApiError as exc:
-        return EditMessageResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return EditMessageResult(
+            success=False,
+            error=_format_slack_error("edit message", f"channel {params.channel_id}", code),
+        )
 
 
 @tool(
@@ -384,6 +530,8 @@ async def slack_get_permalink(
     base_url: str = _BASE_URL,
 ) -> GetPermalinkResult:
     """Get a permanent URL for a Slack message."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return GetPermalinkResult(success=False, error=id_error)
     client = _client(token, base_url)
     try:
         resp = await client.chat_getPermalink(
@@ -395,7 +543,11 @@ async def slack_get_permalink(
             permalink=resp.get("permalink", ""),
         )
     except SlackApiError as exc:
-        return GetPermalinkResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return GetPermalinkResult(
+            success=False,
+            error=_format_slack_error("get permalink", f"channel {params.channel_id}", code),
+        )
 
 
 @tool(
@@ -428,7 +580,11 @@ async def slack_get_file_info(
         )
         return GetFileInfoResult(success=True, file=slack_file)
     except SlackApiError as exc:
-        return GetFileInfoResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return GetFileInfoResult(
+            success=False,
+            error=_format_slack_error("get file info", f"file {params.file_id}", code),
+        )
 
 
 @tool(
@@ -569,6 +725,8 @@ async def slack_get_reactions(
             success=False,
             error="Must provide either (channel_id and timestamp), file_id, or file_comment_id.",
         )
+    if params.channel_id and params.timestamp and (id_error := _validate_slack_channel_id(params.channel_id)):
+        return GetReactionsResult(success=False, error=id_error)
 
     client = _client(token, base_url)
     try:
@@ -604,7 +762,12 @@ async def slack_get_reactions(
 
         return GetReactionsResult(success=True, reactions=reactions, item_type=item_type)
     except SlackApiError as exc:
-        return GetReactionsResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        subject = f"channel {params.channel_id}" if params.channel_id else None
+        return GetReactionsResult(
+            success=False,
+            error=_format_slack_error("get reactions", subject, code),
+        )
 
 
 @tool(
@@ -619,6 +782,8 @@ async def slack_add_reaction(
     base_url: str = _BASE_URL,
 ) -> AddReactionResult:
     """Add an emoji reaction to a Slack message."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return AddReactionResult(success=False, error=id_error)
     normalized = params.reaction_name.strip().strip(":")
     if not normalized:
         return AddReactionResult(success=False, error="reaction_name must not be empty.")
@@ -639,4 +804,8 @@ async def slack_add_reaction(
             timestamp=params.timestamp,
         )
     except SlackApiError as exc:
-        return AddReactionResult(success=False, error=exc.response.get("error", str(exc)))
+        code = exc.response.get("error", str(exc))
+        return AddReactionResult(
+            success=False,
+            error=_format_slack_error("add reaction", f"channel {params.channel_id}", code),
+        )
