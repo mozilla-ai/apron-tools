@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "W012A3CDE",
+      "text": "short fallback",
+      "ts": "1512085950.000216",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {"type": "mrkdwn", "text": "Detailed parent content"}
+        }
+      ]
+    },
+    {
+      "type": "message",
+      "user": "W07QCRPA4",
+      "text": "Reply text",
+      "ts": "1512085960.000100"
+    }
+  ],
+  "has_more": false
+}

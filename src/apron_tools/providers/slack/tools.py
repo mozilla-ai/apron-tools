@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import re
+from typing import Any, cast
 
 import httpx
 from slack_sdk.errors import SlackApiError
@@ -81,6 +82,18 @@ _SLACK_NON_PERMISSION_ERRORS = frozenset(
     }
 )
 
+# Typed Slack text nodes whose ``text`` field is the final string to surface;
+# anything else is treated as a container and walked recursively.
+_TEXT_NODE_TYPES = frozenset({"mrkdwn", "plain_text", "text"})
+
+# Keys on legacy Slack attachment dicts that carry raw human-readable strings,
+# listed in the order Slack renders them so the extracted text preserves the
+# author's intended reading order: ``pretext`` sits above the attachment body,
+# the attachment ``title`` sits above ``text`` (body), ``value`` pairs with
+# each field's ``title`` inside ``fields`` children, and ``fallback`` is the
+# last-resort alternative for clients that can't render attachments.
+_RAW_TEXT_KEYS = ("pretext", "title", "text", "value", "fallback")
+
 
 def _validate_slack_channel_id(channel_id: str) -> str | None:
     """Return an error string if *channel_id* is not a valid Slack ID.
@@ -146,6 +159,71 @@ def _format_slack_error(verb: str, subject: str | None, error_code: str) -> str:
             "This is NOT a permissions error — do not call request_app_connection."
         )
     return error_code
+
+
+def _collect_text(obj: object) -> list[str]:
+    """Recursively collect human-readable text from a Slack structure.
+
+    Handles both Block Kit — which uses typed ``mrkdwn``/``plain_text``/``text``
+    nodes — and legacy attachments, which are flat dicts of raw strings.
+
+    On a typed text node the walker takes ``text`` and stops recursing to
+    avoid duplicate fragments. On untyped dicts it first pulls raw strings
+    from the known attachment keys, then recurses into remaining values so
+    unfamiliar containers are still traversed transparently.
+    """
+    parts: list[str] = []
+
+    def _walk(node: object) -> None:
+        if isinstance(node, dict):
+            # Slack JSON decodes to untyped mapping. The ``object`` parameter
+            # narrows to bare ``dict`` under isinstance, which the type
+            # checker treats as ``dict[Never, Never]``; cast so arbitrary
+            # string lookups are accepted.
+            typed = cast(dict[str, Any], node)
+            if typed.get("type") in _TEXT_NODE_TYPES:
+                t = typed.get("text")
+                if isinstance(t, str) and t:
+                    parts.append(t)
+                return
+
+            for key in _RAW_TEXT_KEYS:
+                val = typed.get(key)
+                if isinstance(val, str) and val:
+                    parts.append(val)
+
+            for v in typed.values():
+                _walk(v)
+
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(obj)
+    return parts
+
+
+def _get_message_text(msg: dict) -> str:
+    """Return the best available text for a Slack message.
+
+    Slack's top-level ``text`` is just a short notification fallback when
+    the message uses Block Kit or legacy attachments, so agents that only
+    read it miss the real content. Priority: blocks, then attachments,
+    then the plain ``text`` field.
+    """
+    for key in ("blocks", "attachments"):
+        rich = msg.get(key)
+        if rich:
+            text = "\n".join(_collect_text(rich))
+            if text.strip():
+                return text
+
+    # Slack occasionally returns ``text=None`` or omits it entirely for
+    # blocks-only messages, which would propagate into ``SlackMessage.text``
+    # (declared as ``str``) and fail validation. Coerce non-string fallbacks
+    # to the empty string instead.
+    fallback_text = msg.get("text")
+    return fallback_text if isinstance(fallback_text, str) else ""
 
 
 def _client(token: str, base_url: str) -> AsyncWebClient:
@@ -342,7 +420,7 @@ async def slack_read_channel_messages(
         messages = [
             SlackMessage(
                 user=m.get("user"),
-                text=m.get("text", ""),
+                text=_get_message_text(m),
                 ts=m.get("ts", ""),
                 reply_count=m.get("reply_count"),
                 files=m.get("files"),
@@ -437,7 +515,7 @@ async def slack_read_thread(
         messages = [
             SlackMessage(
                 user=m.get("user"),
-                text=m.get("text", ""),
+                text=_get_message_text(m),
                 ts=m.get("ts", ""),
                 files=m.get("files"),
             )

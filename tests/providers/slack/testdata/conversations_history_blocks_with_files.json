@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "W012A3CDE",
+      "text": "short fallback",
+      "ts": "1512085950.000100",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {"type": "mrkdwn", "text": "Rich block body"}
+        }
+      ],
+      "files": [
+        {"id": "F123", "name": "diagram.png"}
+      ]
+    }
+  ],
+  "has_more": false
+}

@@ -1259,3 +1259,276 @@ class TestChannelIdBoundaryRejection:
         client.reactions_get.assert_not_called()
         assert result.success is False
         assert "not a valid Slack channel ID" in result.error
+
+
+# ---------------------------------------------------------------------------
+# Block Kit + attachment message-text extraction.
+#
+# Slack messages built with Block Kit or legacy attachments carry their real
+# content inside the ``blocks`` or ``attachments`` arrays; the top-level
+# ``text`` is often just a short notification fallback. The read tools must
+# surface the rich content so agents can actually read what was said.
+# ---------------------------------------------------------------------------
+
+
+class TestCollectText:
+    """Unit tests for ``_collect_text`` — the recursive Slack text walker."""
+
+    def _text(self, obj: object) -> str:
+        return "\n".join(slack_tools._collect_text(obj))
+
+    def test_section_block_text(self) -> None:
+        blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        ":tada: *New User Signup*\n• *Name:* Alice\n• *Email:* alice@example.com\n• *Role:* Engineer"
+                    ),
+                },
+            }
+        ]
+        result = self._text(blocks)
+        assert "Alice" in result
+        assert "alice@example.com" in result
+        assert "Engineer" in result
+
+    def test_header_block(self) -> None:
+        blocks = [{"type": "header", "text": {"type": "plain_text", "text": "Important"}}]
+        assert "Important" in self._text(blocks)
+
+    def test_context_block(self) -> None:
+        blocks = [
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "Posted by bot"}],
+            }
+        ]
+        assert "Posted by bot" in self._text(blocks)
+
+    def test_rich_text_nested_elements(self) -> None:
+        blocks = [
+            {
+                "type": "rich_text",
+                "elements": [
+                    {
+                        "type": "rich_text_section",
+                        "elements": [{"type": "text", "text": "Hello world"}],
+                    }
+                ],
+            }
+        ]
+        assert "Hello world" in self._text(blocks)
+
+    def test_section_with_fields(self) -> None:
+        blocks = [
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": "*Name:* Bob"},
+                    {"type": "mrkdwn", "text": "*Role:* PM"},
+                ],
+            }
+        ]
+        result = self._text(blocks)
+        assert "*Name:* Bob" in result
+        assert "*Role:* PM" in result
+
+    def test_empty_input(self) -> None:
+        assert self._text([]) == ""
+
+    def test_divider_only_returns_empty(self) -> None:
+        assert self._text([{"type": "divider"}]) == ""
+
+    def test_attachment_text(self) -> None:
+        assert "Deploy succeeded" in self._text([{"text": "Deploy succeeded for main branch"}])
+
+    def test_attachment_fallback(self) -> None:
+        assert "GitHub notification" in self._text([{"fallback": "GitHub notification"}])
+
+    def test_multiple_attachments(self) -> None:
+        result = self._text([{"text": "First attachment"}, {"text": "Second attachment"}])
+        assert "First attachment" in result
+        assert "Second attachment" in result
+
+    def test_walks_arbitrary_nesting(self) -> None:
+        """Unknown block types are walked transparently."""
+        blocks = [
+            {
+                "type": "future_block_type",
+                "content": {"type": "plain_text", "text": "Discovered via recursion"},
+            }
+        ]
+        assert "Discovered via recursion" in self._text(blocks)
+
+
+class TestGetMessageText:
+    """Unit tests for ``_get_message_text`` — the blocks/attachments/text priority."""
+
+    def test_prefers_blocks_over_text(self) -> None:
+        msg = {
+            "text": "New user signup: alice@example.com",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": ":tada: *New User Signup*\n• *Name:* Alice\n• *Email:* alice@example.com",
+                    },
+                }
+            ],
+        }
+        result = slack_tools._get_message_text(msg)
+        assert "Name:" in result
+        assert "Alice" in result
+
+    def test_falls_back_to_text_when_no_blocks(self) -> None:
+        assert slack_tools._get_message_text({"text": "Hello world"}) == "Hello world"
+
+    def test_falls_back_to_text_when_blocks_empty(self) -> None:
+        assert slack_tools._get_message_text({"text": "Fallback", "blocks": []}) == "Fallback"
+
+    def test_falls_back_when_blocks_yield_no_text(self) -> None:
+        msg = {"text": "Fallback", "blocks": [{"type": "divider"}]}
+        assert slack_tools._get_message_text(msg) == "Fallback"
+
+    def test_missing_text_and_blocks(self) -> None:
+        assert slack_tools._get_message_text({}) == ""
+
+    def test_prefers_blocks_over_attachments(self) -> None:
+        msg = {
+            "text": "fallback",
+            "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "Block content"}}],
+            "attachments": [{"text": "Attachment content"}],
+        }
+        assert slack_tools._get_message_text(msg) == "Block content"
+
+    def test_falls_back_to_attachments_when_no_blocks(self) -> None:
+        msg = {"text": "fallback", "attachments": [{"text": "Attachment content here"}]}
+        assert slack_tools._get_message_text(msg) == "Attachment content here"
+
+    def test_falls_back_to_text_when_attachments_empty(self) -> None:
+        assert slack_tools._get_message_text({"text": "plain text", "attachments": []}) == "plain text"
+
+
+class TestReadChannelMessagesBlocksAndAttachments:
+    """``slack_read_channel_messages`` surfaces block/attachment content in message text."""
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_message_with_blocks_surfaces_block_content(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.conversations_history.return_value = _mock_response(_load_json("conversations_history_blocks.json"))
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_read_channel_messages(
+            ReadChannelMessagesParams(channel_id="C012AB3CD"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert len(result.messages) == 1
+        assert "Alice Smith" in result.messages[0].text
+        assert "alice@example.com" in result.messages[0].text
+        assert "Engineer" in result.messages[0].text
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_message_without_blocks_still_uses_plain_text(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.conversations_history.return_value = _mock_response(_load_json("conversations_history_plain_text.json"))
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_read_channel_messages(
+            ReadChannelMessagesParams(channel_id="C012AB3CD"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert result.messages[0].text == "Just a plain text message"
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_message_with_legacy_attachments_surfaces_values(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.conversations_history.return_value = _mock_response(_load_json("conversations_history_attachments.json"))
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_read_channel_messages(
+            ReadChannelMessagesParams(channel_id="C012AB3CD"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        text = result.messages[0].text
+        assert "New PR opened" in text
+        assert "Fix login redirect bug" in text
+        assert "apron-tools" in text
+        assert "alice" in text
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_files_still_surfaced_alongside_block_text(self, mock_cls: AsyncMock) -> None:
+        """Ports should not regress the existing ``files`` surfacing."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.conversations_history.return_value = _mock_response(
+            _load_json("conversations_history_blocks_with_files.json")
+        )
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_read_channel_messages(
+            ReadChannelMessagesParams(channel_id="C012AB3CD"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        msg = result.messages[0]
+        assert "Rich block body" in msg.text
+        assert msg.files is not None
+        assert msg.files[0]["name"] == "diagram.png"
+
+
+class TestReadThreadBlocksAndAttachments:
+    """``slack_read_thread`` surfaces block/attachment content in message text."""
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_thread_parent_with_blocks(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.conversations_replies.return_value = _mock_response(
+            _load_json("conversations_replies_parent_blocks.json")
+        )
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_read_thread(
+            ReadThreadParams(channel_id="C012AB3CD", thread_ts="1512085950.000216"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert len(result.messages) == 2
+        assert "Detailed parent content" in result.messages[0].text
+        assert result.messages[1].text == "Reply text"
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_thread_reply_with_attachments(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.conversations_replies.return_value = _mock_response(
+            _load_json("conversations_replies_reply_attachments.json")
+        )
+        client.users_list.return_value = _mock_response(_load_json("users_list.json"))
+
+        result = await slack_read_thread(
+            ReadThreadParams(channel_id="C012AB3CD", thread_ts="1512085950.000216"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert "Build failed on main" in result.messages[1].text

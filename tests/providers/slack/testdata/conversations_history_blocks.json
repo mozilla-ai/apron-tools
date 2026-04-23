@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "W012A3CDE",
+      "text": "New user signup: alice@example.com",
+      "ts": "1512085950.000100",
+      "blocks": [
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": ":tada: *New User Signup*\n• *Name:* Alice Smith\n• *Email:* alice@example.com\n• *Role:* Engineer"
+          }
+        }
+      ]
+    }
+  ],
+  "has_more": false
+}
