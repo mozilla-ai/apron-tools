@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "W012A3CDE",
+      "text": "Parent",
+      "ts": "1512085950.000216"
+    },
+    {
+      "type": "message",
+      "user": "W07QCRPA4",
+      "text": "fallback",
+      "ts": "1512085960.000100",
+      "attachments": [
+        {"text": "Build failed on main"}
+      ]
+    }
+  ],
+  "has_more": false
+}

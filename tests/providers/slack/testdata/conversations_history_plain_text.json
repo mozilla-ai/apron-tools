@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "W012A3CDE",
+      "text": "Just a plain text message",
+      "ts": "1512085950.000100"
+    }
+  ],
+  "has_more": false
+}

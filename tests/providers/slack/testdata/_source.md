@@ -31,3 +31,9 @@
 - **files_info.json:** Based on example response from files.info docs.
 - **reactions_get.json:** Based on example response from reactions.get docs.
 - **reactions_add.json:** Based on example response from reactions.add docs.
+- **conversations_history_blocks.json:** conversations.history shape with a single Block Kit message (section + mrkdwn).
+- **conversations_history_plain_text.json:** conversations.history shape with a single plain-text message (no blocks).
+- **conversations_history_attachments.json:** conversations.history shape with a single legacy-attachment message (pretext, text, fields).
+- **conversations_history_blocks_with_files.json:** conversations.history shape with a single message that carries both blocks and a files array, used to verify files keep surfacing alongside block text.
+- **conversations_replies_parent_blocks.json:** conversations.replies shape with a Block Kit parent and a plain-text reply.
+- **conversations_replies_reply_attachments.json:** conversations.replies shape with a plain-text parent and an attachment-carrying reply.

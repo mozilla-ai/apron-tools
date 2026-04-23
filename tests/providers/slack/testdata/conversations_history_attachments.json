@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "W012A3CDE",
+      "text": "GitHub notification",
+      "ts": "1512085950.000100",
+      "attachments": [
+        {
+          "pretext": "New PR opened",
+          "text": "Fix login redirect bug",
+          "fields": [
+            {"title": "Repo", "value": "apron-tools"},
+            {"title": "Author", "value": "alice"}
+          ]
+        }
+      ]
+    }
+  ],
+  "has_more": false
+}

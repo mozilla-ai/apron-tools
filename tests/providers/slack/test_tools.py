@@ -1419,34 +1419,7 @@ class TestReadChannelMessagesBlocksAndAttachments:
     async def test_message_with_blocks_surfaces_block_content(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
-        blocks = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        ":tada: *New User Signup*\n"
-                        "• *Name:* Alice Smith\n"
-                        "• *Email:* alice@example.com\n"
-                        "• *Role:* Engineer"
-                    ),
-                },
-            }
-        ]
-        history = {
-            "ok": True,
-            "messages": [
-                {
-                    "type": "message",
-                    "user": "W012A3CDE",
-                    "text": "New user signup: alice@example.com",
-                    "ts": "1512085950.000100",
-                    "blocks": blocks,
-                }
-            ],
-            "has_more": False,
-        }
-        client.conversations_history.return_value = _mock_response(history)
+        client.conversations_history.return_value = _mock_response(_load_json("conversations_history_blocks.json"))
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_read_channel_messages(
@@ -1465,19 +1438,7 @@ class TestReadChannelMessagesBlocksAndAttachments:
     async def test_message_without_blocks_still_uses_plain_text(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
-        history = {
-            "ok": True,
-            "messages": [
-                {
-                    "type": "message",
-                    "user": "W012A3CDE",
-                    "text": "Just a plain text message",
-                    "ts": "1512085950.000100",
-                }
-            ],
-            "has_more": False,
-        }
-        client.conversations_history.return_value = _mock_response(history)
+        client.conversations_history.return_value = _mock_response(_load_json("conversations_history_plain_text.json"))
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_read_channel_messages(
@@ -1493,29 +1454,7 @@ class TestReadChannelMessagesBlocksAndAttachments:
     async def test_message_with_legacy_attachments_surfaces_values(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
-        history = {
-            "ok": True,
-            "messages": [
-                {
-                    "type": "message",
-                    "user": "W012A3CDE",
-                    "text": "GitHub notification",
-                    "ts": "1512085950.000100",
-                    "attachments": [
-                        {
-                            "pretext": "New PR opened",
-                            "text": "Fix login redirect bug",
-                            "fields": [
-                                {"title": "Repo", "value": "apron-tools"},
-                                {"title": "Author", "value": "alice"},
-                            ],
-                        }
-                    ],
-                }
-            ],
-            "has_more": False,
-        }
-        client.conversations_history.return_value = _mock_response(history)
+        client.conversations_history.return_value = _mock_response(_load_json("conversations_history_attachments.json"))
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_read_channel_messages(
@@ -1536,21 +1475,9 @@ class TestReadChannelMessagesBlocksAndAttachments:
         """Ports should not regress the existing ``files`` surfacing."""
         client = AsyncMock()
         mock_cls.return_value = client
-        history = {
-            "ok": True,
-            "messages": [
-                {
-                    "type": "message",
-                    "user": "W012A3CDE",
-                    "text": "short fallback",
-                    "ts": "1512085950.000100",
-                    "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "Rich block body"}}],
-                    "files": [{"id": "F123", "name": "diagram.png"}],
-                }
-            ],
-            "has_more": False,
-        }
-        client.conversations_history.return_value = _mock_response(history)
+        client.conversations_history.return_value = _mock_response(
+            _load_json("conversations_history_blocks_with_files.json")
+        )
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_read_channel_messages(
@@ -1572,32 +1499,9 @@ class TestReadThreadBlocksAndAttachments:
     async def test_thread_parent_with_blocks(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
-        blocks = [
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "Detailed parent content"},
-            }
-        ]
-        replies = {
-            "ok": True,
-            "messages": [
-                {
-                    "type": "message",
-                    "user": "W012A3CDE",
-                    "text": "short fallback",
-                    "ts": "1512085950.000216",
-                    "blocks": blocks,
-                },
-                {
-                    "type": "message",
-                    "user": "W07QCRPA4",
-                    "text": "Reply text",
-                    "ts": "1512085960.000100",
-                },
-            ],
-            "has_more": False,
-        }
-        client.conversations_replies.return_value = _mock_response(replies)
+        client.conversations_replies.return_value = _mock_response(
+            _load_json("conversations_replies_parent_blocks.json")
+        )
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_read_thread(
@@ -1615,26 +1519,9 @@ class TestReadThreadBlocksAndAttachments:
     async def test_thread_reply_with_attachments(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
-        replies = {
-            "ok": True,
-            "messages": [
-                {
-                    "type": "message",
-                    "user": "W012A3CDE",
-                    "text": "Parent",
-                    "ts": "1512085950.000216",
-                },
-                {
-                    "type": "message",
-                    "user": "W07QCRPA4",
-                    "text": "fallback",
-                    "ts": "1512085960.000100",
-                    "attachments": [{"text": "Build failed on main"}],
-                },
-            ],
-            "has_more": False,
-        }
-        client.conversations_replies.return_value = _mock_response(replies)
+        client.conversations_replies.return_value = _mock_response(
+            _load_json("conversations_replies_reply_attachments.json")
+        )
         client.users_list.return_value = _mock_response(_load_json("users_list.json"))
 
         result = await slack_read_thread(
