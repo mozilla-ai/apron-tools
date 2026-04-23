@@ -10,6 +10,7 @@ from pytest_httpx import HTTPXMock
 from apron_tools.providers.google.gmail.tools import (
     gmail_add_label_to_email,
     gmail_create_draft,
+    gmail_create_label,
     gmail_edit_draft,
     gmail_get_thread_replies,
     gmail_list_emails,
@@ -23,6 +24,8 @@ from apron_tools.providers.google.gmail.types import (
     AddLabelToEmailParams,
     CreateDraftParams,
     CreateDraftResult,
+    CreateLabelParams,
+    CreateLabelResult,
     EditDraftParams,
     EditDraftResult,
     GetThreadRepliesParams,
@@ -497,3 +500,70 @@ class TestRemoveLabelFromEmail:
         assert defn.provider == "google"
         assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.modify" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# create_label
+# ---------------------------------------------------------------------------
+
+
+class TestCreateLabel:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/labels",
+            json=_load_json("create_label.json"),
+        )
+
+        result = await gmail_create_label(
+            CreateLabelParams(name="Invoices"),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CreateLabelResult)
+        assert result.success is True
+        assert result.id == "Label_42"
+        assert result.name == "Invoices"
+        assert result.type == "user"
+
+    async def test_trims_whitespace_in_request(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/labels",
+            json=_load_json("create_label.json"),
+        )
+
+        result = await gmail_create_label(
+            CreateLabelParams(name="  Invoices  "),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        assert json.loads(request.content)["name"] == "Invoices"
+
+    async def test_rejects_whitespace_only_name(self) -> None:
+        result = await gmail_create_label(
+            CreateLabelParams(name="   "),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "empty" in result.error.lower()
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=409, text="Label name exists")
+
+        result = await gmail_create_label(
+            CreateLabelParams(name="Invoices"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "409" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = gmail_create_label._tool_definition
+        assert defn.name == "gmail_create_label"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
+        assert "https://www.googleapis.com/auth/gmail.labels" in defn.scopes

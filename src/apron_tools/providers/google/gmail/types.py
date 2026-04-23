@@ -90,6 +90,12 @@ class RemoveLabelFromEmailParams(BaseModel):
     label_id: str
 
 
+class CreateLabelParams(BaseModel):
+    """Parameters for creating a new user-defined Gmail label."""
+
+    name: str = Field(min_length=1)
+
+
 # ---------------------------------------------------------------------------
 # Shared nested models
 # ---------------------------------------------------------------------------
@@ -378,3 +384,27 @@ class ModifyLabelsResult(ToolResult):
         if not self.success:
             return f"Error: {self.error}"
         return f"Message {self.id} labels updated: {', '.join(self.label_ids)}"
+
+
+class CreateLabelResult(ToolResult):
+    """Result of creating a new Gmail label."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    name: str = ""
+    type: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _set_success(cls, data: Any) -> Any:
+        """Set success=True when parsing raw API JSON."""
+        if isinstance(data, dict) and "success" not in data:
+            data["success"] = True
+        return data
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the created label."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Label created. Name: {self.name}, ID: {self.id}"
