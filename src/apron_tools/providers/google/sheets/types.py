@@ -2,11 +2,47 @@
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from apron_tools.types import ToolResult
+
+
+def _col_index_to_letter(col_index: int) -> str:
+    """Convert a 0-based column index to an A1-notation column letter (0 -> 'A', 26 -> 'AA')."""
+    result = ""
+    n = col_index + 1
+    while n > 0:
+        n, remainder = divmod(n - 1, 26)
+        result = chr(ord("A") + remainder) + result
+    return result
+
+
+# Column letters match A-ZZZ, which covers the full 18,278-column Sheets limit.
+_RANGE_START_PATTERN = re.compile(r"^([A-Za-z]{1,3})(\d+)$")
+
+
+def _parse_range_start(range_str: str) -> tuple[int, int]:
+    """Return the 1-based start row and 0-based start column of an A1-notation range.
+
+    Falls back to ``(1, 0)`` when the range has no explicit cell reference
+    (e.g. a bare sheet name like ``Sheet1`` or ``Sheet1!A:A``).
+    """
+    body = range_str.split("!", 1)[1] if "!" in range_str else range_str
+    start_part = body.split(":", 1)[0]
+    match = _RANGE_START_PATTERN.match(start_part)
+    if not match:
+        return 1, 0
+    col_str = match.group(1).upper()
+    row = int(match.group(2))
+    col_index = 0
+    for c in col_str:
+        col_index = col_index * 26 + (ord(c) - ord("A") + 1)
+    return row, col_index - 1
+
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -245,19 +281,36 @@ class ReadSpreadsheetResult(ToolResult):
         return data
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the spreadsheet data."""
+        """Return the spreadsheet data as a parseable JSON string.
+
+        The output is a JSON list of row dicts keyed by A1-notation column
+        letter plus a 1-based ``row`` field (e.g. ``{"row": 2, "A": "Alice"}``).
+        When metadata is present (``title`` or ``sheet_names``) the payload
+        is wrapped as ``{"metadata": {...}, "range": ..., "rows": [...]}``.
+        Empty trailing cells are omitted so downstream agents can rely on
+        ``json.loads`` to round-trip the result — see issue #92.
+        """
         if not self.success:
             return f"Error: {self.error}"
-        if not self.values:
-            return f"No data in range '{self.range}'."
-        row_count = len(self.values)
-        col_count = max(len(row) for row in self.values) if self.values else 0
-        header = ""
-        if self.title:
-            header = f"Spreadsheet: {self.title}\n"
-        if self.sheet_names:
-            header += f"Sheets: {', '.join(self.sheet_names)}\n"
-        return f"{header}Range: {self.range}\nData: {row_count} row(s) x {col_count} column(s)"
+
+        include_metadata = bool(self.title or self.sheet_names)
+        start_row, start_col = _parse_range_start(self.range)
+
+        rows: list[dict[str, Any]] = []
+        for i, row in enumerate(self.values):
+            row_dict: dict[str, Any] = {"row": start_row + i}
+            for j, cell in enumerate(row):
+                row_dict[_col_index_to_letter(start_col + j)] = cell
+            rows.append(row_dict)
+
+        if include_metadata:
+            payload: dict[str, Any] = {
+                "metadata": {"title": self.title, "sheets": self.sheet_names},
+                "range": self.range,
+                "rows": rows,
+            }
+            return json.dumps(payload, ensure_ascii=False)
+        return json.dumps(rows, ensure_ascii=False)
 
 
 class UpdateSpreadsheetResult(ToolResult):
@@ -367,9 +420,14 @@ class FindRowResult(ToolResult):
         return data
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the found row."""
+        """Return the matched row as a bare integer, parseable as JSON.
+
+        Downstream agents treat the found-row output as data — returning
+        the row number by itself lets ``json.loads`` recover the integer.
+        The not-found case remains a human-readable message.
+        """
         if not self.success:
             return f"Error: {self.error}"
         if self.row_number == 0:
             return f"No row found where column {self.column} equals '{self.value}'."
-        return f"Row {self.row_number} (column {self.column} = '{self.value}')."
+        return str(self.row_number)

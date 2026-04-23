@@ -257,20 +257,28 @@ class TestReadSpreadsheetResult:
         assert len(result.values) == 4
         assert result.values[0] == ["Name", "Age", "City", "Score"]
 
-    def test_str_output(self):
+    def test_str_output_is_parseable_json(self):
+        """``str(result)`` must round-trip through ``json.loads``.
+
+        Downstream agents parse the read-spreadsheet output as JSON.
+        Any non-JSON prefix breaks them — see issue #92.
+        """
         data = _load_json("read_spreadsheet_values.json")
         result = ReadSpreadsheetResult(
             success=True,
             range=data["range"],
             values=data["values"],
         )
-        text = str(result)
 
-        assert "Sheet1!A1:D5" in text
-        assert "4 row(s)" in text
-        assert "4 column(s)" in text
+        parsed = json.loads(str(result))
 
-    def test_str_with_metadata(self):
+        assert isinstance(parsed, list)
+        assert len(parsed) == 4
+        assert parsed[0] == {"row": 1, "A": "Name", "B": "Age", "C": "City", "D": "Score"}
+        assert parsed[1] == {"row": 2, "A": "Alice", "B": "30", "C": "New York", "D": "95"}
+
+    def test_str_output_with_metadata_is_parseable_json(self):
+        """With metadata, the output is a JSON object wrapping rows and metadata."""
         data = _load_json("read_spreadsheet_values.json")
         result = ReadSpreadsheetResult(
             success=True,
@@ -279,14 +287,72 @@ class TestReadSpreadsheetResult:
             title="Budget 2024",
             sheet_names=["Sheet1"],
         )
-        text = str(result)
 
-        assert "Budget 2024" in text
-        assert "Sheet1" in text
+        parsed = json.loads(str(result))
+
+        assert parsed["metadata"] == {"title": "Budget 2024", "sheets": ["Sheet1"]}
+        assert parsed["range"] == "Sheet1!A1:D5"
+        assert isinstance(parsed["rows"], list)
+        assert len(parsed["rows"]) == 4
+        assert parsed["rows"][0] == {
+            "row": 1,
+            "A": "Name",
+            "B": "Age",
+            "C": "City",
+            "D": "Score",
+        }
+
+    def test_str_output_honors_range_offset(self):
+        """Row numbers and column letters must reflect the returned range's origin."""
+        result = ReadSpreadsheetResult(
+            success=True,
+            range="Sheet1!B2:C3",
+            values=[["x", "y"], ["z", "w"]],
+        )
+
+        parsed = json.loads(str(result))
+
+        assert parsed[0] == {"row": 2, "B": "x", "C": "y"}
+        assert parsed[1] == {"row": 3, "B": "z", "C": "w"}
+
+    def test_str_output_omits_empty_trailing_cells(self):
+        """Sheets API returns ragged rows; only present cells should appear."""
+        result = ReadSpreadsheetResult(
+            success=True,
+            range="Sheet1!A1:C2",
+            values=[["Name", "Age", "City"], ["Alice"]],
+        )
+
+        parsed = json.loads(str(result))
+
+        assert parsed[0] == {"row": 1, "A": "Name", "B": "Age", "C": "City"}
+        assert parsed[1] == {"row": 2, "A": "Alice"}
 
     def test_str_empty(self):
+        """An empty range serialises as an empty JSON list."""
         result = ReadSpreadsheetResult(success=True, range="Sheet1!A1:D5", values=[])
-        assert "No data" in str(result)
+
+        parsed = json.loads(str(result))
+
+        assert parsed == []
+
+    def test_str_empty_with_metadata(self):
+        """An empty range with metadata serialises to the wrapped JSON object."""
+        result = ReadSpreadsheetResult(
+            success=True,
+            range="Sheet1!A1:D5",
+            values=[],
+            title="Budget 2024",
+            sheet_names=["Sheet1"],
+        )
+
+        parsed = json.loads(str(result))
+
+        assert parsed == {
+            "metadata": {"title": "Budget 2024", "sheets": ["Sheet1"]},
+            "range": "Sheet1!A1:D5",
+            "rows": [],
+        }
 
     def test_str_on_error(self):
         result = ReadSpreadsheetResult(success=False, error="Not found")
@@ -400,7 +466,8 @@ class TestFindRowResult:
         assert result.success is True
         assert result.row_number == 3
 
-    def test_str_found(self):
+    def test_str_found_is_parseable_json_integer(self):
+        """Found-row output must round-trip as a JSON integer so agents can parse it."""
         result = FindRowResult(
             success=True,
             row_number=3,
@@ -408,10 +475,8 @@ class TestFindRowResult:
             column="A",
             value="Bob",
         )
-        text = str(result)
 
-        assert "Row 3" in text
-        assert "Bob" in text
+        assert json.loads(str(result)) == 3
 
     def test_str_not_found(self):
         result = FindRowResult(
