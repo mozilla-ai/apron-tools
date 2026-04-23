@@ -252,18 +252,21 @@ async def microsoft_onedrive_move_files(
     outcomes: list[MoveFileOutcome] = []
     apply_new_name = params.new_name is not None and len(params.item_ids) == 1
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        for item_id in params.item_ids:
-            outcomes.append(
-                await _move_single_item(
-                    client,
-                    token,
-                    item_id,
-                    params.destination_folder_id,
-                    params.new_name if apply_new_name else None,
-                    base_url=base_url,
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            for item_id in params.item_ids:
+                outcomes.append(
+                    await _move_single_item(
+                        client,
+                        token,
+                        item_id,
+                        params.destination_folder_id,
+                        params.new_name if apply_new_name else None,
+                        base_url=base_url,
+                    )
                 )
-            )
+    except httpx.HTTPError as exc:
+        return MoveFilesResult(success=False, error=str(exc))
 
     return MoveFilesResult(success=True, outcomes=outcomes)
 

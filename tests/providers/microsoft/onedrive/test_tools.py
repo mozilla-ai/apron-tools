@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import httpx
+import pytest
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.microsoft.onedrive.tools import (
@@ -381,6 +383,32 @@ class TestMoveFiles:
 
         assert result.success is False
         assert result.error is not None and "item_id" in result.error
+
+    async def test_client_error_returned_as_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """httpx.HTTPError raised by AsyncClient setup is converted to a failed result."""
+
+        class _FailingClient:
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                pass
+
+            async def __aenter__(self) -> _FailingClient:
+                raise httpx.ConnectError("tls handshake failed")
+
+            async def __aexit__(self, *args: object) -> bool:
+                return False
+
+        monkeypatch.setattr(
+            "apron_tools.providers.microsoft.onedrive.tools.httpx.AsyncClient",
+            _FailingClient,
+        )
+
+        result = await microsoft_onedrive_move_files(
+            MoveFilesParams(item_ids=["file-001"], destination_folder_id="folder-002"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error is not None and "tls handshake failed" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_onedrive_move_files._tool_definition
