@@ -1,0 +1,57 @@
+{
+  "presentationId": "pres-001",
+  "title": "Layouts Fixture",
+  "slides": [
+    {
+      "objectId": "slide-001",
+      "pageElements": [
+        {
+          "objectId": "shape-with-text",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "text": {
+              "textElements": [
+                {
+                  "startIndex": 0,
+                  "endIndex": 6,
+                  "textRun": {"content": "Hello\n", "style": {}}
+                }
+              ]
+            }
+          }
+        },
+        {
+          "objectId": "shape-empty",
+          "shape": {
+            "shapeType": "TEXT_BOX",
+            "text": {"textElements": []}
+          }
+        }
+      ],
+      "slideProperties": {"layoutObjectId": "layout-blank"}
+    }
+  ],
+  "layouts": [
+    {
+      "objectId": "layout-blank",
+      "layoutProperties": {"name": "BLANK", "displayName": "Blank"}
+    },
+    {
+      "objectId": "layout-title-and-body",
+      "layoutProperties": {"name": "TITLE_AND_BODY", "displayName": "Title and body"},
+      "pageElements": [
+        {"shape": {"placeholder": {"type": "TITLE"}}},
+        {"shape": {"placeholder": {"type": "BODY"}}}
+      ]
+    },
+    {
+      "objectId": "layout-section-header",
+      "layoutProperties": {"name": "SECTION_HEADER", "displayName": "Section header"},
+      "pageElements": [
+        {"shape": {"placeholder": {"type": "CENTERED_TITLE"}}}
+      ]
+    }
+  ],
+  "masters": [{"objectId": "master-001"}],
+  "revisionId": "rev-002"
+}
