@@ -428,6 +428,10 @@ class TestCreateEvent:
         request = httpx_mock.get_request()
         body = json.loads(request.content)
         assert body["description"] == "Existing notes"
+        # Invalid URL must not disable Meet generation — otherwise the event
+        # ends up with neither a Meet link nor a usable custom URL.
+        assert "conferenceData" in body
+        assert request.url.params.get("conferenceDataVersion") == "1"
 
     async def test_video_call_url_not_duplicated_in_description(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(

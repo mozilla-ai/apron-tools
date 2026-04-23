@@ -55,6 +55,16 @@ def _build_meet_conference_data() -> dict:
     }
 
 
+def _is_valid_video_call_url(url: str | None) -> bool:
+    """Return True when *url* is a non-empty http(s) URL.
+
+    Keeps Meet-suppression and description-append in lockstep so an invalid
+    URL never disables Meet generation without leaving a usable alternative
+    behind.
+    """
+    return bool(url) and url.startswith(("https://", "http://"))
+
+
 def _append_video_url_to_description(description: str, video_call_url: str) -> str:
     """Append a custom video call URL to the event description.
 
@@ -62,7 +72,7 @@ def _append_video_url_to_description(description: str, video_call_url: str) -> s
     conferenceData. Skips URLs without an http(s) prefix and avoids
     duplicating the URL if it is already present in the description.
     """
-    if not video_call_url or not video_call_url.startswith(("https://", "http://")):
+    if not _is_valid_video_call_url(video_call_url):
         return description
     if video_call_url in description:
         return description
@@ -206,10 +216,12 @@ async def google_calendar_create_event(
     """Create a new event in a calendar."""
     encoded_cal = quote(params.calendar_id, safe="")
 
-    # A custom video_call_url takes precedence over auto-generated Meet links,
-    # otherwise a provided URL would be silently dropped.
+    # A valid custom video_call_url takes precedence over auto-generated Meet
+    # links, otherwise a provided URL would be silently dropped. Invalid URLs
+    # fall through to the default generate_meet_link behaviour so the event
+    # never ends up with neither a Meet link nor a usable custom URL.
     generate_meet_link = params.generate_meet_link
-    if params.video_call_url:
+    if _is_valid_video_call_url(params.video_call_url):
         generate_meet_link = False
 
     body: dict = {
@@ -276,10 +288,12 @@ async def google_calendar_update_event(
     encoded_cal = quote(params.calendar_id, safe="")
     encoded_event = quote(params.event_id, safe="")
 
-    # A custom video_call_url takes precedence over auto-generated Meet links,
-    # otherwise a provided URL would be silently dropped.
+    # A valid custom video_call_url takes precedence over auto-generated Meet
+    # links, otherwise a provided URL would be silently dropped. Invalid URLs
+    # fall through to the default generate_meet_link behaviour so the event
+    # never ends up with neither a Meet link nor a usable custom URL.
     generate_meet_link = params.generate_meet_link
-    if params.video_call_url:
+    if _is_valid_video_call_url(params.video_call_url):
         generate_meet_link = False
 
     # Fetch the existing event to merge with provided updates.
