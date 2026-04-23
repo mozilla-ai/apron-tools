@@ -24,6 +24,7 @@ all = [
     "apron-tools[salesforce]",
     "apron-tools[slack]",
     "apron-tools[typeform]",
+    "apron-tools[web-access]",
     "apron-tools[word]",
 ]
 
@@ -39,6 +40,7 @@ powerpoint = ["python-pptx>=1.0"]
 salesforce = ["simple-salesforce>=1.0"]
 slack = ["slack_sdk[optional]>=3.0"]
 typeform = []
+web-access = ["tabstack>=2.2.0"]
 word = ["python-docx>=1.0"]
 
 [dependency-groups]

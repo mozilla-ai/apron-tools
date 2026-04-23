@@ -19,6 +19,7 @@ SDK_PACKAGES = (
     "slack_sdk",
     "pptx",
     "docx",
+    "tabstack",
 )
 
 
