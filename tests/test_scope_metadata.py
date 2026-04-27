@@ -179,10 +179,13 @@ def _all_scope_enums() -> list[type[Scope]]:
     return enums
 
 
+_ALL_SCOPE_ENUMS = _all_scope_enums()
+
+
 class TestProviderScopeMetadataCoverage:
     """Acceptance check: every member of every provider scope enum has metadata."""
 
-    @pytest.mark.parametrize("scope_enum", _all_scope_enums(), ids=lambda e: e.__name__)
+    @pytest.mark.parametrize("scope_enum", _ALL_SCOPE_ENUMS, ids=lambda e: e.__name__)
     def test_every_member_has_metadata(self, scope_enum: type[Scope]):
         assert len(scope_enum) > 0, f"{scope_enum.__name__} has no members"
         for member in scope_enum:
@@ -193,7 +196,7 @@ class TestProviderScopeMetadataCoverage:
             )
             assert isinstance(member.required, bool), f"{member!r} required is not bool"
 
-    @pytest.mark.parametrize("scope_enum", _all_scope_enums(), ids=lambda e: e.__name__)
+    @pytest.mark.parametrize("scope_enum", _ALL_SCOPE_ENUMS, ids=lambda e: e.__name__)
     def test_every_member_is_str(self, scope_enum: type[Scope]):
         for member in scope_enum:
             assert isinstance(member, str)
