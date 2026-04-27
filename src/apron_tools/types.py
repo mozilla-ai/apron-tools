@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Base64Bytes, BaseModel, Field, HttpUrl
 
@@ -59,7 +59,7 @@ class Scope(StrEnum):
         description: str,
         access_type: AccessType,
         required: bool = False,  # noqa: FBT001, FBT002
-    ) -> Scope:
+    ) -> Self:
         """Create a scope member carrying consent-UI metadata."""
         member = str.__new__(cls, value)
         member._value_ = value
