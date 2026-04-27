@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class MicrosoftOnedriveScope(StrEnum):
+class MicrosoftOnedriveScope(Scope):
     """OAuth scopes for Microsoft Graph Files / OneDrive API access."""
 
-    FILES_READ = "Files.Read"
-    FILES_READ_WRITE = "Files.ReadWrite"
+    FILES_READ = (
+        "Files.Read",
+        "View Files",
+        "View your OneDrive files and folders",
+        "read",
+        False,
+    )
+    FILES_READ_WRITE = (
+        "Files.ReadWrite",
+        "Edit Files",
+        "Create, edit, and manage your OneDrive files and folders",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[MicrosoftOnedriveScope]] = {

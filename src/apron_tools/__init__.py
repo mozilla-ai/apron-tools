@@ -12,13 +12,26 @@ from apron_tools.registry import (
     get_tools_for_service,
 )
 from apron_tools.tool import tool
-from apron_tools.types import CapabilityGroup, FileFromBytes, FileFromUrl, FileInput, ToolDefinition, ToolResult
+from apron_tools.types import (
+    AccessType,
+    CapabilityGroup,
+    FileFromBytes,
+    FileFromUrl,
+    FileInput,
+    Scope,
+    ScopeMetadata,
+    ToolDefinition,
+    ToolResult,
+)
 
 __all__ = [
+    "AccessType",
     "CapabilityGroup",
     "FileFromBytes",
     "FileFromUrl",
     "FileInput",
+    "Scope",
+    "ScopeMetadata",
     "ToolDefinition",
     "ToolResult",
     "discover_capability_groups",

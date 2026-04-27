@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class ConfluenceScope(StrEnum):
+class ConfluenceScope(Scope):
     """OAuth scopes for Atlassian Confluence API access."""
 
-    READ_CONFLUENCE_CONTENT = "read:confluence-content.all"
-    WRITE_CONFLUENCE_CONTENT = "write:confluence-content"
-    SEARCH_CONFLUENCE = "search:confluence"
+    READ_CONFLUENCE_CONTENT = (
+        "read:confluence-content.all",
+        "Read Content",
+        "View Confluence pages, blog posts, comments, and attachments across all spaces",
+        "read",
+        False,
+    )
+    WRITE_CONFLUENCE_CONTENT = (
+        "write:confluence-content",
+        "Write Content",
+        "Create and modify Confluence pages, blog posts, and attachments",
+        "write",
+        False,
+    )
+    SEARCH_CONFLUENCE = (
+        "search:confluence",
+        "Search",
+        "Search across Confluence content",
+        "read",
+        False,
+    )
 
 
 SCOPES: dict[str, list[ConfluenceScope]] = {

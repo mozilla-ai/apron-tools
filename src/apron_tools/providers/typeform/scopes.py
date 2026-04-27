@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class TypeformScope(StrEnum):
+class TypeformScope(Scope):
     """OAuth scopes for Typeform API access."""
 
-    FORMS_READ = "forms:read"
-    FORMS_WRITE = "forms:write"
-    RESPONSES_READ = "responses:read"
+    FORMS_READ = (
+        "forms:read",
+        "View Forms",
+        "View your Typeform forms and questions",
+        "read",
+        False,
+    )
+    FORMS_WRITE = (
+        "forms:write",
+        "Edit Forms",
+        "Create and modify your Typeform forms",
+        "write",
+        False,
+    )
+    RESPONSES_READ = (
+        "responses:read",
+        "View Responses",
+        "View form submissions and responses",
+        "read",
+        False,
+    )
 
 
 SCOPES: dict[str, list[TypeformScope]] = {

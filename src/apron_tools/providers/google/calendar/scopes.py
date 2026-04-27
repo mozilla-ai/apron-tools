@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class GoogleCalendarScope(StrEnum):
+class GoogleCalendarScope(Scope):
     """OAuth scopes for Google Calendar API access."""
 
-    CALENDAR_READONLY = "https://www.googleapis.com/auth/calendar.readonly"
-    CALENDAR = "https://www.googleapis.com/auth/calendar"
+    CALENDAR_READONLY = (
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "View Calendar",
+        "View your Google Calendar events and schedules",
+        "read",
+        False,
+    )
+    CALENDAR = (
+        "https://www.googleapis.com/auth/calendar",
+        "Full Calendar Access",
+        "View, edit, share, and delete all calendars and events",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[GoogleCalendarScope]] = {

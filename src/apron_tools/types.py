@@ -3,9 +3,98 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal
+from enum import StrEnum
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Base64Bytes, BaseModel, Field, HttpUrl
+
+AccessType = Literal["read", "write", "admin"]
+"""Access level granted by a scope.
+
+Used by consent UIs to visually group scopes (e.g. read tools under
+one heading, write tools under another) and by static audits to
+enforce least-privilege: a read-only tool must not declare a scope
+whose ``access_type`` is ``"write"`` or ``"admin"``.
+
+For scopes that implicitly cover both reading and writing
+(e.g. Google's ``gmail.modify``), use ``"write"`` and call out the
+read implication in the description so the consent screen wording
+matches what the user will actually see at the provider.
+"""
+
+
+class Scope(StrEnum):
+    """Base class for OAuth/capability scope enums with consent-UI metadata.
+
+    Members carry their value (the raw scope string) plus four metadata
+    attributes used by consent pickers: ``label``, ``description``,
+    ``access_type``, and ``required``. Members remain ``str``-equivalent —
+    libraries that consume scope strings (``urlencode``, ``" ".join(...)``,
+    ``httpx`` form bodies, Authlib) accept them directly with no
+    ``ScopeName.`` prefix leaking into the wire format.
+
+    Subclass and define members as tuples:
+
+    .. code-block:: python
+
+        class GmailScope(Scope):
+            READONLY = (
+                "https://www.googleapis.com/auth/gmail.readonly",
+                "Read Emails",
+                "View and search your Gmail messages",
+                "read",
+                False,
+            )
+    """
+
+    label: str
+    description: str
+    access_type: AccessType
+    required: bool
+
+    def __new__(
+        cls,
+        value: str,
+        label: str,
+        description: str,
+        access_type: AccessType,
+        required: bool = False,  # noqa: FBT001, FBT002
+    ) -> Self:
+        """Create a scope member carrying consent-UI metadata."""
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member.label = label
+        member.description = description
+        member.access_type = access_type
+        member.required = required
+        return member
+
+
+@dataclass(frozen=True)
+class ScopeMetadata:
+    """Plain-dataclass view of a :class:`Scope` member.
+
+    Useful for serialising scope metadata (e.g. to JSON for a consent UI)
+    or passing it across boundaries where the original enum class is not
+    importable.
+    """
+
+    scope: str
+    label: str
+    description: str
+    access_type: AccessType
+    required: bool
+
+    @classmethod
+    def from_scope(cls, scope: Scope) -> ScopeMetadata:
+        """Build a ``ScopeMetadata`` from a :class:`Scope` enum member."""
+        return cls(
+            scope=str(scope),
+            label=scope.label,
+            description=scope.description,
+            access_type=scope.access_type,
+            required=scope.required,
+        )
 
 
 class ToolResult(BaseModel):
@@ -66,6 +155,11 @@ class CapabilityGroup:
 
     Represents an integration that can be connected via OAuth,
     with the aggregate scopes required across all its tools.
+
+    ``scopes`` typically holds :class:`Scope` enum members so the
+    per-scope metadata travels with the group. ``str`` is accepted for
+    callers that build a group manually from raw scope strings; those
+    entries simply have no metadata available via :meth:`metadata`.
     """
 
     provider: str
@@ -74,8 +168,39 @@ class CapabilityGroup:
     display_name: str
     """Human-readable name, e.g. ``Typeform``."""
 
-    scopes: list[str]
-    """Union of all OAuth scopes required by this provider's tools."""
+    scopes: list[Scope | str]
+    """Union of all OAuth scopes required by this provider's tools.
+
+    Members are :class:`Scope` instances when sourced from a provider
+    scope enum, or raw ``str`` for ad-hoc groups. Lists may freely mix
+    the two: :meth:`metadata` falls back to defaults for raw strings.
+    """
+
+    def metadata(self) -> list[ScopeMetadata]:
+        """Return per-scope consent-UI metadata for this group.
+
+        Scope members that are :class:`Scope` enum instances yield full
+        metadata. Raw string entries fall back to defaults: the scope
+        string is used as both the label and the description, with
+        ``access_type="read"`` and ``required=False``. Callers building
+        a least-privilege consent picker should prefer scope enums so
+        the read/write split and required-scope semantics are accurate.
+        """
+        result: list[ScopeMetadata] = []
+        for s in self.scopes:
+            if isinstance(s, Scope):
+                result.append(ScopeMetadata.from_scope(s))
+            else:
+                result.append(
+                    ScopeMetadata(
+                        scope=str(s),
+                        label=str(s),
+                        description=str(s),
+                        access_type="read",
+                        required=False,
+                    )
+                )
+        return result
 
 
 # ---------------------------------------------------------------------------

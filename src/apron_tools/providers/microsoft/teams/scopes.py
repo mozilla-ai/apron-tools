@@ -2,20 +2,54 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class MicrosoftTeamsScope(StrEnum):
+class MicrosoftTeamsScope(Scope):
     """OAuth scopes for Microsoft Graph Teams API access."""
 
-    TEAM_READ_BASIC = "Team.ReadBasic.All"
-    CHANNEL_READ_BASIC = "Channel.ReadBasic.All"
-    CHAT_READ = "Chat.Read"
-    CHAT_READ_WRITE = "Chat.ReadWrite"
-    CHANNEL_MESSAGE_READ = "ChannelMessage.Read.All"
-    CHANNEL_MESSAGE_SEND = "ChannelMessage.Send"
+    TEAM_READ_BASIC = (
+        "Team.ReadBasic.All",
+        "View Teams",
+        "Read basic information about your teams",
+        "read",
+        False,
+    )
+    CHANNEL_READ_BASIC = (
+        "Channel.ReadBasic.All",
+        "View Channels",
+        "Read basic information about Teams channels",
+        "read",
+        False,
+    )
+    CHAT_READ = (
+        "Chat.Read",
+        "Read Chats",
+        "View chat messages in Microsoft Teams",
+        "read",
+        False,
+    )
+    CHAT_READ_WRITE = (
+        "Chat.ReadWrite",
+        "Send Chat Messages",
+        "Send and manage chat messages in Teams",
+        "write",
+        False,
+    )
+    CHANNEL_MESSAGE_READ = (
+        "ChannelMessage.Read.All",
+        "Read Channel Messages",
+        "View messages in Teams channels",
+        "read",
+        False,
+    )
+    CHANNEL_MESSAGE_SEND = (
+        "ChannelMessage.Send",
+        "Send Channel Messages",
+        "Send messages to Teams channels",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[MicrosoftTeamsScope]] = {

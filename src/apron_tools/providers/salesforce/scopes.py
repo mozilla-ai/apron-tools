@@ -2,17 +2,36 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class SalesforceScope(StrEnum):
+class SalesforceScope(Scope):
     """OAuth scopes for Salesforce API access."""
 
-    API = "api"
-    FULL = "full"
-    REFRESH_TOKEN = "refresh_token"
+    API = (
+        "api",
+        "API Access",
+        "Access Salesforce REST APIs for data operations (REST, SOQL, SOSL)",
+        "write",
+        False,
+    )
+    # `full` grants access to all data the user can access — including
+    # admin-level configuration. Reserve for tools that genuinely require
+    # administrative scope.
+    FULL = (
+        "full",
+        "Full Access",
+        "Access all data the authenticated user can access, including administrative configuration",
+        "admin",
+        False,
+    )
+    REFRESH_TOKEN = (
+        "refresh_token",
+        "Refresh Token",
+        "Obtain long-lived refresh tokens for persistent access",
+        "read",
+        False,
+    )
 
 
 SCOPES: dict[str, list[SalesforceScope]] = {

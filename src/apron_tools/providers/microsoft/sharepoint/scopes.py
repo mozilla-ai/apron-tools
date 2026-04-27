@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class MicrosoftSharePointScope(StrEnum):
+class MicrosoftSharePointScope(Scope):
     """OAuth scopes for Microsoft Graph SharePoint API access."""
 
-    SITES_READ_ALL = "Sites.Read.All"
-    SITES_READ_WRITE_ALL = "Sites.ReadWrite.All"
-    FILES_READ_WRITE_ALL = "Files.ReadWrite.All"
+    SITES_READ_ALL = (
+        "Sites.Read.All",
+        "View SharePoint Sites",
+        "View SharePoint sites and their content",
+        "read",
+        False,
+    )
+    SITES_READ_WRITE_ALL = (
+        "Sites.ReadWrite.All",
+        "Edit SharePoint Sites",
+        "Create and modify content on SharePoint sites",
+        "write",
+        False,
+    )
+    FILES_READ_WRITE_ALL = (
+        "Files.ReadWrite.All",
+        "Edit All Files",
+        "Create, edit, and manage all files across SharePoint",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[MicrosoftSharePointScope]] = {
