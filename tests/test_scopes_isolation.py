@@ -1,4 +1,4 @@
-"""Verify scopes are importable without loading tool SDK dependencies.
+"""Verify scopes are importable without loading tool implementations or SDKs.
 
 Uses subprocess to guarantee a clean sys.modules — no test-ordering dependency.
 """
@@ -11,9 +11,10 @@ import sys
 import apron_tools.providers as _providers_pkg
 from apron_tools.types import CapabilityGroup
 
-# SDK packages that should NOT be loaded when importing only scopes.
-# Only includes packages imported by provider tools.py files, not core
-# dependencies like httpx which are always loaded.
+# Belt-and-braces watchlist of SDK packages that no scopes-only import path
+# should pull in. The structural test below is the primary invariant; this
+# list catches the orthogonal failure mode of an SDK leaking from a non-tools
+# module (e.g. a future scopes.py that grew an SDK import).
 SDK_PACKAGES = (
     "github",
     "slack_sdk",
@@ -43,8 +44,25 @@ def _collect_scopes_modules() -> list[str]:
     return modules
 
 
-# Script executed in a clean subprocess to verify SDK isolation.
-_ISOLATION_SCRIPT = f"""\
+# Structural invariant: after discovery, no provider tools.py module is loaded.
+# Catches any leaked eager re-export regardless of what the tools module imports.
+_STRUCTURAL_ISOLATION_SCRIPT = """\
+import sys
+from apron_tools.registry import discover_capability_groups
+
+discover_capability_groups()
+
+leaked = sorted(
+    name for name in sys.modules
+    if name.startswith("apron_tools.providers.") and name.endswith(".tools")
+)
+if leaked:
+    print(",".join(leaked))
+    sys.exit(1)
+"""
+
+
+_SDK_ISOLATION_SCRIPT = f"""\
 import sys
 from apron_tools.registry import discover_capability_groups
 
@@ -71,11 +89,30 @@ class TestScopesImportIsolation:
             cg = getattr(module, "CAPABILITY_GROUP", None)
             assert isinstance(cg, CapabilityGroup), f"{module_path} missing CAPABILITY_GROUP"
 
-    def test_discover_capability_groups_does_not_load_sdks(self):
-        """Run in a clean subprocess to guarantee no SDK packages are loaded."""
+    def test_discover_capability_groups_does_not_load_tool_modules(self):
+        """No `apron_tools.providers.*.tools` module is loaded after discovery.
+
+        SDK-list-independent: any future leaked re-export fails this test by
+        construction, regardless of what the leaked tools module happens to import.
+        """
         result = subprocess.run(
-            [sys.executable, "-c", _ISOLATION_SCRIPT],
+            [sys.executable, "-c", _STRUCTURAL_ISOLATION_SCRIPT],
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, f"discover_capability_groups() loaded SDK packages: {result.stdout.strip()}"
+        assert result.returncode == 0, (
+            f"discover_capability_groups() loaded tool modules: "
+            f"{result.stdout.strip()} | stderr: {result.stderr.strip()}"
+        )
+
+    def test_discover_capability_groups_does_not_load_sdks(self):
+        """Run in a clean subprocess to guarantee no SDK packages are loaded."""
+        result = subprocess.run(
+            [sys.executable, "-c", _SDK_ISOLATION_SCRIPT],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"discover_capability_groups() loaded SDK packages: "
+            f"{result.stdout.strip()} | stderr: {result.stderr.strip()}"
+        )
