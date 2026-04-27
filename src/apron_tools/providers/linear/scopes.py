@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class LinearScope(StrEnum):
+class LinearScope(Scope):
     """Capability scopes for Linear API access."""
 
-    READ = "read"
-    WRITE = "write"
-    ADMIN = "admin"
+    READ = (
+        "read",
+        "Read Access",
+        "Read issues, projects, and workspace data",
+        "read",
+        False,
+    )
+    WRITE = (
+        "write",
+        "Write Access",
+        "Modify issues, projects, and workspace data",
+        "write",
+        False,
+    )
+    ADMIN = (
+        "admin",
+        "Admin Access",
+        "Read administrative workspace data such as user account details",
+        "admin",
+        False,
+    )
 
 
 SCOPES: dict[str, list[LinearScope]] = {
