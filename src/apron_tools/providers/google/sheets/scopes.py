@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class GoogleSheetsScope(StrEnum):
+class GoogleSheetsScope(Scope):
     """OAuth scopes for Google Sheets and Drive API access."""
 
-    SPREADSHEETS = "https://www.googleapis.com/auth/spreadsheets"
-    DRIVE = "https://www.googleapis.com/auth/drive"
+    SPREADSHEETS = (
+        "https://www.googleapis.com/auth/spreadsheets",
+        "Full Spreadsheet Access",
+        "View, edit, create, and delete all Google Sheets",
+        "write",
+        False,
+    )
+    DRIVE = (
+        "https://www.googleapis.com/auth/drive",
+        "Full Drive Access",
+        "View, edit, create, delete, and share all Google Drive files",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[GoogleSheetsScope]] = {
