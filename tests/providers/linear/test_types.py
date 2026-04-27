@@ -22,8 +22,9 @@ from apron_tools.providers.linear.types import (
     ListUsersResult,
     ReadIssueParams,
     ReadIssueResult,
-    UpdateIssueParams,
-    UpdateIssueResult,
+    UpdateIssueItem,
+    UpdateIssuesParams,
+    UpdateIssuesResult,
     UpdateProjectParams,
     UpdateProjectResult,
     WhoamiParams,
@@ -112,16 +113,20 @@ class TestCreateIssueParams:
         assert params.state_id == "state-001"
 
 
-class TestUpdateIssueParams:
+class TestUpdateIssuesParams:
     def test_required_fields(self):
-        params = UpdateIssueParams(issue_id="issue-001")
-        assert params.issue_id == "issue-001"
+        params = UpdateIssuesParams(issue_ids="issue-001")
+        assert params.issue_ids == "issue-001"
         assert params.title is None
 
     def test_partial_update(self):
-        params = UpdateIssueParams(issue_id="issue-001", title="New title")
+        params = UpdateIssuesParams(issue_ids="issue-001", title="New title")
         assert params.title == "New title"
         assert params.description is None
+
+    def test_csv_input(self):
+        params = UpdateIssuesParams(issue_ids="issue-001,issue-002")
+        assert params.issue_ids == "issue-001,issue-002"
 
 
 class TestListProjectsParams:
@@ -381,38 +386,37 @@ class TestCreateIssueResult:
 
 
 # ---------------------------------------------------------------------------
-# UpdateIssueResult
+# UpdateIssuesResult
 # ---------------------------------------------------------------------------
 
 
-class TestUpdateIssueResult:
-    def test_parse_api_response(self):
+class TestUpdateIssuesResult:
+    def test_str_lists_per_issue_outcomes(self):
         from apron_tools.providers.linear.types import MutationIssue
 
         data = _load_json("update_issue.json")
         issue_data = data["data"]["issueUpdate"]["issue"]
         issue = MutationIssue.model_validate(issue_data)
-        result = UpdateIssueResult(issue=issue)
-
-        assert result.success is True
-        assert result.issue is not None
-        assert result.issue.identifier == "ENG-123"
-
-    def test_str_output(self):
-        from apron_tools.providers.linear.types import MutationIssue
-
-        data = _load_json("update_issue.json")
-        issue_data = data["data"]["issueUpdate"]["issue"]
-        issue = MutationIssue.model_validate(issue_data)
-        result = UpdateIssueResult(issue=issue)
+        result = UpdateIssuesResult(
+            success=True,
+            items=[
+                UpdateIssueItem(issue_id="issue-001", success=True, issue=issue),
+                UpdateIssueItem(issue_id="issue-002", success=False, error="Conflict"),
+            ],
+        )
         text = str(result)
 
         assert "ENG-123" in text
-        assert "Updated" in text
+        assert "issue-002" in text
+        assert "Conflict" in text
 
-    def test_str_on_error(self):
-        result = UpdateIssueResult(success=False, error="Conflict")
-        assert str(result) == "Error: Conflict"
+    def test_str_on_top_level_error(self):
+        result = UpdateIssuesResult(success=False, error="Auth error")
+        assert str(result) == "Error: Auth error"
+
+    def test_str_with_no_items(self):
+        result = UpdateIssuesResult(success=True, items=[])
+        assert str(result) == "No issues processed."
 
 
 # ---------------------------------------------------------------------------

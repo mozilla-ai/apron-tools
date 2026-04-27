@@ -8,7 +8,7 @@ from pathlib import Path
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.gmail.tools import (
-    gmail_add_label_to_email,
+    gmail_add_labels_to_emails,
     gmail_create_draft,
     gmail_create_label,
     gmail_edit_draft,
@@ -16,12 +16,12 @@ from apron_tools.providers.google.gmail.tools import (
     gmail_list_emails,
     gmail_list_labels,
     gmail_read_email,
-    gmail_remove_label_from_email,
+    gmail_remove_labels_from_emails,
     gmail_reply_to_email,
     gmail_send_email,
 )
 from apron_tools.providers.google.gmail.types import (
-    AddLabelToEmailParams,
+    AddLabelsToEmailsParams,
     CreateDraftParams,
     CreateDraftResult,
     CreateLabelParams,
@@ -37,7 +37,7 @@ from apron_tools.providers.google.gmail.types import (
     ModifyLabelsResult,
     ReadEmailParams,
     ReadEmailResult,
-    RemoveLabelFromEmailParams,
+    RemoveLabelsFromEmailsParams,
     ReplyToEmailParams,
     ReplyToEmailResult,
     SendEmailParams,
@@ -421,82 +421,165 @@ class TestListLabels:
 
 
 # ---------------------------------------------------------------------------
-# add_label_to_email
+# add_labels_to_emails (bulk)
 # ---------------------------------------------------------------------------
 
 
-class TestAddLabelToEmail:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+class TestAddLabelsToEmails:
+    async def test_single_message(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/messages/msg-001/modify",
             json=_load_json("modify_add_label.json"),
         )
 
-        result = await gmail_add_label_to_email(
-            AddLabelToEmailParams(message_id="msg-001", label_id="label-001"),
+        result = await gmail_add_labels_to_emails(
+            AddLabelsToEmailsParams(message_ids="msg-001", label_ids="label-001"),
             token=_TOKEN,
         )
 
         assert isinstance(result, ModifyLabelsResult)
         assert result.success is True
-        assert result.id == "msg-001"
-        assert "label-001" in result.label_ids
+        assert len(result.items) == 1
+        assert result.items[0].message_id == "msg-001"
+        assert result.items[0].success is True
+        assert "label-001" in result.items[0].label_ids
 
-    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
-        httpx_mock.add_response(status_code=404, text="Not Found")
+    async def test_multiple_messages(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/modify",
+            json={"id": "msg-001", "threadId": "t-1", "labelIds": ["INBOX", "label-001"]},
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-002/modify",
+            json={"id": "msg-002", "threadId": "t-2", "labelIds": ["INBOX", "label-001"]},
+        )
 
-        result = await gmail_add_label_to_email(
-            AddLabelToEmailParams(message_id="bad-id", label_id="label-001"),
+        result = await gmail_add_labels_to_emails(
+            AddLabelsToEmailsParams(message_ids="msg-001, msg-002", label_ids="label-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert [item.message_id for item in result.items] == ["msg-001", "msg-002"]
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/modify",
+            json=_load_json("modify_add_label.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/bad-id/modify",
+            status_code=404,
+            text="Not Found",
+        )
+
+        result = await gmail_add_labels_to_emails(
+            AddLabelsToEmailsParams(message_ids="msg-001,bad-id", label_ids="label-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "404" in (result.items[1].error or "")
+
+    async def test_empty_message_ids(self) -> None:
+        result = await gmail_add_labels_to_emails(
+            AddLabelsToEmailsParams(message_ids="", label_ids="label-001"),
             token=_TOKEN,
         )
 
         assert result.success is False
-        assert "404" in result.error
+        assert result.error == "No message IDs provided."
+
+    async def test_empty_label_ids(self) -> None:
+        result = await gmail_add_labels_to_emails(
+            AddLabelsToEmailsParams(message_ids="msg-001", label_ids=" , "),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "No label IDs provided."
 
     async def test_has_tool_definition(self) -> None:
-        defn = gmail_add_label_to_email._tool_definition
-        assert defn.name == "gmail_add_label_to_email"
+        defn = gmail_add_labels_to_emails._tool_definition
+        assert defn.name == "gmail_add_labels_to_emails"
         assert defn.provider == "google"
         assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.modify" in defn.scopes
 
 
 # ---------------------------------------------------------------------------
-# remove_label_from_email
+# remove_labels_from_emails (bulk)
 # ---------------------------------------------------------------------------
 
 
-class TestRemoveLabelFromEmail:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+class TestRemoveLabelsFromEmails:
+    async def test_single_message(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/messages/msg-001/modify",
             json=_load_json("modify_remove_label.json"),
         )
 
-        result = await gmail_remove_label_from_email(
-            RemoveLabelFromEmailParams(message_id="msg-001", label_id="label-001"),
+        result = await gmail_remove_labels_from_emails(
+            RemoveLabelsFromEmailsParams(message_ids="msg-001", label_ids="label-001"),
             token=_TOKEN,
         )
 
         assert isinstance(result, ModifyLabelsResult)
         assert result.success is True
-        assert result.id == "msg-001"
-        assert "label-001" not in result.label_ids
+        assert len(result.items) == 1
+        assert result.items[0].message_id == "msg-001"
+        assert "label-001" not in result.items[0].label_ids
 
-    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
-        httpx_mock.add_response(status_code=403, text="Forbidden")
+    async def test_multiple_messages(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/modify",
+            json={"id": "msg-001", "threadId": "t-1", "labelIds": ["INBOX"]},
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-002/modify",
+            json={"id": "msg-002", "threadId": "t-2", "labelIds": ["INBOX"]},
+        )
 
-        result = await gmail_remove_label_from_email(
-            RemoveLabelFromEmailParams(message_id="bad-id", label_id="label-001"),
+        result = await gmail_remove_labels_from_emails(
+            RemoveLabelsFromEmailsParams(message_ids="msg-001,msg-002", label_ids="label-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert [item.message_id for item in result.items] == ["msg-001", "msg-002"]
+        assert all(item.success for item in result.items)
+
+    async def test_api_error_per_item(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/bad-id/modify",
+            status_code=403,
+            text="Forbidden",
+        )
+
+        result = await gmail_remove_labels_from_emails(
+            RemoveLabelsFromEmailsParams(message_ids="bad-id", label_ids="label-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is False
+        assert "403" in (result.items[0].error or "")
+
+    async def test_empty_message_ids(self) -> None:
+        result = await gmail_remove_labels_from_emails(
+            RemoveLabelsFromEmailsParams(message_ids="  ", label_ids="label-001"),
             token=_TOKEN,
         )
 
         assert result.success is False
-        assert "403" in result.error
+        assert result.error == "No message IDs provided."
 
     async def test_has_tool_definition(self) -> None:
-        defn = gmail_remove_label_from_email._tool_definition
-        assert defn.name == "gmail_remove_label_from_email"
+        defn = gmail_remove_labels_from_emails._tool_definition
+        assert defn.name == "gmail_remove_labels_from_emails"
         assert defn.provider == "google"
         assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.modify" in defn.scopes

@@ -38,7 +38,7 @@ SCOPES: dict[str, list[LinearScope]] = {
     "linear_list_issues": [LinearScope.READ],
     "linear_read_issue": [LinearScope.READ],
     "linear_create_issue": [LinearScope.WRITE],
-    "linear_update_issue": [LinearScope.WRITE],
+    "linear_update_issues": [LinearScope.WRITE],
     "linear_list_projects": [LinearScope.READ],
     "linear_create_project": [LinearScope.WRITE],
     "linear_update_project": [LinearScope.WRITE],

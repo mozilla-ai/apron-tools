@@ -113,11 +113,15 @@ class GetReactionsParams(BaseModel):
     full: bool = False
 
 
-class AddReactionParams(BaseModel):
-    """Parameters for adding a reaction to a Slack message."""
+class AddReactionsParams(BaseModel):
+    """Parameters for adding the same reaction to one or more Slack messages.
+
+    ``timestamps`` accepts a comma-separated list of message timestamps to
+    support bulk operations.
+    """
 
     channel_id: str
-    timestamp: str
+    timestamps: str
     reaction_name: str
 
 
@@ -567,25 +571,37 @@ class GetReactionsResult(ToolResult):
         return "\n".join(lines)
 
 
-class AddReactionResult(ToolResult):
-    """Result of adding a reaction to a Slack message."""
+class AddReactionItem(BaseModel):
+    """Per-message outcome of a bulk Slack add-reactions call."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    timestamp: str
+    success: bool = True
+    error: str | None = None
+
+
+class AddReactionsResult(ToolResult):
+    """Result of adding a reaction to one or more Slack messages."""
 
     model_config = ConfigDict(extra="ignore")
 
     reaction_name: str = ""
     channel_id: str = ""
-    timestamp: str = ""
-
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when the API response indicates ok."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = data.get("ok", False)
-        return data
+    items: list[AddReactionItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable confirmation of the added reaction."""
+        """Return an LLM-readable summary of the bulk reaction add."""
         if not self.success:
             return f"Error: {self.error}"
-        return f"Reaction :{self.reaction_name}: added to message {self.timestamp} in channel {self.channel_id}."
+        if not self.items:
+            return "No messages processed."
+        lines: list[str] = []
+        for item in self.items:
+            if item.success:
+                lines.append(
+                    f"- Reaction :{self.reaction_name}: added to message {item.timestamp} in channel {self.channel_id}."
+                )
+            else:
+                lines.append(f"- {item.timestamp}: Failed: {item.error}")
+        return "\n".join(lines)

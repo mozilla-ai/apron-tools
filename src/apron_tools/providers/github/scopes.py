@@ -30,7 +30,7 @@ SCOPES: dict[str, list[GitHubScope]] = {
     "github_list_issues": [GitHubScope.REPO],
     "github_get_issue": [GitHubScope.REPO],
     "github_create_issue": [GitHubScope.REPO],
-    "github_add_issue_comment": [GitHubScope.REPO],
+    "github_add_issue_comments": [GitHubScope.REPO],
     "github_list_pull_requests": [GitHubScope.REPO],
     "github_get_pull_request": [GitHubScope.REPO],
     "github_create_pull_request": [GitHubScope.REPO],

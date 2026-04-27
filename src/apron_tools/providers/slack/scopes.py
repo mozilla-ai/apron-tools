@@ -191,7 +191,7 @@ SCOPES: dict[str, list[SlackScope]] = {
     "slack_download_file": [SlackScope.FILES_READ],
     "slack_save_file_for_upload": [SlackScope.FILES_READ],
     "slack_get_reactions": [SlackScope.REACTIONS_READ],
-    "slack_add_reaction": [SlackScope.REACTIONS_WRITE],
+    "slack_add_reactions": [SlackScope.REACTIONS_WRITE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

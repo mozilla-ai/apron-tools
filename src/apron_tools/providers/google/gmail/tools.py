@@ -8,8 +8,9 @@ from email.mime.text import MIMEText
 
 import httpx
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.providers.google.gmail.types import (
-    AddLabelToEmailParams,
+    AddLabelsToEmailsParams,
     CreateDraftParams,
     CreateDraftResult,
     CreateLabelParams,
@@ -24,10 +25,11 @@ from apron_tools.providers.google.gmail.types import (
     ListEmailsResult,
     ListLabelsParams,
     ListLabelsResult,
+    ModifyLabelsItem,
     ModifyLabelsResult,
     ReadEmailParams,
     ReadEmailResult,
-    RemoveLabelFromEmailParams,
+    RemoveLabelsFromEmailsParams,
     ReplyToEmailParams,
     ReplyToEmailResult,
     SendEmailParams,
@@ -564,68 +566,89 @@ async def gmail_list_labels(
     return ListLabelsResult(success=True, labels=labels)
 
 
-@tool(
-    scopes=SCOPES["gmail_add_label_to_email"],
-    api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/modify",
-    provider="google",
-    service="gmail",
-)
-async def gmail_add_label_to_email(
-    params: AddLabelToEmailParams,
-    *,
+async def _modify_message_labels(
+    client: httpx.AsyncClient,
+    base_url: str,
     token: str,
-    base_url: str = _GMAIL_BASE_URL,
-) -> ModifyLabelsResult:
-    """Add a label to a Gmail message."""
+    message_id: str,
+    add_label_ids: list[str],
+    remove_label_ids: list[str],
+) -> ModifyLabelsItem:
+    """Send a single Gmail messages.modify request and shape the per-item outcome."""
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                f"{base_url}/messages/{params.message_id}/modify",
-                headers=_headers(token, content_type=True),
-                json={"addLabelIds": [params.label_id], "removeLabelIds": []},
-            )
+        resp = await client.post(
+            f"{base_url}/messages/{message_id}/modify",
+            headers=_headers(token, content_type=True),
+            json={"addLabelIds": add_label_ids, "removeLabelIds": remove_label_ids},
+        )
     except httpx.HTTPError as exc:
-        return ModifyLabelsResult(success=False, error=str(exc))
+        return ModifyLabelsItem(message_id=message_id, success=False, error=str(exc))
 
     if not resp.is_success:
-        return ModifyLabelsResult(
+        return ModifyLabelsItem(
+            message_id=message_id,
             success=False,
             error=f"Gmail API error {resp.status_code}: {resp.text}",
         )
 
-    return ModifyLabelsResult.model_validate(resp.json())
+    data = resp.json()
+    return ModifyLabelsItem(
+        message_id=data.get("id", message_id),
+        label_ids=list(data.get("labelIds", [])),
+        success=True,
+    )
 
 
 @tool(
-    scopes=SCOPES["gmail_remove_label_from_email"],
+    scopes=SCOPES["gmail_add_labels_to_emails"],
     api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/modify",
     provider="google",
     service="gmail",
 )
-async def gmail_remove_label_from_email(
-    params: RemoveLabelFromEmailParams,
+async def gmail_add_labels_to_emails(
+    params: AddLabelsToEmailsParams,
     *,
     token: str,
     base_url: str = _GMAIL_BASE_URL,
 ) -> ModifyLabelsResult:
-    """Remove a label from a Gmail message."""
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                f"{base_url}/messages/{params.message_id}/modify",
-                headers=_headers(token, content_type=True),
-                json={"addLabelIds": [], "removeLabelIds": [params.label_id]},
-            )
-    except httpx.HTTPError as exc:
-        return ModifyLabelsResult(success=False, error=str(exc))
+    """Add one or more labels to one or more Gmail messages."""
+    message_ids = parse_csv_ids(params.message_ids)
+    label_ids = parse_csv_ids(params.label_ids)
+    if not message_ids:
+        return ModifyLabelsResult(success=False, error="No message IDs provided.")
+    if not label_ids:
+        return ModifyLabelsResult(success=False, error="No label IDs provided.")
 
-    if not resp.is_success:
-        return ModifyLabelsResult(
-            success=False,
-            error=f"Gmail API error {resp.status_code}: {resp.text}",
-        )
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [await _modify_message_labels(client, base_url, token, msg_id, label_ids, []) for msg_id in message_ids]
 
-    return ModifyLabelsResult.model_validate(resp.json())
+    return ModifyLabelsResult(success=True, items=items)
+
+
+@tool(
+    scopes=SCOPES["gmail_remove_labels_from_emails"],
+    api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/modify",
+    provider="google",
+    service="gmail",
+)
+async def gmail_remove_labels_from_emails(
+    params: RemoveLabelsFromEmailsParams,
+    *,
+    token: str,
+    base_url: str = _GMAIL_BASE_URL,
+) -> ModifyLabelsResult:
+    """Remove one or more labels from one or more Gmail messages."""
+    message_ids = parse_csv_ids(params.message_ids)
+    label_ids = parse_csv_ids(params.label_ids)
+    if not message_ids:
+        return ModifyLabelsResult(success=False, error="No message IDs provided.")
+    if not label_ids:
+        return ModifyLabelsResult(success=False, error="No label IDs provided.")
+
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [await _modify_message_labels(client, base_url, token, msg_id, [], label_ids) for msg_id in message_ids]
+
+    return ModifyLabelsResult(success=True, items=items)
 
 
 @tool(

@@ -13,7 +13,7 @@ from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
 from apron_tools.providers.slack import tools as slack_tools
 from apron_tools.providers.slack.tools import (
-    slack_add_reaction,
+    slack_add_reactions,
     slack_download_file,
     slack_edit_message,
     slack_explore_workspace,
@@ -29,8 +29,8 @@ from apron_tools.providers.slack.tools import (
     slack_send_user_message,
 )
 from apron_tools.providers.slack.types import (
-    AddReactionParams,
-    AddReactionResult,
+    AddReactionsParams,
+    AddReactionsResult,
     DownloadFileParams,
     DownloadFileResult,
     EditMessageParams,
@@ -874,29 +874,57 @@ class TestSlackGetReactions:
 
 
 # ---------------------------------------------------------------------------
-# slack_add_reaction
+# slack_add_reactions (bulk)
 # ---------------------------------------------------------------------------
 
 
-class TestSlackAddReaction:
+class TestSlackAddReactions:
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
-    async def test_success(self, mock_cls: AsyncMock) -> None:
+    async def test_single_message(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
         client.reactions_add.return_value = _mock_response(_load_json("reactions_add.json"))
 
-        result = await slack_add_reaction(
-            AddReactionParams(channel_id="C012AB3CD", timestamp="1512085950.000216", reaction_name="thumbsup"),
+        result = await slack_add_reactions(
+            AddReactionsParams(channel_id="C012AB3CD", timestamps="1512085950.000216", reaction_name="thumbsup"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
-        assert isinstance(result, AddReactionResult)
+        assert isinstance(result, AddReactionsResult)
         assert result.success is True
         assert result.reaction_name == "thumbsup"
+        assert result.channel_id == "C012AB3CD"
+        assert len(result.items) == 1
+        assert result.items[0].timestamp == "1512085950.000216"
+        assert result.items[0].success is True
         client.reactions_add.assert_called_once_with(
             channel="C012AB3CD", timestamp="1512085950.000216", name="thumbsup"
         )
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_multiple_messages(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.reactions_add.return_value = _mock_response(_load_json("reactions_add.json"))
+
+        result = await slack_add_reactions(
+            AddReactionsParams(
+                channel_id="C012AB3CD",
+                timestamps="1512085950.000216, 1512085951.000217",
+                reaction_name="thumbsup",
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert [item.timestamp for item in result.items] == [
+            "1512085950.000216",
+            "1512085951.000217",
+        ]
+        assert all(item.success for item in result.items)
+        assert client.reactions_add.await_count == 2
 
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_strips_colons(self, mock_cls: AsyncMock) -> None:
@@ -904,8 +932,12 @@ class TestSlackAddReaction:
         mock_cls.return_value = client
         client.reactions_add.return_value = _mock_response(_load_json("reactions_add.json"))
 
-        result = await slack_add_reaction(
-            AddReactionParams(channel_id="C012AB3CD", timestamp="1512085950.000216", reaction_name=":thumbsup:"),
+        result = await slack_add_reactions(
+            AddReactionsParams(
+                channel_id="C012AB3CD",
+                timestamps="1512085950.000216",
+                reaction_name=":thumbsup:",
+            ),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
@@ -914,8 +946,8 @@ class TestSlackAddReaction:
         assert result.reaction_name == "thumbsup"
 
     async def test_empty_reaction_name(self) -> None:
-        result = await slack_add_reaction(
-            AddReactionParams(channel_id="C012AB3CD", timestamp="000", reaction_name="::"),
+        result = await slack_add_reactions(
+            AddReactionsParams(channel_id="C012AB3CD", timestamps="000", reaction_name="::"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
@@ -924,8 +956,8 @@ class TestSlackAddReaction:
         assert "empty" in result.error
 
     async def test_invalid_reaction_name(self) -> None:
-        result = await slack_add_reaction(
-            AddReactionParams(channel_id="C012AB3CD", timestamp="000", reaction_name="bad emoji!"),
+        result = await slack_add_reactions(
+            AddReactionsParams(channel_id="C012AB3CD", timestamps="000", reaction_name="bad emoji!"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
@@ -933,24 +965,43 @@ class TestSlackAddReaction:
         assert result.success is False
         assert "invalid" in result.error
 
-    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
-    async def test_api_error(self, mock_cls: AsyncMock) -> None:
-        client = AsyncMock()
-        mock_cls.return_value = client
-        client.reactions_add.side_effect = _slack_api_error("already_reacted")
-
-        result = await slack_add_reaction(
-            AddReactionParams(channel_id="C012AB3CD", timestamp="1512085950.000216", reaction_name="thumbsup"),
+    async def test_empty_timestamps(self) -> None:
+        result = await slack_add_reactions(
+            AddReactionsParams(channel_id="C012AB3CD", timestamps=" , ", reaction_name="thumbsup"),
             token=_TOKEN,
             base_url=_BASE_URL,
         )
 
         assert result.success is False
-        assert result.error == "already_reacted"
+        assert result.error == "No timestamps provided."
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_partial_failure(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.reactions_add.side_effect = [
+            _mock_response(_load_json("reactions_add.json")),
+            _slack_api_error("already_reacted"),
+        ]
+
+        result = await slack_add_reactions(
+            AddReactionsParams(
+                channel_id="C012AB3CD",
+                timestamps="ts-001,ts-002",
+                reaction_name="thumbsup",
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert result.items[1].error == "already_reacted"
 
     async def test_has_tool_definition(self) -> None:
-        defn = slack_add_reaction._tool_definition
-        assert defn.name == "slack_add_reaction"
+        defn = slack_add_reactions._tool_definition
+        assert defn.name == "slack_add_reactions"
         assert defn.provider == "slack"
 
 
@@ -1248,14 +1299,14 @@ class TestChannelIdBoundaryRejection:
         assert "not a valid Slack channel ID" in result.error
 
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
-    async def test_add_reaction_rejects_name(self, mock_cls: AsyncMock) -> None:
+    async def test_add_reactions_rejects_name(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
 
-        result = await slack_add_reaction(
-            AddReactionParams(
+        result = await slack_add_reactions(
+            AddReactionsParams(
                 channel_id="general",
-                timestamp="1512085950.000216",
+                timestamps="1512085950.000216",
                 reaction_name="thumbsup",
             ),
             token=_TOKEN,

@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 
 from apron_tools.providers.github.types import (
-    AddIssueCommentParams,
-    AddIssueCommentResult,
+    AddIssueCommentItem,
+    AddIssueCommentsParams,
+    AddIssueCommentsResult,
     CreateBranchParams,
     CreateBranchResult,
     CreateIssueParams,
@@ -109,10 +110,15 @@ class TestCreateIssueParams:
         assert params.assignees == ""
 
 
-class TestAddIssueCommentParams:
+class TestAddIssueCommentsParams:
     def test_required_fields(self):
-        params = AddIssueCommentParams(owner="octocat", repo="Hello-World", issue_number=1347, body="Me too")
+        params = AddIssueCommentsParams(owner="octocat", repo="Hello-World", issue_numbers="1347", body="Me too")
         assert params.body == "Me too"
+        assert params.issue_numbers == "1347"
+
+    def test_csv_input(self):
+        params = AddIssueCommentsParams(owner="octocat", repo="Hello-World", issue_numbers="1,2,3", body="hi")
+        assert params.issue_numbers == "1,2,3"
 
 
 class TestListPullRequestsParams:
@@ -398,34 +404,50 @@ class TestCreateIssueResult:
 
 
 # ---------------------------------------------------------------------------
-# AddIssueCommentResult
+# AddIssueCommentsResult
 # ---------------------------------------------------------------------------
 
 
-class TestAddIssueCommentResult:
-    def test_parse_api_response(self):
+class TestAddIssueCommentsResult:
+    def test_str_lists_per_issue_outcomes(self):
         data = _load_json("add_issue_comment.json")
         comment = IssueCommentSummary.model_validate(data)
-        result = AddIssueCommentResult(success=True, comment=comment)
-
-        assert result.success is True
-        assert result.comment is not None
-        assert result.comment.body == "Me too"
-        assert result.comment.user is not None
-        assert result.comment.user.login == "octocat"
-
-    def test_str_output(self):
-        data = _load_json("add_issue_comment.json")
-        comment = IssueCommentSummary.model_validate(data)
-        result = AddIssueCommentResult(success=True, comment=comment)
+        result = AddIssueCommentsResult(
+            success=True,
+            items=[
+                AddIssueCommentItem(issue_number=1347, success=True, comment=comment),
+                AddIssueCommentItem(issue_number=1348, success=True, comment=comment),
+            ],
+        )
         text = str(result)
 
-        assert "Comment added successfully!" in text
+        assert "Issue #1347" in text
+        assert "Issue #1348" in text
         assert "issuecomment-1" in text
 
-    def test_str_on_error(self):
-        result = AddIssueCommentResult(success=False, error="Not found")
+    def test_str_marks_per_issue_failures(self):
+        data = _load_json("add_issue_comment.json")
+        comment = IssueCommentSummary.model_validate(data)
+        result = AddIssueCommentsResult(
+            success=True,
+            items=[
+                AddIssueCommentItem(issue_number=1347, success=True, comment=comment),
+                AddIssueCommentItem(issue_number=9999, success=False, error="HTTP 404"),
+            ],
+        )
+        text = str(result)
+
+        assert "Issue #1347" in text
+        assert "Issue #9999" in text
+        assert "HTTP 404" in text
+
+    def test_str_on_top_level_error(self):
+        result = AddIssueCommentsResult(success=False, error="Not found")
         assert str(result) == "Error: Not found"
+
+    def test_str_with_no_items(self):
+        result = AddIssueCommentsResult(success=True, items=[])
+        assert str(result) == "No issues processed."
 
 
 # ---------------------------------------------------------------------------

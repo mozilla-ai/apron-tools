@@ -12,9 +12,11 @@ import httpx
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.providers.slack.types import (
-    AddReactionParams,
-    AddReactionResult,
+    AddReactionItem,
+    AddReactionsParams,
+    AddReactionsResult,
     DownloadFileParams,
     DownloadFileResult,
     EditMessageParams,
@@ -895,41 +897,52 @@ async def slack_get_reactions(
 
 
 @tool(
-    scopes=SCOPES["slack_add_reaction"],
+    scopes=SCOPES["slack_add_reactions"],
     api_docs="https://docs.slack.dev/reference/web-api/reactions/add",
     provider="slack",
 )
-async def slack_add_reaction(
-    params: AddReactionParams,
+async def slack_add_reactions(
+    params: AddReactionsParams,
     *,
     token: str,
     base_url: str = _BASE_URL,
-) -> AddReactionResult:
-    """Add an emoji reaction to a Slack message."""
+) -> AddReactionsResult:
+    """Add the same emoji reaction to one or more Slack messages."""
     if id_error := _validate_slack_channel_id(params.channel_id):
-        return AddReactionResult(success=False, error=id_error)
+        return AddReactionsResult(success=False, error=id_error)
     normalized = params.reaction_name.strip().strip(":")
     if not normalized:
-        return AddReactionResult(success=False, error="reaction_name must not be empty.")
+        return AddReactionsResult(success=False, error="reaction_name must not be empty.")
     if not _REACTION_NAME_PATTERN.fullmatch(normalized):
-        return AddReactionResult(success=False, error="reaction_name contains invalid characters.")
+        return AddReactionsResult(success=False, error="reaction_name contains invalid characters.")
+
+    timestamps = parse_csv_ids(params.timestamps)
+    if not timestamps:
+        return AddReactionsResult(success=False, error="No timestamps provided.")
 
     client = _client(token, base_url)
-    try:
-        await client.reactions_add(
-            channel=params.channel_id,
-            timestamp=params.timestamp,
-            name=normalized,
-        )
-        return AddReactionResult(
-            success=True,
-            reaction_name=normalized,
-            channel_id=params.channel_id,
-            timestamp=params.timestamp,
-        )
-    except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
-        return AddReactionResult(
-            success=False,
-            error=_format_slack_error("add reaction", f"channel {params.channel_id}", code),
-        )
+    items: list[AddReactionItem] = []
+    for ts in timestamps:
+        try:
+            await client.reactions_add(
+                channel=params.channel_id,
+                timestamp=ts,
+                name=normalized,
+            )
+            items.append(AddReactionItem(timestamp=ts, success=True))
+        except SlackApiError as exc:
+            code = exc.response.get("error", str(exc))
+            items.append(
+                AddReactionItem(
+                    timestamp=ts,
+                    success=False,
+                    error=_format_slack_error("add reaction", f"channel {params.channel_id}", code),
+                )
+            )
+
+    return AddReactionsResult(
+        success=True,
+        reaction_name=normalized,
+        channel_id=params.channel_id,
+        items=items,
+    )

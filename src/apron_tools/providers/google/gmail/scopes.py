@@ -56,8 +56,8 @@ SCOPES: dict[str, list[GmailScope]] = {
     "gmail_reply_to_email": [GmailScope.COMPOSE],
     "gmail_get_thread_replies": [GmailScope.READONLY],
     "gmail_list_labels": [GmailScope.READONLY],
-    "gmail_add_label_to_email": [GmailScope.MODIFY],
-    "gmail_remove_label_from_email": [GmailScope.MODIFY],
+    "gmail_add_labels_to_emails": [GmailScope.MODIFY],
+    "gmail_remove_labels_from_emails": [GmailScope.MODIFY],
     # Creating a label only needs gmail.labels, which is narrower than
     # gmail.modify. Existing installations that already hold gmail.modify
     # remain covered at the API level since modify implies labels access.

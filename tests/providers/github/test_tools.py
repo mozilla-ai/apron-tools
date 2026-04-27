@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from apron_tools.providers.github.tools import (
-    github_add_issue_comment,
+    github_add_issue_comments,
     github_create_branch,
     github_create_issue,
     github_create_pull_request,
@@ -29,8 +29,8 @@ from apron_tools.providers.github.tools import (
     github_update_file,
 )
 from apron_tools.providers.github.types import (
-    AddIssueCommentParams,
-    AddIssueCommentResult,
+    AddIssueCommentsParams,
+    AddIssueCommentsResult,
     CreateBranchParams,
     CreateBranchResult,
     CreateIssueParams,
@@ -544,12 +544,12 @@ class TestCreateIssue:
 
 
 # ---------------------------------------------------------------------------
-# github_add_issue_comment
+# github_add_issue_comments (bulk)
 # ---------------------------------------------------------------------------
 
 
-class TestAddIssueComment:
-    async def test_success(self) -> None:
+class TestAddIssueComments:
+    async def test_single_issue(self) -> None:
         data = _load_json("add_issue_comment.json")
         mock_comment = _mock_comment(data)
 
@@ -562,47 +562,136 @@ class TestAddIssueComment:
             mock_repo.get_issue.return_value = mock_issue
             mock_issue.create_comment.return_value = mock_comment
 
-            result = await github_add_issue_comment(
-                AddIssueCommentParams(
+            result = await github_add_issue_comments(
+                AddIssueCommentsParams(
                     owner="octocat",
                     repo="Hello-World",
-                    issue_number=1347,
+                    issue_numbers="1347",
                     body="Me too",
                 ),
                 token=_TOKEN,
             )
 
-        assert isinstance(result, AddIssueCommentResult)
+        assert isinstance(result, AddIssueCommentsResult)
         assert result.success is True
-        assert result.comment is not None
-        assert result.comment.body == "Me too"
+        assert len(result.items) == 1
+        item = result.items[0]
+        assert item.issue_number == 1347
+        assert item.success is True
+        assert item.comment is not None
+        assert item.comment.body == "Me too"
 
-    async def test_error(self) -> None:
-        from github import GithubException
+    async def test_multiple_issues(self) -> None:
+        data = _load_json("add_issue_comment.json")
 
         with patch("apron_tools.providers.github.tools._build_client") as mock_build:
             mock_g = MagicMock()
             mock_build.return_value = mock_g
             mock_repo = MagicMock()
             mock_g.get_repo.return_value = mock_repo
-            mock_repo.get_issue.side_effect = GithubException(404, {"message": "Not Found"}, None)
+            mock_issue = MagicMock()
+            mock_repo.get_issue.return_value = mock_issue
+            mock_issue.create_comment.return_value = _mock_comment(data)
 
-            result = await github_add_issue_comment(
-                AddIssueCommentParams(
+            result = await github_add_issue_comments(
+                AddIssueCommentsParams(
                     owner="octocat",
                     repo="Hello-World",
-                    issue_number=9999,
+                    issue_numbers="1347, 1348 ,1349",
+                    body="Me too",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        assert [item.issue_number for item in result.items] == [1347, 1348, 1349]
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self) -> None:
+        from github import GithubException
+
+        data = _load_json("add_issue_comment.json")
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+
+            good_issue = MagicMock()
+            good_issue.create_comment.return_value = _mock_comment(data)
+            mock_repo.get_issue.side_effect = [
+                good_issue,
+                GithubException(404, {"message": "Not Found"}, None),
+            ]
+
+            result = await github_add_issue_comments(
+                AddIssueCommentsParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    issue_numbers="1347,9999",
+                    body="Me too",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "404" in (result.items[1].error or "")
+
+    async def test_repo_lookup_error(self) -> None:
+        from github import GithubException
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_add_issue_comments(
+                AddIssueCommentsParams(
+                    owner="octocat",
+                    repo="missing",
+                    issue_numbers="1347",
                     body="test",
                 ),
                 token=_TOKEN,
             )
 
         assert result.success is False
-        assert "404" in result.error
+        assert "404" in (result.error or "")
+
+    async def test_empty_issue_numbers(self) -> None:
+        result = await github_add_issue_comments(
+            AddIssueCommentsParams(
+                owner="octocat",
+                repo="Hello-World",
+                issue_numbers="",
+                body="test",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "No issue numbers provided."
+
+    async def test_invalid_issue_number(self) -> None:
+        result = await github_add_issue_comments(
+            AddIssueCommentsParams(
+                owner="octocat",
+                repo="Hello-World",
+                issue_numbers="1347,abc",
+                body="test",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "abc" in (result.error or "")
 
     async def test_has_tool_definition(self) -> None:
-        defn = github_add_issue_comment._tool_definition
-        assert defn.name == "github_add_issue_comment"
+        defn = github_add_issue_comments._tool_definition
+        assert defn.name == "github_add_issue_comments"
         assert defn.provider == "github"
 
 

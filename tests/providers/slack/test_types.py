@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 
 from apron_tools.providers.slack.types import (
-    AddReactionParams,
-    AddReactionResult,
+    AddReactionItem,
+    AddReactionsParams,
+    AddReactionsResult,
     DownloadFileParams,
     DownloadFileResult,
     EditMessageParams,
@@ -149,11 +150,24 @@ class TestGetReactionsParams:
         assert params.file_id == "F0S43PZDF"
 
 
-class TestAddReactionParams:
+class TestAddReactionsParams:
     def test_required_fields(self):
-        params = AddReactionParams(channel_id="C012AB3CD", timestamp="1512085950.000216", reaction_name="thumbsup")
+        params = AddReactionsParams(
+            channel_id="C012AB3CD",
+            timestamps="1512085950.000216",
+            reaction_name="thumbsup",
+        )
         assert params.channel_id == "C012AB3CD"
         assert params.reaction_name == "thumbsup"
+        assert params.timestamps == "1512085950.000216"
+
+    def test_csv_input(self):
+        params = AddReactionsParams(
+            channel_id="C012AB3CD",
+            timestamps="1512085950.000216,1512085951.000217",
+            reaction_name="thumbsup",
+        )
+        assert params.timestamps == "1512085950.000216,1512085951.000217"
 
 
 # ---------------------------------------------------------------------------
@@ -565,23 +579,45 @@ class TestGetReactionsResult:
 
 
 # ---------------------------------------------------------------------------
-# AddReactionResult
+# AddReactionsResult
 # ---------------------------------------------------------------------------
 
 
-class TestAddReactionResult:
-    def test_str_output(self):
-        result = AddReactionResult(
+class TestAddReactionsResult:
+    def test_str_lists_per_message_outcomes(self):
+        result = AddReactionsResult(
             success=True,
             reaction_name="thumbsup",
             channel_id="C012AB3CD",
-            timestamp="1512085950.000216",
+            items=[
+                AddReactionItem(timestamp="1512085950.000216", success=True),
+                AddReactionItem(timestamp="1512085951.000217", success=True),
+            ],
         )
         text = str(result)
         assert ":thumbsup:" in text
         assert "C012AB3CD" in text
         assert "1512085950.000216" in text
+        assert "1512085951.000217" in text
 
-    def test_str_on_error(self):
-        result = AddReactionResult(success=False, error="already_reacted")
+    def test_str_marks_per_message_failures(self):
+        result = AddReactionsResult(
+            success=True,
+            reaction_name="thumbsup",
+            channel_id="C012AB3CD",
+            items=[
+                AddReactionItem(timestamp="1512085950.000216", success=True),
+                AddReactionItem(timestamp="bad-ts", success=False, error="already_reacted"),
+            ],
+        )
+        text = str(result)
+        assert "bad-ts" in text
+        assert "already_reacted" in text
+
+    def test_str_on_top_level_error(self):
+        result = AddReactionsResult(success=False, error="already_reacted")
         assert str(result) == "Error: already_reacted"
+
+    def test_str_with_no_items(self):
+        result = AddReactionsResult(success=True, reaction_name="thumbsup", items=[])
+        assert str(result) == "No messages processed."
