@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class GitHubScope(StrEnum):
+class GitHubScope(Scope):
     """OAuth scopes for GitHub API access."""
 
-    REPO = "repo"
-    PUBLIC_REPO = "public_repo"
+    REPO = (
+        "repo",
+        "All Repositories",
+        "Full access to public and private repositories, including code, issues, and pull requests",
+        "write",
+        False,
+    )
+    PUBLIC_REPO = (
+        "public_repo",
+        "Public Repositories",
+        "Access public repositories only (code, issues, pull requests)",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[GitHubScope]] = {
