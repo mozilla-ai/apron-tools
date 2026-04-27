@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class TrelloScope(StrEnum):
+class TrelloScope(Scope):
     """Trello API access scopes."""
 
-    READ = "read"
-    WRITE = "write"
+    READ = (
+        "read",
+        "Read Access",
+        "View your Trello boards, lists, and cards",
+        "read",
+        False,
+    )
+    WRITE = (
+        "write",
+        "Write Access",
+        "Create and modify boards, lists, and cards",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[TrelloScope]] = {
