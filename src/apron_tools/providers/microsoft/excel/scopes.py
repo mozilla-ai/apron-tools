@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class MicrosoftExcelScope(StrEnum):
+class MicrosoftExcelScope(Scope):
     """OAuth scopes for Microsoft Graph Excel API access."""
 
-    FILES_READ = "Files.Read"
-    FILES_READ_WRITE = "Files.ReadWrite"
+    FILES_READ = (
+        "Files.Read",
+        "View Files",
+        "View your Excel files and workbooks",
+        "read",
+        False,
+    )
+    FILES_READ_WRITE = (
+        "Files.ReadWrite",
+        "Edit Files",
+        "Create, edit, and manage your Excel files",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[MicrosoftExcelScope]] = {
