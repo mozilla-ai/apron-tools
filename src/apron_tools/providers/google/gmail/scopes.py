@@ -2,18 +2,49 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class GmailScope(StrEnum):
+class GmailScope(Scope):
     """OAuth scopes for Gmail API access."""
 
-    READONLY = "https://www.googleapis.com/auth/gmail.readonly"
-    COMPOSE = "https://www.googleapis.com/auth/gmail.compose"
-    MODIFY = "https://www.googleapis.com/auth/gmail.modify"
-    LABELS = "https://www.googleapis.com/auth/gmail.labels"
+    READONLY = (
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "Read Emails",
+        "View and search your Gmail messages",
+        "read",
+        False,
+    )
+    COMPOSE = (
+        "https://www.googleapis.com/auth/gmail.compose",
+        "Compose, Send & Manage Drafts",
+        (
+            "Create, edit, and delete drafts, and send messages or drafts "
+            "(narrower than Full Email Management — no label or trash management)"
+        ),
+        "write",
+        False,
+    )
+    # gmail.modify implies read access; the description leads with that
+    # implication so the consent-screen wording matches what the user
+    # will see at Google.
+    MODIFY = (
+        "https://www.googleapis.com/auth/gmail.modify",
+        "Full Email Management",
+        "Read and manage all emails including drafts, labels, and trash",
+        "write",
+        False,
+    )
+    # gmail.labels covers listing / creating / updating / deleting labels
+    # themselves — it does not cover applying labels to existing messages
+    # (that requires gmail.modify, which implies labels access).
+    LABELS = (
+        "https://www.googleapis.com/auth/gmail.labels",
+        "Manage Labels",
+        "See and edit your email labels",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[GmailScope]] = {
