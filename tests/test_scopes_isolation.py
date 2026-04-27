@@ -100,7 +100,10 @@ class TestScopesImportIsolation:
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, f"discover_capability_groups() loaded tool modules: {result.stdout.strip()}"
+        assert result.returncode == 0, (
+            f"discover_capability_groups() loaded tool modules: "
+            f"{result.stdout.strip()} | stderr: {result.stderr.strip()}"
+        )
 
     def test_discover_capability_groups_does_not_load_sdks(self):
         """Run in a clean subprocess to guarantee no SDK packages are loaded."""
@@ -109,4 +112,7 @@ class TestScopesImportIsolation:
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, f"discover_capability_groups() loaded SDK packages: {result.stdout.strip()}"
+        assert result.returncode == 0, (
+            f"discover_capability_groups() loaded SDK packages: "
+            f"{result.stdout.strip()} | stderr: {result.stderr.strip()}"
+        )
