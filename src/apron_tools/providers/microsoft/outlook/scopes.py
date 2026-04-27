@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class MicrosoftOutlookScope(StrEnum):
+class MicrosoftOutlookScope(Scope):
     """OAuth scopes for Microsoft Graph Mail API access."""
 
-    MAIL_READ = "Mail.Read"
-    MAIL_SEND = "Mail.Send"
-    MAIL_READ_WRITE = "Mail.ReadWrite"
+    MAIL_READ = (
+        "Mail.Read",
+        "Read Emails",
+        "View your Outlook emails and attachments",
+        "read",
+        False,
+    )
+    MAIL_SEND = (
+        "Mail.Send",
+        "Send Emails",
+        "Send emails on your behalf",
+        "write",
+        False,
+    )
+    MAIL_READ_WRITE = (
+        "Mail.ReadWrite",
+        "Manage Emails",
+        "Create drafts, move, and organize your emails",
+        "write",
+        False,
+    )
 
 
 SCOPES: dict[str, list[MicrosoftOutlookScope]] = {
