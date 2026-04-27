@@ -55,10 +55,13 @@ class CreateIssueParams(BaseModel):
     state_id: str | None = None
 
 
-class UpdateIssueParams(BaseModel):
-    """Parameters for updating an issue."""
+class UpdateIssuesParams(BaseModel):
+    """Parameters for applying the same update to one or more issues.
 
-    issue_id: str
+    ``issue_ids`` accepts a comma-separated list to support bulk operations.
+    """
+
+    issue_ids: str
     title: str | None = None
     description: str | None = None
     state_id: str | None = None
@@ -455,28 +458,39 @@ class CreateIssueResult(ToolResult):
         return f"Created [{self.issue.identifier}] {self.issue.title} (id={self.issue.id}, url={self.issue.url})"
 
 
-class UpdateIssueResult(ToolResult):
-    """Result of updating an issue."""
+class UpdateIssueItem(BaseModel):
+    """Per-issue outcome of a bulk Linear issue update."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    issue_id: str
+    success: bool = True
+    error: str | None = None
+    issue: MutationIssue | None = None
+
+
+class UpdateIssuesResult(ToolResult):
+    """Result of updating one or more Linear issues."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    issue: MutationIssue | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Derive success from the mutation response."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+    items: list[UpdateIssueItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the updated issue."""
+        """Return an LLM-readable summary of the bulk issue update."""
         if not self.success:
             return f"Error: {self.error}"
-        if self.issue is None:
-            return "Issue updated but no details returned."
-        return f"Updated [{self.issue.identifier}] {self.issue.title}"
+        if not self.items:
+            return "No issues processed."
+        lines: list[str] = []
+        for item in self.items:
+            if item.success and item.issue is not None:
+                lines.append(f"- Updated [{item.issue.identifier}] {item.issue.title}")
+            elif item.success:
+                lines.append(f"- {item.issue_id}: Updated.")
+            else:
+                lines.append(f"- {item.issue_id}: Failed: {item.error}")
+        return "\n".join(lines)
 
 
 class ListProjectsResult(ToolResult):

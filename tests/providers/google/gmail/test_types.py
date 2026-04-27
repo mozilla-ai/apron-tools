@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from apron_tools.providers.google.gmail.types import (
-    AddLabelToEmailParams,
+    AddLabelsToEmailsParams,
     CreateDraftParams,
     CreateDraftResult,
     CreateLabelParams,
@@ -21,10 +21,11 @@ from apron_tools.providers.google.gmail.types import (
     ListEmailsResult,
     ListLabelsParams,
     ListLabelsResult,
+    ModifyLabelsItem,
     ModifyLabelsResult,
     ReadEmailParams,
     ReadEmailResult,
-    RemoveLabelFromEmailParams,
+    RemoveLabelsFromEmailsParams,
     ReplyToEmailParams,
     ReplyToEmailResult,
     SendEmailParams,
@@ -124,18 +125,28 @@ class TestListLabelsParams:
         assert params is not None
 
 
-class TestAddLabelToEmailParams:
+class TestAddLabelsToEmailsParams:
     def test_required(self):
-        params = AddLabelToEmailParams(message_id="msg-001", label_id="label-001")
-        assert params.message_id == "msg-001"
-        assert params.label_id == "label-001"
+        params = AddLabelsToEmailsParams(message_ids="msg-001", label_ids="label-001")
+        assert params.message_ids == "msg-001"
+        assert params.label_ids == "label-001"
+
+    def test_csv_inputs(self):
+        params = AddLabelsToEmailsParams(message_ids="msg-001,msg-002", label_ids="label-001,label-002")
+        assert params.message_ids == "msg-001,msg-002"
+        assert params.label_ids == "label-001,label-002"
 
 
-class TestRemoveLabelFromEmailParams:
+class TestRemoveLabelsFromEmailsParams:
     def test_required(self):
-        params = RemoveLabelFromEmailParams(message_id="msg-001", label_id="label-001")
-        assert params.message_id == "msg-001"
-        assert params.label_id == "label-001"
+        params = RemoveLabelsFromEmailsParams(message_ids="msg-001", label_ids="label-001")
+        assert params.message_ids == "msg-001"
+        assert params.label_ids == "label-001"
+
+    def test_csv_inputs(self):
+        params = RemoveLabelsFromEmailsParams(message_ids="msg-001,msg-002", label_ids="label-001,label-002")
+        assert params.message_ids == "msg-001,msg-002"
+        assert params.label_ids == "label-001,label-002"
 
 
 class TestCreateLabelParams:
@@ -471,33 +482,42 @@ class TestListLabelsResult:
 
 
 class TestModifyLabelsResult:
-    def test_parse_add_label_response(self):
-        data = _load_json("modify_add_label.json")
-        result = ModifyLabelsResult.model_validate(data)
-
-        assert result.success is True
-        assert result.id == "msg-001"
-        assert "label-001" in result.label_ids
-
-    def test_parse_remove_label_response(self):
-        data = _load_json("modify_remove_label.json")
-        result = ModifyLabelsResult.model_validate(data)
-
-        assert result.success is True
-        assert result.id == "msg-001"
-        assert "label-001" not in result.label_ids
-
-    def test_str_output(self):
-        result = ModifyLabelsResult(success=True, id="msg-001", label_ids=["INBOX", "label-001"])
+    def test_str_lists_per_message_outcomes(self):
+        result = ModifyLabelsResult(
+            success=True,
+            items=[
+                ModifyLabelsItem(message_id="msg-001", label_ids=["INBOX", "label-001"]),
+                ModifyLabelsItem(message_id="msg-002", label_ids=["INBOX"]),
+            ],
+        )
         text = str(result)
 
         assert "msg-001" in text
+        assert "msg-002" in text
         assert "INBOX" in text
         assert "label-001" in text
 
-    def test_str_on_error(self):
+    def test_str_marks_per_message_failures(self):
+        result = ModifyLabelsResult(
+            success=True,
+            items=[
+                ModifyLabelsItem(message_id="msg-001", label_ids=["INBOX"]),
+                ModifyLabelsItem(message_id="bad-id", success=False, error="HTTP 404"),
+            ],
+        )
+        text = str(result)
+
+        assert "msg-001" in text
+        assert "bad-id" in text
+        assert "HTTP 404" in text
+
+    def test_str_on_top_level_error(self):
         result = ModifyLabelsResult(success=False, error="Not found")
         assert str(result) == "Error: Not found"
+
+    def test_str_with_no_items(self):
+        result = ModifyLabelsResult(success=True, items=[])
+        assert str(result) == "No messages processed."
 
 
 # ---------------------------------------------------------------------------

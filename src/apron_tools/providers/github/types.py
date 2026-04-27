@@ -59,12 +59,15 @@ class CreateIssueParams(BaseModel):
     assignees: str = ""
 
 
-class AddIssueCommentParams(BaseModel):
-    """Parameters for adding a comment to an issue."""
+class AddIssueCommentsParams(BaseModel):
+    """Parameters for adding the same comment to one or more issues.
+
+    ``issue_numbers`` accepts a comma-separated list to support bulk operations.
+    """
 
     owner: str
     repo: str
-    issue_number: int
+    issue_numbers: str
     body: str
 
 
@@ -588,31 +591,38 @@ class CreateIssueResult(ToolResult):
         return "\n".join(lines)
 
 
-class AddIssueCommentResult(ToolResult):
-    """Result of adding a comment to an issue."""
+class AddIssueCommentItem(BaseModel):
+    """Per-issue outcome of a bulk add-issue-comments call."""
 
     model_config = ConfigDict(extra="ignore")
 
+    issue_number: int
+    success: bool = True
+    error: str | None = None
     comment: IssueCommentSummary | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+
+class AddIssueCommentsResult(ToolResult):
+    """Result of adding the same comment across one or more issues."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    items: list[AddIssueCommentItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the added comment."""
+        """Return an LLM-readable summary of the bulk comment add."""
         if not self.success:
             return f"Error: {self.error}"
-        if self.comment is None:
-            return "Comment added but no details available."
-        lines = [
-            "Comment added successfully!",
-            f"  URL: {self.comment.html_url}",
-        ]
+        if not self.items:
+            return "No issues processed."
+        lines: list[str] = []
+        for item in self.items:
+            if item.success and item.comment is not None:
+                lines.append(f"- Issue #{item.issue_number}: Comment added. URL: {item.comment.html_url}")
+            elif item.success:
+                lines.append(f"- Issue #{item.issue_number}: Comment added.")
+            else:
+                lines.append(f"- Issue #{item.issue_number}: Failed: {item.error}")
         return "\n".join(lines)
 
 

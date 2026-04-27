@@ -76,18 +76,24 @@ class ListLabelsParams(BaseModel):
     """Parameters for listing Gmail labels."""
 
 
-class AddLabelToEmailParams(BaseModel):
-    """Parameters for adding a label to a message."""
+class AddLabelsToEmailsParams(BaseModel):
+    """Parameters for adding labels to one or more messages.
 
-    message_id: str
-    label_id: str
+    Both fields accept comma-separated IDs to support bulk operations.
+    """
+
+    message_ids: str
+    label_ids: str
 
 
-class RemoveLabelFromEmailParams(BaseModel):
-    """Parameters for removing a label from a message."""
+class RemoveLabelsFromEmailsParams(BaseModel):
+    """Parameters for removing labels from one or more messages.
 
-    message_id: str
-    label_id: str
+    Both fields accept comma-separated IDs to support bulk operations.
+    """
+
+    message_ids: str
+    label_ids: str
 
 
 class CreateLabelParams(BaseModel):
@@ -362,28 +368,38 @@ class ListLabelsResult(ToolResult):
         return "\n".join(lines)
 
 
-class ModifyLabelsResult(ToolResult):
-    """Result of adding or removing a label from a message."""
+class ModifyLabelsItem(BaseModel):
+    """Per-message outcome of a bulk label modification."""
 
     model_config = ConfigDict(extra="ignore")
 
-    id: str = ""
+    message_id: str
     label_ids: list[str] = []
+    success: bool = True
+    error: str | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-            data["label_ids"] = data.get("labelIds", [])
-        return data
+
+class ModifyLabelsResult(ToolResult):
+    """Result of adding or removing labels across one or more messages."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    items: list[ModifyLabelsItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the label modification."""
+        """Return an LLM-readable summary of the bulk label modification."""
         if not self.success:
             return f"Error: {self.error}"
-        return f"Message {self.id} labels updated: {', '.join(self.label_ids)}"
+        if not self.items:
+            return "No messages processed."
+        lines: list[str] = []
+        for item in self.items:
+            if item.success:
+                label_str = ", ".join(item.label_ids)
+                lines.append(f"- {item.message_id}: Labels updated. Label IDs: {label_str}")
+            else:
+                lines.append(f"- {item.message_id}: Failed: {item.error}")
+        return "\n".join(lines)
 
 
 class CreateLabelResult(ToolResult):

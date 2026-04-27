@@ -9,12 +9,14 @@ from typing import Any, cast
 
 from github import Github, GithubException
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.tool import tool
 
 from .scopes import SCOPES
 from .types import (
-    AddIssueCommentParams,
-    AddIssueCommentResult,
+    AddIssueCommentItem,
+    AddIssueCommentsParams,
+    AddIssueCommentsResult,
     BranchSummary,
     CreateBranchParams,
     CreateBranchResult,
@@ -445,23 +447,34 @@ async def github_create_issue(
 
 
 @tool(
-    scopes=SCOPES["github_add_issue_comment"],
+    scopes=SCOPES["github_add_issue_comments"],
     api_docs="https://docs.github.com/en/rest/issues/comments#create-an-issue-comment",
     provider="github",
 )
-async def github_add_issue_comment(
-    params: AddIssueCommentParams,
+async def github_add_issue_comments(
+    params: AddIssueCommentsParams,
     *,
     token: str,
     base_url: str = _BASE_URL,
-) -> AddIssueCommentResult:
-    """Add a comment to an existing GitHub issue."""
+) -> AddIssueCommentsResult:
+    """Add the same comment to one or more existing GitHub issues."""
+    raw_numbers = parse_csv_ids(params.issue_numbers)
+    if not raw_numbers:
+        return AddIssueCommentsResult(success=False, error="No issue numbers provided.")
 
-    def _call() -> AddIssueCommentResult:
-        g = _build_client(token, base_url)
+    parsed_numbers: list[int] = []
+    for token_str in raw_numbers:
         try:
-            repo = g.get_repo(f"{params.owner}/{params.repo}")
-            issue = repo.get_issue(params.issue_number)
+            parsed_numbers.append(int(token_str))
+        except ValueError:
+            return AddIssueCommentsResult(
+                success=False,
+                error=f"Invalid issue number: {token_str!r}",
+            )
+
+    def _add_one(repo: Any, issue_number: int) -> AddIssueCommentItem:
+        try:
+            issue = repo.get_issue(issue_number)
             comment = issue.create_comment(params.body)
             summary = IssueCommentSummary(
                 id=comment.id,
@@ -471,9 +484,25 @@ async def github_add_issue_comment(
                 created_at=(comment.created_at.isoformat() + "Z" if comment.created_at else None),
                 updated_at=(comment.updated_at.isoformat() + "Z" if comment.updated_at else None),
             )
-            return AddIssueCommentResult(success=True, comment=summary)
+            return AddIssueCommentItem(issue_number=issue_number, success=True, comment=summary)
         except GithubException as exc:
-            return AddIssueCommentResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+            return AddIssueCommentItem(
+                issue_number=issue_number,
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+
+    def _call() -> AddIssueCommentsResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = g.get_repo(f"{params.owner}/{params.repo}")
+            items = [_add_one(repo, num) for num in parsed_numbers]
+            return AddIssueCommentsResult(success=True, items=items)
+        except GithubException as exc:
+            return AddIssueCommentsResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
         finally:
             g.close()
 

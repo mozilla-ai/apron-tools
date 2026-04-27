@@ -16,7 +16,7 @@ from apron_tools.providers.linear.tools import (
     linear_list_teams,
     linear_list_users,
     linear_read_issue,
-    linear_update_issue,
+    linear_update_issues,
     linear_update_project,
     linear_upload_file_to_issue,
     linear_whoami,
@@ -38,8 +38,8 @@ from apron_tools.providers.linear.types import (
     ListUsersResult,
     ReadIssueParams,
     ReadIssueResult,
-    UpdateIssueParams,
-    UpdateIssueResult,
+    UpdateIssuesParams,
+    UpdateIssuesResult,
     UpdateProjectParams,
     UpdateProjectResult,
     UploadFileToIssueParams,
@@ -320,41 +320,65 @@ class TestCreateIssue:
 
 
 # ---------------------------------------------------------------------------
-# update_issue
+# update_issues (bulk)
 # ---------------------------------------------------------------------------
 
 
-class TestUpdateIssue:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+class TestUpdateIssues:
+    async def test_single_issue(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("update_issue.json"))
 
-        params = UpdateIssueParams(issue_id="issue-001", title="Updated title")
-        result = await linear_update_issue(params, token=_TOKEN)
+        params = UpdateIssuesParams(issue_ids="issue-001", title="Updated title")
+        result = await linear_update_issues(params, token=_TOKEN)
 
-        assert isinstance(result, UpdateIssueResult)
+        assert isinstance(result, UpdateIssuesResult)
         assert result.success is True
-        assert result.issue is not None
-        assert result.issue.identifier == "ENG-123"
+        assert len(result.items) == 1
+        item = result.items[0]
+        assert item.success is True
+        assert item.issue is not None
+        assert item.issue.identifier == "ENG-123"
+
+    async def test_multiple_issues(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("update_issue.json"))
+        httpx_mock.add_response(json=_load_json("update_issue.json"))
+
+        params = UpdateIssuesParams(issue_ids="issue-001, issue-002", title="Updated")
+        result = await linear_update_issues(params, token=_TOKEN)
+
+        assert result.success is True
+        assert [item.issue_id for item in result.items] == ["issue-001", "issue-002"]
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("update_issue.json"))
+        httpx_mock.add_response(json=_load_json("error.json"))
+
+        params = UpdateIssuesParams(issue_ids="issue-001,issue-002", title="Updated")
+        result = await linear_update_issues(params, token=_TOKEN)
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+
+    async def test_empty_issue_ids(self) -> None:
+        params = UpdateIssuesParams(issue_ids=" , ", title="Updated")
+        result = await linear_update_issues(params, token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "No issue IDs provided."
 
     async def test_no_fields_returns_error(self) -> None:
-        params = UpdateIssueParams(issue_id="issue-001")
-        result = await linear_update_issue(params, token=_TOKEN)
+        params = UpdateIssuesParams(issue_ids="issue-001")
+        result = await linear_update_issues(params, token=_TOKEN)
 
         assert result.success is False
         assert result.error is not None
         assert "No fields" in result.error
 
-    async def test_graphql_error(self, httpx_mock: HTTPXMock) -> None:
-        httpx_mock.add_response(json=_load_json("error.json"))
-
-        params = UpdateIssueParams(issue_id="issue-001", title="Fail")
-        result = await linear_update_issue(params, token=_TOKEN)
-
-        assert result.success is False
-
     async def test_has_tool_definition(self) -> None:
-        defn = linear_update_issue._tool_definition
-        assert defn.name == "linear_update_issue"
+        defn = linear_update_issues._tool_definition
+        assert defn.name == "linear_update_issues"
         assert defn.provider == "linear"
         assert defn.scopes == ["write"]
 

@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.linear.types import (
     CreateIssueParams,
@@ -30,8 +31,9 @@ from apron_tools.providers.linear.types import (
     ProjectDetail,
     ReadIssueParams,
     ReadIssueResult,
-    UpdateIssueParams,
-    UpdateIssueResult,
+    UpdateIssueItem,
+    UpdateIssuesParams,
+    UpdateIssuesResult,
     UpdateProjectParams,
     UpdateProjectResult,
     UploadFileToIssueParams,
@@ -433,7 +435,7 @@ async def linear_create_issue(
 
 
 # ---------------------------------------------------------------------------
-# update_issue
+# update_issues
 # ---------------------------------------------------------------------------
 
 _UPDATE_ISSUE_MUTATION = """
@@ -450,14 +452,48 @@ mutation($id: String!, $input: IssueUpdateInput!) {
 """
 
 
-@tool(scopes=SCOPES["linear_update_issue"], api_docs=_API_DOCS, provider="linear")
-async def linear_update_issue(
-    params: UpdateIssueParams,
+async def _update_one_issue(
+    issue_id: str,
+    input_data: dict[str, Any],
+    token: str,
+    base_url: str,
+) -> UpdateIssueItem:
+    """Run a single issueUpdate mutation and shape the per-issue outcome."""
+    try:
+        data = await _execute_graphql(
+            _UPDATE_ISSUE_MUTATION,
+            {"id": issue_id, "input": input_data},
+            token,
+            base_url,
+        )
+    except httpx.HTTPError as exc:
+        return UpdateIssueItem(issue_id=issue_id, success=False, error=str(exc))
+
+    error = _extract_error(data)
+    if error:
+        return UpdateIssueItem(issue_id=issue_id, success=False, error=error)
+
+    result = data.get("data", {}).get("issueUpdate", {})
+    if not result.get("success"):
+        return UpdateIssueItem(issue_id=issue_id, success=False, error="Mutation returned success=false")
+
+    issue_data = result.get("issue")
+    issue = MutationIssue.model_validate(issue_data) if issue_data else None
+    return UpdateIssueItem(issue_id=issue_id, success=True, issue=issue)
+
+
+@tool(scopes=SCOPES["linear_update_issues"], api_docs=_API_DOCS, provider="linear")
+async def linear_update_issues(
+    params: UpdateIssuesParams,
     *,
     token: str,
     base_url: str = _BASE_URL,
-) -> UpdateIssueResult:
-    """Update an existing Linear issue."""
+) -> UpdateIssuesResult:
+    """Update one or more existing Linear issues with the same field changes."""
+    issue_ids = parse_csv_ids(params.issue_ids)
+    if not issue_ids:
+        return UpdateIssuesResult(success=False, error="No issue IDs provided.")
+
     input_data: dict[str, Any] = {}
     if params.title is not None:
         input_data["title"] = params.title
@@ -473,29 +509,10 @@ async def linear_update_issue(
         input_data["projectId"] = params.project_id
 
     if not input_data:
-        return UpdateIssueResult(success=False, error="No fields provided to update")
+        return UpdateIssuesResult(success=False, error="No fields provided to update")
 
-    try:
-        data = await _execute_graphql(
-            _UPDATE_ISSUE_MUTATION,
-            {"id": params.issue_id, "input": input_data},
-            token,
-            base_url,
-        )
-    except httpx.HTTPError as exc:
-        return UpdateIssueResult(success=False, error=str(exc))
-
-    error = _extract_error(data)
-    if error:
-        return UpdateIssueResult(success=False, error=error)
-
-    result = data.get("data", {}).get("issueUpdate", {})
-    if not result.get("success"):
-        return UpdateIssueResult(success=False, error="Mutation returned success=false")
-
-    issue_data = result.get("issue")
-    issue = MutationIssue.model_validate(issue_data) if issue_data else None
-    return UpdateIssueResult(success=True, issue=issue)
+    items = [await _update_one_issue(issue_id, input_data, token, base_url) for issue_id in issue_ids]
+    return UpdateIssuesResult(success=True, items=items)
 
 
 # ---------------------------------------------------------------------------
