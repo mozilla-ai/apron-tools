@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class GoogleTasksScope(StrEnum):
+class GoogleTasksScope(Scope):
     """OAuth scopes for Google Tasks API access."""
 
-    TASKS_READONLY = "https://www.googleapis.com/auth/tasks.readonly"
-    TASKS = "https://www.googleapis.com/auth/tasks"
+    TASKS_READONLY = (
+        "https://www.googleapis.com/auth/tasks.readonly",
+        "View Tasks",
+        "View your Google Tasks and task lists",
+        "read",
+        False,
+    )
+    # tasks implies tasks.readonly via scope-implication rules; the
+    # description leads with "View" so the consent screen wording matches
+    # what the user grants in practice.
+    TASKS = (
+        "https://www.googleapis.com/auth/tasks",
+        "Manage Tasks",
+        "View, create, edit, organize, and delete your Google Tasks and task lists",
+        "write",
+        False,
+    )
 
 
 # Write tools declare both scopes because the Tasks API rejects writes without
