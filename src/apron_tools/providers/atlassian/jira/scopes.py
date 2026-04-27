@@ -2,17 +2,33 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class JiraScope(StrEnum):
+class JiraScope(Scope):
     """OAuth scopes for Atlassian Jira API access."""
 
-    READ_JIRA_WORK = "read:jira-work"
-    WRITE_JIRA_WORK = "write:jira-work"
-    READ_JIRA_USER = "read:jira-user"
+    READ_JIRA_WORK = (
+        "read:jira-work",
+        "Read Issues",
+        "View Jira issues, projects, and boards",
+        "read",
+        False,
+    )
+    WRITE_JIRA_WORK = (
+        "write:jira-work",
+        "Write Issues",
+        "Create and modify Jira issues and comments",
+        "write",
+        False,
+    )
+    READ_JIRA_USER = (
+        "read:jira-user",
+        "Read Users",
+        "View Jira user profiles",
+        "read",
+        False,
+    )
 
 
 SCOPES: dict[str, list[JiraScope]] = {
