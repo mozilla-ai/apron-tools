@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
-from apron_tools.types import CapabilityGroup
+from apron_tools.types import CapabilityGroup, Scope
 
 
-class WebAccessScope(StrEnum):
+class WebAccessScope(Scope):
     """Capability scopes for the web_access provider.
 
     web_access is backed by the Tabstack service API (service token auth),
@@ -15,8 +13,20 @@ class WebAccessScope(StrEnum):
     can be surfaced alongside OAuth-based providers in the registry.
     """
 
-    RESEARCH = "research"
-    EXTRACT = "extract"
+    RESEARCH = (
+        "research",
+        "Research the Web",
+        "Run multi-step web research queries that browse and synthesise public web content",
+        "read",
+        False,
+    )
+    EXTRACT = (
+        "extract",
+        "Extract Structured Data",
+        "Fetch a URL and extract structured JSON matching a caller-provided schema",
+        "read",
+        False,
+    )
 
 
 SCOPES: dict[str, list[WebAccessScope]] = {
