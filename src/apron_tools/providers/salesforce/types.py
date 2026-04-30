@@ -37,11 +37,16 @@ class CreateRecordParams(BaseModel):
     fields: dict[str, Any]
 
 
-class UpdateRecordParams(BaseModel):
-    """Parameters for updating a Salesforce record."""
+class UpdateRecordsParams(BaseModel):
+    """Parameters for updating one or more Salesforce records.
+
+    ``record_ids`` accepts a comma-separated list of record IDs to support
+    bulk operations. ``object_type`` and ``fields`` are applied to every
+    record in the call.
+    """
 
     object_type: str
-    record_id: str
+    record_ids: str
     fields: dict[str, Any]
 
 
@@ -215,24 +220,37 @@ class CreateRecordResult(ToolResult):
         return f"Created record: {self.id}"
 
 
-class UpdateRecordResult(ToolResult):
-    """Result of updating a Salesforce record."""
+class UpdateRecordItem(BaseModel):
+    """Per-record outcome of a bulk Salesforce update call."""
 
     model_config = ConfigDict(extra="ignore")
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+    record_id: str
+    success: bool = True
+    error: str | None = None
+
+
+class UpdateRecordsResult(ToolResult):
+    """Result of updating one or more Salesforce records."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    object_type: str = ""
+    items: list[UpdateRecordItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable confirmation of the update."""
+        """Return an LLM-readable summary of the bulk update."""
         if not self.success:
             return f"Error: {self.error}"
-        return "Record updated successfully."
+        if not self.items:
+            return "No records processed."
+        lines: list[str] = []
+        for entry in self.items:
+            if entry.success:
+                lines.append(f"- {self.object_type} {entry.record_id} updated.")
+            else:
+                lines.append(f"- {entry.record_id}: Failed: {entry.error}")
+        return "\n".join(lines)
 
 
 class SearchRecordsResult(ToolResult):

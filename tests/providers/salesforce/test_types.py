@@ -16,8 +16,9 @@ from apron_tools.providers.salesforce.types import (
     QueryRecordsResult,
     SearchRecordsParams,
     SearchRecordsResult,
-    UpdateRecordParams,
-    UpdateRecordResult,
+    UpdateRecordItem,
+    UpdateRecordsParams,
+    UpdateRecordsResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -61,16 +62,24 @@ class TestCreateRecordParams:
         assert params.fields == {"Name": "Acme Corp"}
 
 
-class TestUpdateRecordParams:
+class TestUpdateRecordsParams:
     def test_required_fields(self):
-        params = UpdateRecordParams(
+        params = UpdateRecordsParams(
             object_type="Account",
-            record_id="001-001",
+            record_ids="001-001",
             fields={"Name": "Acme Inc"},
         )
         assert params.object_type == "Account"
-        assert params.record_id == "001-001"
+        assert params.record_ids == "001-001"
         assert params.fields == {"Name": "Acme Inc"}
+
+    def test_multiple_ids(self):
+        params = UpdateRecordsParams(
+            object_type="Account",
+            record_ids="001-001,001-002",
+            fields={"Name": "Acme Inc"},
+        )
+        assert params.record_ids == "001-001,001-002"
 
 
 class TestSearchRecordsParams:
@@ -222,22 +231,38 @@ class TestCreateRecordResult:
 
 
 # ---------------------------------------------------------------------------
-# UpdateRecordResult
+# UpdateRecordsResult
 # ---------------------------------------------------------------------------
 
 
-class TestUpdateRecordResult:
+class TestUpdateRecordsResult:
     def test_success(self):
-        result = UpdateRecordResult(success=True)
-
+        result = UpdateRecordsResult(
+            success=True,
+            object_type="Account",
+            items=[UpdateRecordItem(record_id="001-001", success=True)],
+        )
         assert result.success is True
+        assert "Account 001-001 updated" in str(result)
 
-    def test_str_output(self):
-        result = UpdateRecordResult(success=True)
-        assert str(result) == "Record updated successfully."
+    def test_partial_failure(self):
+        result = UpdateRecordsResult(
+            success=True,
+            object_type="Account",
+            items=[
+                UpdateRecordItem(record_id="001-001", success=True),
+                UpdateRecordItem(record_id="missing", success=False, error="404"),
+            ],
+        )
+        text = str(result)
+        assert "Failed: 404" in text
+
+    def test_str_no_items(self):
+        result = UpdateRecordsResult(success=True)
+        assert "No records processed" in str(result)
 
     def test_str_on_error(self):
-        result = UpdateRecordResult(success=False, error="Entity is deleted")
+        result = UpdateRecordsResult(success=False, error="Entity is deleted")
         assert str(result) == "Error: Entity is deleted"
 
 

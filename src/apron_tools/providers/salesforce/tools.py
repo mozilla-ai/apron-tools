@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.providers.salesforce.types import (
     CreateRecordParams,
     CreateRecordResult,
@@ -18,8 +19,9 @@ from apron_tools.providers.salesforce.types import (
     SearchRecordsParams,
     SearchRecordsResult,
     SObjectSummary,
-    UpdateRecordParams,
-    UpdateRecordResult,
+    UpdateRecordItem,
+    UpdateRecordsParams,
+    UpdateRecordsResult,
 )
 from apron_tools.tool import tool
 
@@ -163,7 +165,7 @@ async def salesforce_query_records(
     data = response.json()
     return QueryRecordsResult(
         success=True,
-        total_size=data.get("totalSize", 0),
+        total_size=data.get("totalSize", 0),  # ty: ignore[unknown-argument]
         done=data.get("done", True),
         records=data.get("records", []),
     )
@@ -260,48 +262,72 @@ async def salesforce_create_record(
 
 
 # ---------------------------------------------------------------------------
-# salesforce_update_record
+# salesforce_update_records
 # ---------------------------------------------------------------------------
 
 
-@tool(
-    scopes=SCOPES["salesforce_update_record"],
-    api_docs="https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_retrieve.htm",
-    provider="salesforce",
-    service="salesforce",
-)
-async def salesforce_update_record(
-    params: UpdateRecordParams,
-    *,
+async def _update_one_record(
+    instance_url: str,
+    object_type: str,
+    record_id: str,
+    fields: dict[str, Any],
     token: str,
-    userinfo_url: str = _USERINFO_URL,
-) -> UpdateRecordResult:
-    """Update an existing Salesforce record."""
-    try:
-        instance_url = await _resolve_instance_url(token, userinfo_url=userinfo_url)
-    except RuntimeError as exc:
-        return UpdateRecordResult(success=False, error=str(exc))
-
+) -> UpdateRecordItem:
+    """Patch a single Salesforce record and shape the per-record outcome."""
     headers = {**_headers(token), "Content-Type": "application/json"}
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             response = await client.patch(
-                _api_url(instance_url, f"/sobjects/{params.object_type}/{params.record_id}"),
+                _api_url(instance_url, f"/sobjects/{object_type}/{record_id}"),
                 headers=headers,
-                json=params.fields,
+                json=fields,
             )
     except httpx.HTTPError as exc:
-        return UpdateRecordResult(success=False, error=str(exc))
+        return UpdateRecordItem(record_id=record_id, success=False, error=str(exc))
 
-    # Salesforce returns 204 No Content on success.
     if response.status_code == 204:
-        return UpdateRecordResult(success=True)
+        return UpdateRecordItem(record_id=record_id, success=True)
 
-    return UpdateRecordResult(
+    return UpdateRecordItem(
+        record_id=record_id,
         success=False,
         error=f"Salesforce API error {response.status_code}: {response.text}",
     )
+
+
+@tool(
+    scopes=SCOPES["salesforce_update_records"],
+    api_docs="https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_retrieve.htm",
+    provider="salesforce",
+    service="salesforce",
+)
+async def salesforce_update_records(
+    params: UpdateRecordsParams,
+    *,
+    token: str,
+    userinfo_url: str = _USERINFO_URL,
+) -> UpdateRecordsResult:
+    """Update one or more Salesforce records with the same field payload.
+
+    ``object_type`` and ``fields`` are applied to every record in the call.
+    Per-record outcomes are returned in ``items`` so partial failures surface
+    without aborting the whole bulk call.
+    """
+    record_ids = parse_csv_ids(params.record_ids)
+    if not record_ids:
+        return UpdateRecordsResult(success=False, error="No record IDs provided.")
+
+    try:
+        instance_url = await _resolve_instance_url(token, userinfo_url=userinfo_url)
+    except RuntimeError as exc:
+        return UpdateRecordsResult(success=False, error=str(exc))
+
+    items = [
+        await _update_one_record(instance_url, params.object_type, record_id, params.fields, token)
+        for record_id in record_ids
+    ]
+    return UpdateRecordsResult(success=True, object_type=params.object_type, items=items)
 
 
 # ---------------------------------------------------------------------------
