@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.atlassian.jira.types import (
     AddCommentParams,
     AddCommentResult,
-    AssignIssueParams,
-    AssignIssueResult,
+    AssignIssueItem,
+    AssignIssuesParams,
+    AssignIssuesResult,
     BoardSummary,
     CreateIssueParams,
     CreateIssueResult,
@@ -307,22 +309,60 @@ async def atlassian_jira_edit_issue(
     return EditIssueResult(success=True, issue_key=params.issue_key)
 
 
+async def _assign_one_issue(
+    cloud_id: str,
+    issue_key: str,
+    account_id: str | None,
+    token: str,
+    base_url: str,
+) -> AssignIssueItem:
+    """Run a single assignee PUT and shape the per-issue outcome."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.put(
+                _api_url(cloud_id, f"/issue/{issue_key}/assignee", base_url=base_url),
+                headers=_headers(token, content_type=True),
+                json={"accountId": account_id},
+            )
+    except httpx.HTTPError as exc:
+        return AssignIssueItem(issue_key=issue_key, success=False, error=str(exc))
+
+    if not resp.is_success:
+        return AssignIssueItem(
+            issue_key=issue_key,
+            success=False,
+            error=f"Jira API error {resp.status_code}: {resp.text}",
+        )
+
+    return AssignIssueItem(issue_key=issue_key, success=True)
+
+
 @tool(
-    scopes=SCOPES["atlassian_jira_assign_issue"],
+    scopes=SCOPES["atlassian_jira_assign_issues"],
     api_docs="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-assignee-put",
     provider="atlassian",
     service="atlassian_jira",
 )
-async def atlassian_jira_assign_issue(
-    params: AssignIssueParams,
+async def atlassian_jira_assign_issues(
+    params: AssignIssuesParams,
     *,
     token: str,
     base_url: str = _BASE_URL,
-) -> AssignIssueResult:
-    """Assign or unassign a Jira issue."""
+) -> AssignIssuesResult:
+    """Assign or unassign one or more Jira issues with a shared assignee.
+
+    ``assign_to_me`` applies to every issue in the call: pass True to assign
+    each issue to the authenticated user, False to unassign each issue.
+    Per-issue outcomes are returned in ``items`` so partial failures surface
+    without aborting the whole bulk call.
+    """
+    issue_keys = parse_csv_ids(params.issue_keys)
+    if not issue_keys:
+        return AssignIssuesResult(success=False, error="No issue keys provided.")
+
     cloud_id = await _resolve_cloud_id(token, base_url)
     if not cloud_id:
-        return AssignIssueResult(
+        return AssignIssuesResult(
             success=False,
             error="Failed to resolve Jira cloud ID. Ensure you have access to a Jira site.",
         )
@@ -341,32 +381,13 @@ async def atlassian_jira_assign_issue(
             pass
 
         if not account_id:
-            return AssignIssueResult(
+            return AssignIssuesResult(
                 success=False,
                 error="Could not retrieve current user account ID.",
             )
 
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.put(
-                _api_url(cloud_id, f"/issue/{params.issue_key}/assignee", base_url=base_url),
-                headers=_headers(token, content_type=True),
-                json={"accountId": account_id},
-            )
-    except httpx.HTTPError as exc:
-        return AssignIssueResult(success=False, error=str(exc))
-
-    if not resp.is_success:
-        return AssignIssueResult(
-            success=False,
-            error=f"Jira API error {resp.status_code}: {resp.text}",
-        )
-
-    return AssignIssueResult(
-        success=True,
-        issue_key=params.issue_key,
-        assigned=params.assign_to_me,
-    )
+    items = [await _assign_one_issue(cloud_id, key, account_id, token, base_url) for key in issue_keys]
+    return AssignIssuesResult(success=True, assigned=params.assign_to_me, items=items)
 
 
 @tool(

@@ -9,7 +9,7 @@ from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.atlassian.jira.tools import (
     atlassian_jira_add_comment,
-    atlassian_jira_assign_issue,
+    atlassian_jira_assign_issues,
     atlassian_jira_create_issue,
     atlassian_jira_edit_issue,
     atlassian_jira_explore_issues,
@@ -21,8 +21,8 @@ from apron_tools.providers.atlassian.jira.tools import (
 from apron_tools.providers.atlassian.jira.types import (
     AddCommentParams,
     AddCommentResult,
-    AssignIssueParams,
-    AssignIssueResult,
+    AssignIssuesParams,
+    AssignIssuesResult,
     CreateIssueParams,
     CreateIssueResult,
     EditIssueParams,
@@ -271,8 +271,8 @@ class TestEditIssue:
 # ---------------------------------------------------------------------------
 
 
-class TestAssignIssue:
-    async def test_assign_to_me(self, httpx_mock: HTTPXMock) -> None:
+class TestAssignIssues:
+    async def test_single_issue_assign_to_me(self, httpx_mock: HTTPXMock) -> None:
         _mock_cloud_id(httpx_mock)
         httpx_mock.add_response(
             url=f"{_API_PREFIX}/myself",
@@ -283,14 +283,67 @@ class TestAssignIssue:
             status_code=204,
         )
 
-        result = await atlassian_jira_assign_issue(
-            AssignIssueParams(issue_key="EX-1"),
+        result = await atlassian_jira_assign_issues(
+            AssignIssuesParams(issue_keys="EX-1"),
             token=_TOKEN,
         )
 
-        assert isinstance(result, AssignIssueResult)
+        assert isinstance(result, AssignIssuesResult)
         assert result.success is True
         assert result.assigned is True
+        assert len(result.items) == 1
+        assert result.items[0].issue_key == "EX-1"
+        assert result.items[0].success is True
+
+    async def test_multiple_issues(self, httpx_mock: HTTPXMock) -> None:
+        _mock_cloud_id(httpx_mock)
+        httpx_mock.add_response(
+            url=f"{_API_PREFIX}/myself",
+            json=_load_json("myself.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_API_PREFIX}/issue/EX-1/assignee",
+            status_code=204,
+        )
+        httpx_mock.add_response(
+            url=f"{_API_PREFIX}/issue/EX-2/assignee",
+            status_code=204,
+        )
+
+        result = await atlassian_jira_assign_issues(
+            AssignIssuesParams(issue_keys="EX-1, EX-2"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert [item.issue_key for item in result.items] == ["EX-1", "EX-2"]
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        _mock_cloud_id(httpx_mock)
+        httpx_mock.add_response(
+            url=f"{_API_PREFIX}/myself",
+            json=_load_json("myself.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_API_PREFIX}/issue/EX-1/assignee",
+            status_code=204,
+        )
+        httpx_mock.add_response(
+            url=f"{_API_PREFIX}/issue/EX-MISSING/assignee",
+            status_code=404,
+            text="Issue does not exist",
+        )
+
+        result = await atlassian_jira_assign_issues(
+            AssignIssuesParams(issue_keys="EX-1,EX-MISSING"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "404" in result.items[1].error
 
     async def test_unassign(self, httpx_mock: HTTPXMock) -> None:
         _mock_cloud_id(httpx_mock)
@@ -299,13 +352,23 @@ class TestAssignIssue:
             status_code=204,
         )
 
-        result = await atlassian_jira_assign_issue(
-            AssignIssueParams(issue_key="EX-1", assign_to_me=False),
+        result = await atlassian_jira_assign_issues(
+            AssignIssuesParams(issue_keys="EX-1", assign_to_me=False),
             token=_TOKEN,
         )
 
         assert result.success is True
         assert result.assigned is False
+        assert result.items[0].success is True
+
+    async def test_empty_issue_keys(self) -> None:
+        result = await atlassian_jira_assign_issues(
+            AssignIssuesParams(issue_keys=" , "),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "No issue keys provided."
 
     async def test_myself_failure(self, httpx_mock: HTTPXMock) -> None:
         _mock_cloud_id(httpx_mock)
@@ -315,8 +378,8 @@ class TestAssignIssue:
             text="Unauthorized",
         )
 
-        result = await atlassian_jira_assign_issue(
-            AssignIssueParams(issue_key="EX-1"),
+        result = await atlassian_jira_assign_issues(
+            AssignIssuesParams(issue_keys="EX-1"),
             token=_TOKEN,
         )
 
@@ -324,8 +387,8 @@ class TestAssignIssue:
         assert "account ID" in result.error
 
     async def test_has_tool_definition(self) -> None:
-        defn = atlassian_jira_assign_issue._tool_definition
-        assert defn.name == "atlassian_jira_assign_issue"
+        defn = atlassian_jira_assign_issues._tool_definition
+        assert defn.name == "atlassian_jira_assign_issues"
         assert defn.provider == "atlassian"
         assert defn.service == "atlassian_jira"
         assert "write:jira-work" in defn.scopes

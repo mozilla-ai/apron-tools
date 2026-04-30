@@ -8,8 +8,9 @@ from pathlib import Path
 from apron_tools.providers.atlassian.jira.types import (
     AddCommentParams,
     AddCommentResult,
-    AssignIssueParams,
-    AssignIssueResult,
+    AssignIssueItem,
+    AssignIssuesParams,
+    AssignIssuesResult,
     CreateIssueParams,
     CreateIssueResult,
     EditIssueParams,
@@ -97,13 +98,18 @@ class TestEditIssueParams:
         assert params.priority is None
 
 
-class TestAssignIssueParams:
+class TestAssignIssuesParams:
     def test_defaults(self):
-        params = AssignIssueParams(issue_key="EX-1")
+        params = AssignIssuesParams(issue_keys="EX-1")
+        assert params.issue_keys == "EX-1"
         assert params.assign_to_me is True
 
+    def test_multiple_keys(self):
+        params = AssignIssuesParams(issue_keys="EX-1,EX-2,EX-3")
+        assert params.issue_keys == "EX-1,EX-2,EX-3"
+
     def test_unassign(self):
-        params = AssignIssueParams(issue_key="EX-1", assign_to_me=False)
+        params = AssignIssuesParams(issue_keys="EX-1", assign_to_me=False)
         assert params.assign_to_me is False
 
 
@@ -289,21 +295,47 @@ class TestEditIssueResult:
 
 
 # ---------------------------------------------------------------------------
-# AssignIssueResult
+# AssignIssuesResult
 # ---------------------------------------------------------------------------
 
 
-class TestAssignIssueResult:
+class TestAssignIssuesResult:
     def test_assigned(self):
-        result = AssignIssueResult(success=True, issue_key="EX-1", assigned=True)
+        result = AssignIssuesResult(
+            success=True,
+            assigned=True,
+            items=[AssignIssueItem(issue_key="EX-1", success=True)],
+        )
+        assert "EX-1" in str(result)
         assert "assigned to you" in str(result)
 
     def test_unassigned(self):
-        result = AssignIssueResult(success=True, issue_key="EX-1", assigned=False)
+        result = AssignIssuesResult(
+            success=True,
+            assigned=False,
+            items=[AssignIssueItem(issue_key="EX-1", success=True)],
+        )
         assert "unassigned" in str(result)
 
+    def test_partial_failure(self):
+        result = AssignIssuesResult(
+            success=True,
+            assigned=True,
+            items=[
+                AssignIssueItem(issue_key="EX-1", success=True),
+                AssignIssueItem(issue_key="EX-2", success=False, error="not found"),
+            ],
+        )
+        rendered = str(result)
+        assert "EX-1" in rendered
+        assert "Failed: not found" in rendered
+
+    def test_empty_items(self):
+        result = AssignIssuesResult(success=True)
+        assert "No issues processed" in str(result)
+
     def test_str_on_error(self):
-        result = AssignIssueResult(success=False, error="Forbidden")
+        result = AssignIssuesResult(success=False, error="Forbidden")
         assert str(result) == "Error: Forbidden"
 
 
