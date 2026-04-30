@@ -183,7 +183,7 @@ async def gmail_list_emails(
                 emails.append(
                     EmailSummary(
                         id=msg_id,
-                        thread_id=msg_data.get("threadId", ""),
+                        thread_id=msg_data.get("threadId", ""),  # ty: ignore[unknown-argument]
                         subject=_extract_header(hdrs, "Subject"),
                         from_address=_extract_header(hdrs, "From"),
                         to_address=_extract_header(hdrs, "To"),
