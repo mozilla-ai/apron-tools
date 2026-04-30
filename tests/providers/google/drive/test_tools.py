@@ -11,9 +11,9 @@ from apron_tools.providers.google.drive.tools import (
     google_drive_create_folder,
     google_drive_get_file_info,
     google_drive_list_files,
-    google_drive_move_file,
+    google_drive_move_files,
     google_drive_search,
-    google_drive_share_file,
+    google_drive_share_files,
 )
 from apron_tools.providers.google.drive.types import (
     CreateFolderParams,
@@ -22,17 +22,16 @@ from apron_tools.providers.google.drive.types import (
     GetFileInfoResult,
     ListFilesParams,
     ListFilesResult,
-    MoveFileParams,
-    MoveFileResult,
+    MoveFilesParams,
+    MoveFilesResult,
     SearchParams,
     SearchResult,
-    ShareFileParams,
-    ShareFileResult,
+    ShareFilesParams,
+    ShareFilesResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
 _TOKEN = "test-token"
-_DRIVE_BASE = "https://www.googleapis.com/drive/v3/files"
 _FILE_ID = "file-001"
 
 
@@ -178,49 +177,80 @@ class TestGetFileInfo:
 # ---------------------------------------------------------------------------
 
 
-class TestMoveFile:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
-        # First request: get current parents.
+class TestMoveFiles:
+    async def test_single_file(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("move_file_meta.json"))
-        # Second request: update parents.
         httpx_mock.add_response(json=_load_json("move_file.json"))
 
-        result = await google_drive_move_file(
-            MoveFileParams(file_id=_FILE_ID, destination_folder_id="folder-002"),
+        result = await google_drive_move_files(
+            MoveFilesParams(file_ids=_FILE_ID, destination_folder_id="folder-002"),
             token=_TOKEN,
         )
 
-        assert isinstance(result, MoveFileResult)
+        assert isinstance(result, MoveFilesResult)
         assert result.success is True
-        assert result.id == _FILE_ID
-        assert result.parents == ["folder-002"]
+        assert result.destination_folder_id == "folder-002"
+        assert len(result.items) == 1
+        item = result.items[0]
+        assert item.success is True
+        assert item.file_id == _FILE_ID
+        assert item.parents == ["folder-002"]
 
-    async def test_meta_error(self, httpx_mock: HTTPXMock) -> None:
+    async def test_multiple_files(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("move_file_meta.json"))
+        httpx_mock.add_response(json=_load_json("move_file.json"))
+        httpx_mock.add_response(json=_load_json("move_file_meta.json"))
+        httpx_mock.add_response(json=_load_json("move_file.json"))
+
+        result = await google_drive_move_files(
+            MoveFilesParams(file_ids=f"{_FILE_ID}, file-002", destination_folder_id="folder-002"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert len(result.items) == 2
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("move_file_meta.json"))
+        httpx_mock.add_response(json=_load_json("move_file.json"))
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await google_drive_move_file(
-            MoveFileParams(file_id="bad-id", destination_folder_id="folder-002"),
+        result = await google_drive_move_files(
+            MoveFilesParams(file_ids=f"{_FILE_ID},bad-id", destination_folder_id="folder-002"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "404" in result.items[1].error
+
+    async def test_empty_file_ids(self) -> None:
+        result = await google_drive_move_files(
+            MoveFilesParams(file_ids=" , ", destination_folder_id="folder-002"),
             token=_TOKEN,
         )
 
         assert result.success is False
-        assert "404" in result.error
+        assert result.error == "No file IDs provided."
 
     async def test_update_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("move_file_meta.json"))
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await google_drive_move_file(
-            MoveFileParams(file_id=_FILE_ID, destination_folder_id="folder-002"),
+        result = await google_drive_move_files(
+            MoveFilesParams(file_ids=_FILE_ID, destination_folder_id="folder-002"),
             token=_TOKEN,
         )
 
-        assert result.success is False
-        assert "403" in result.error
+        assert result.success is True
+        assert result.items[0].success is False
+        assert "403" in result.items[0].error
 
     async def test_has_tool_definition(self) -> None:
-        defn = google_drive_move_file._tool_definition
-        assert defn.name == "google_drive_move_file"
+        defn = google_drive_move_files._tool_definition
+        assert defn.name == "google_drive_move_files"
         assert defn.provider == "google"
         assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes
@@ -269,40 +299,74 @@ class TestSearch:
 # ---------------------------------------------------------------------------
 
 
-class TestShareFile:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+class TestShareFiles:
+    async def test_single_file(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("share_file.json"))
 
-        result = await google_drive_share_file(
-            ShareFileParams(
-                file_id=_FILE_ID,
+        result = await google_drive_share_files(
+            ShareFilesParams(
+                file_ids=_FILE_ID,
                 email="bob@example.com",
                 role="writer",
             ),
             token=_TOKEN,
         )
 
-        assert isinstance(result, ShareFileResult)
+        assert isinstance(result, ShareFilesResult)
         assert result.success is True
-        assert result.id == "perm-001"
+        assert result.email == "bob@example.com"
         assert result.role == "writer"
-        assert result.email_address == "bob@example.com"
-        assert result.display_name == "Bob Jones"
+        assert len(result.items) == 1
+        item = result.items[0]
+        assert item.success is True
+        assert item.file_id == _FILE_ID
+        assert item.permission_id == "perm-001"
+        assert item.email_address == "bob@example.com"
+        assert item.display_name == "Bob Jones"
 
-    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+    async def test_multiple_files(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("share_file.json"))
+        httpx_mock.add_response(json=_load_json("share_file.json"))
+
+        result = await google_drive_share_files(
+            ShareFilesParams(
+                file_ids=f"{_FILE_ID},file-002",
+                email="bob@example.com",
+                role="writer",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert [item.file_id for item in result.items] == [_FILE_ID, "file-002"]
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("share_file.json"))
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await google_drive_share_file(
-            ShareFileParams(file_id="bad-id", email="nobody@example.com"),
+        result = await google_drive_share_files(
+            ShareFilesParams(file_ids=f"{_FILE_ID},bad-id", email="bob@example.com"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "403" in result.items[1].error
+
+    async def test_empty_file_ids(self) -> None:
+        result = await google_drive_share_files(
+            ShareFilesParams(file_ids=" , ", email="bob@example.com"),
             token=_TOKEN,
         )
 
         assert result.success is False
-        assert "403" in result.error
+        assert result.error == "No file IDs provided."
 
     async def test_has_tool_definition(self) -> None:
-        defn = google_drive_share_file._tool_definition
-        assert defn.name == "google_drive_share_file"
+        defn = google_drive_share_files._tool_definition
+        assert defn.name == "google_drive_share_files"
         assert defn.provider == "google"
         assert defn.service == "google_drive"
         assert "https://www.googleapis.com/auth/drive" in defn.scopes

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.google.drive.types import (
     CreateFolderParams,
@@ -12,14 +13,16 @@ from apron_tools.providers.google.drive.types import (
     GetFileInfoResult,
     ListFilesParams,
     ListFilesResult,
-    MoveFileParams,
-    MoveFileResult,
+    MoveFileItem,
+    MoveFilesParams,
+    MoveFilesResult,
     ReadTextFileParams,
     ReadTextFileResult,
     SearchParams,
     SearchResult,
-    ShareFileParams,
-    ShareFileResult,
+    ShareFileItem,
+    ShareFilesParams,
+    ShareFilesResult,
     UploadFileParams,
     UploadFileResult,
 )
@@ -170,24 +173,17 @@ async def google_drive_get_file_info(
     return GetFileInfoResult.model_validate(resp.json())
 
 
-@tool(
-    scopes=SCOPES["google_drive_move_file"],
-    api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/update",
-    provider="google",
-    service="google_drive",
-)
-async def google_drive_move_file(
-    params: MoveFileParams,
-    *,
+async def _move_one_file(
+    file_id: str,
+    destination_folder_id: str,
     token: str,
-    base_url: str = _DRIVE_BASE_URL,
-) -> MoveFileResult:
-    """Move a file to a different folder in Google Drive."""
+    base_url: str,
+) -> MoveFileItem:
+    """Move a single Drive file and shape the per-file outcome."""
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            # Fetch the current parents to remove the file from them.
             meta_resp = await client.get(
-                f"{base_url}/{params.file_id}",
+                f"{base_url}/{file_id}",
                 headers=_headers(token),
                 params={
                     "fields": "parents",
@@ -195,7 +191,8 @@ async def google_drive_move_file(
                 },
             )
             if not meta_resp.is_success:
-                return MoveFileResult(
+                return MoveFileItem(
+                    file_id=file_id,
                     success=False,
                     error=f"Drive API error {meta_resp.status_code}: {meta_resp.text}",
                 )
@@ -204,10 +201,10 @@ async def google_drive_move_file(
             remove_parents = ",".join(current_parents)
 
             resp = await client.patch(
-                f"{base_url}/{params.file_id}",
+                f"{base_url}/{file_id}",
                 headers=_headers(token, content_type=True),
                 params={
-                    "addParents": params.destination_folder_id,
+                    "addParents": destination_folder_id,
                     "removeParents": remove_parents,
                     "fields": "id,name,parents",
                     "supportsAllDrives": "true",
@@ -215,15 +212,52 @@ async def google_drive_move_file(
                 json={},
             )
     except httpx.HTTPError as exc:
-        return MoveFileResult(success=False, error=str(exc))
+        return MoveFileItem(file_id=file_id, success=False, error=str(exc))
 
     if not resp.is_success:
-        return MoveFileResult(
+        return MoveFileItem(
+            file_id=file_id,
             success=False,
             error=f"Drive API error {resp.status_code}: {resp.text}",
         )
 
-    return MoveFileResult.model_validate(resp.json())
+    data = resp.json()
+    return MoveFileItem(
+        file_id=data.get("id", file_id),
+        success=True,
+        name=data.get("name", ""),
+        parents=data.get("parents", []),
+    )
+
+
+@tool(
+    scopes=SCOPES["google_drive_move_files"],
+    api_docs="https://developers.google.com/drive/api/reference/rest/v3/files/update",
+    provider="google",
+    service="google_drive",
+)
+async def google_drive_move_files(
+    params: MoveFilesParams,
+    *,
+    token: str,
+    base_url: str = _DRIVE_BASE_URL,
+) -> MoveFilesResult:
+    """Move one or more files to a destination folder in Google Drive.
+
+    ``destination_folder_id`` is applied to every file in the call. Per-file
+    outcomes are returned in ``items`` so partial failures surface without
+    aborting the whole bulk call.
+    """
+    file_ids = parse_csv_ids(params.file_ids)
+    if not file_ids:
+        return MoveFilesResult(success=False, error="No file IDs provided.")
+
+    items = [await _move_one_file(file_id, params.destination_folder_id, token, base_url) for file_id in file_ids]
+    return MoveFilesResult(
+        success=True,
+        destination_folder_id=params.destination_folder_id,
+        items=items,
+    )
 
 
 @tool(
@@ -269,43 +303,79 @@ async def google_drive_search(
     return SearchResult.model_validate(data)
 
 
-@tool(
-    scopes=SCOPES["google_drive_share_file"],
-    api_docs="https://developers.google.com/drive/api/reference/rest/v3/permissions/create",
-    provider="google",
-    service="google_drive",
-)
-async def google_drive_share_file(
-    params: ShareFileParams,
-    *,
+async def _share_one_file(
+    file_id: str,
+    email: str,
+    role: str,
     token: str,
-    base_url: str = _DRIVE_BASE_URL,
-) -> ShareFileResult:
-    """Share a file with another user in Google Drive."""
+    base_url: str,
+) -> ShareFileItem:
+    """Create a single Drive permission and shape the per-file outcome."""
     body = {
         "type": "user",
-        "role": params.role,
-        "emailAddress": params.email,
+        "role": role,
+        "emailAddress": email,
     }
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
-                f"{base_url}/{params.file_id}/permissions",
+                f"{base_url}/{file_id}/permissions",
                 headers=_headers(token, content_type=True),
                 params={"supportsAllDrives": "true"},
                 json=body,
             )
     except httpx.HTTPError as exc:
-        return ShareFileResult(success=False, error=str(exc))
+        return ShareFileItem(file_id=file_id, success=False, error=str(exc))
 
     if not resp.is_success:
-        return ShareFileResult(
+        return ShareFileItem(
+            file_id=file_id,
             success=False,
             error=f"Drive API error {resp.status_code}: {resp.text}",
         )
 
-    return ShareFileResult.model_validate(resp.json())
+    data = resp.json()
+    return ShareFileItem(
+        file_id=file_id,
+        success=True,
+        permission_id=data.get("id", ""),
+        type=data.get("type", ""),
+        role=data.get("role", ""),
+        emailAddress=data.get("emailAddress", ""),
+        displayName=data.get("displayName", ""),
+    )
+
+
+@tool(
+    scopes=SCOPES["google_drive_share_files"],
+    api_docs="https://developers.google.com/drive/api/reference/rest/v3/permissions/create",
+    provider="google",
+    service="google_drive",
+)
+async def google_drive_share_files(
+    params: ShareFilesParams,
+    *,
+    token: str,
+    base_url: str = _DRIVE_BASE_URL,
+) -> ShareFilesResult:
+    """Share one or more files with another user in Google Drive.
+
+    ``email`` and ``role`` are applied to every file in the call. Per-file
+    outcomes are returned in ``items`` so partial failures surface without
+    aborting the whole bulk call.
+    """
+    file_ids = parse_csv_ids(params.file_ids)
+    if not file_ids:
+        return ShareFilesResult(success=False, error="No file IDs provided.")
+
+    items = [await _share_one_file(file_id, params.email, params.role, token, base_url) for file_id in file_ids]
+    return ShareFilesResult(
+        success=True,
+        email=params.email,
+        role=params.role,
+        items=items,
+    )
 
 
 _UPLOAD_BASE_URL = "https://www.googleapis.com/upload/drive/v3/files"

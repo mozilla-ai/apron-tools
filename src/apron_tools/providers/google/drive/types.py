@@ -33,10 +33,14 @@ class GetFileInfoParams(BaseModel):
     file_id: str
 
 
-class MoveFileParams(BaseModel):
-    """Parameters for moving a file to a different folder."""
+class MoveFilesParams(BaseModel):
+    """Parameters for moving one or more files to a destination folder.
 
-    file_id: str
+    ``file_ids`` accepts a comma-separated list of file IDs to support bulk
+    operations. ``destination_folder_id`` is applied to every file.
+    """
+
+    file_ids: str
     destination_folder_id: str
 
 
@@ -47,10 +51,14 @@ class SearchParams(BaseModel):
     max_results: int = 20
 
 
-class ShareFileParams(BaseModel):
-    """Parameters for sharing a file with another user."""
+class ShareFilesParams(BaseModel):
+    """Parameters for sharing one or more files with another user.
 
-    file_id: str
+    ``file_ids`` accepts a comma-separated list of file IDs to support bulk
+    operations. ``email`` and ``role`` are applied to every file.
+    """
+
+    file_ids: str
     email: str
     role: str = "reader"
 
@@ -176,29 +184,40 @@ class GetFileInfoResult(ToolResult):
         return f"File: {self.name}\nID: {self.id}\nType: {self.mime_type}\nURL: {self.web_view_link}{owner_str}"
 
 
-class MoveFileResult(ToolResult):
-    """Result of moving a file in Drive."""
+class MoveFileItem(BaseModel):
+    """Per-file outcome of a bulk Drive move call."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    id: str = ""
+    file_id: str
+    success: bool = True
+    error: str | None = None
     name: str = ""
     parents: list[str] = []
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+
+class MoveFilesResult(ToolResult):
+    """Result of moving one or more files in Drive."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    destination_folder_id: str = ""
+    items: list[MoveFileItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the move."""
+        """Return an LLM-readable summary of the bulk move."""
         if not self.success:
             return f"Error: {self.error}"
-        dest = self.parents[0] if self.parents else "unknown"
-        return f"File '{self.name}' moved to folder {dest}."
+        if not self.items:
+            return "No files processed."
+        lines: list[str] = []
+        for item in self.items:
+            if item.success:
+                label = f"'{item.name}'" if item.name else item.file_id
+                lines.append(f"- File {label} moved to folder {self.destination_folder_id}.")
+            else:
+                lines.append(f"- {item.file_id}: Failed: {item.error}")
+        return "\n".join(lines)
 
 
 class SearchResult(ToolResult):
@@ -228,30 +247,43 @@ class SearchResult(ToolResult):
         return "\n".join(lines)
 
 
-class ShareFileResult(ToolResult):
-    """Result of sharing a file in Drive."""
+class ShareFileItem(BaseModel):
+    """Per-file outcome of a bulk Drive share call."""
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    id: str = ""
+    file_id: str
+    success: bool = True
+    error: str | None = None
+    permission_id: str = ""
     type: str = ""
     role: str = ""
     email_address: str = Field(default="", alias="emailAddress")
     display_name: str = Field(default="", alias="displayName")
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+
+class ShareFilesResult(ToolResult):
+    """Result of sharing one or more files in Drive."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    email: str = ""
+    role: str = ""
+    items: list[ShareFileItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the sharing result."""
+        """Return an LLM-readable summary of the bulk share."""
         if not self.success:
             return f"Error: {self.error}"
-        return f"Shared with {self.display_name} ({self.email_address}) as {self.role}."
+        if not self.items:
+            return "No files processed."
+        lines: list[str] = []
+        for item in self.items:
+            if item.success:
+                lines.append(f"- File {item.file_id} shared with {self.email} as {self.role}.")
+            else:
+                lines.append(f"- {item.file_id}: Failed: {item.error}")
+        return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
