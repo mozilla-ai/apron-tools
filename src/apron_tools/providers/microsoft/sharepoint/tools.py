@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.providers.microsoft.sharepoint.types import (
     CreateFolderParams,
     CreateFolderResult,
@@ -15,8 +16,9 @@ from apron_tools.providers.microsoft.sharepoint.types import (
     ListDrivesResult,
     ListSitesParams,
     ListSitesResult,
-    MoveFileParams,
-    MoveFileResult,
+    MoveFileItem,
+    MoveFilesParams,
+    MoveFilesResult,
     SearchParams,
     SearchResult,
     SiteInfo,
@@ -226,53 +228,78 @@ async def microsoft_sharepoint_search(
     return SearchResult(success=True, items=items)
 
 
-@tool(
-    scopes=SCOPES["microsoft_sharepoint_move_file"],
-    api_docs="https://learn.microsoft.com/en-us/graph/api/driveitem-update",
-    provider="microsoft",
-    service="microsoft_sharepoint",
-)
-async def microsoft_sharepoint_move_file(
-    params: MoveFileParams,
-    *,
+async def _move_one_item(
+    drive_id: str,
+    item_id: str,
+    destination_folder_id: str,
     token: str,
-    base_url: str = _GRAPH_BASE_URL,
-) -> MoveFileResult:
-    """Move a file or folder to a different location within the same drive."""
+    base_url: str,
+) -> MoveFileItem:
+    """Move a single SharePoint drive item and shape the per-item outcome."""
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            # Fetch the current item to confirm it exists.
             get_resp = await client.get(
-                f"{base_url}/drives/{params.drive_id}/items/{params.item_id}",
+                f"{base_url}/drives/{drive_id}/items/{item_id}",
                 headers=_headers(token),
                 params={"$select": "id,name"},
             )
             if not get_resp.is_success:
-                return MoveFileResult(
+                return MoveFileItem(
+                    item_id=item_id,
                     success=False,
                     error=f"Graph API error {get_resp.status_code}: {get_resp.text}",
                 )
 
-            # Build the move request body.
-            body: dict = {
-                "parentReference": {"id": params.destination_folder_id},
-            }
-            if params.new_name:
-                body["name"] = params.new_name
-
             patch_resp = await client.patch(
-                f"{base_url}/drives/{params.drive_id}/items/{params.item_id}",
+                f"{base_url}/drives/{drive_id}/items/{item_id}",
                 headers=_headers(token, content_type=True),
-                json=body,
+                json={"parentReference": {"id": destination_folder_id}},
             )
             if not patch_resp.is_success:
-                return MoveFileResult(
+                return MoveFileItem(
+                    item_id=item_id,
                     success=False,
                     error=f"Graph API error {patch_resp.status_code}: {patch_resp.text}",
                 )
 
     except httpx.HTTPError as exc:
-        return MoveFileResult(success=False, error=str(exc))
+        return MoveFileItem(item_id=item_id, success=False, error=str(exc))
 
-    item = DriveItem.model_validate(patch_resp.json())
-    return MoveFileResult(success=True, item=item)
+    return MoveFileItem(
+        item_id=item_id,
+        success=True,
+        item=DriveItem.model_validate(patch_resp.json()),
+    )
+
+
+@tool(
+    scopes=SCOPES["microsoft_sharepoint_move_files"],
+    api_docs="https://learn.microsoft.com/en-us/graph/api/driveitem-update",
+    provider="microsoft",
+    service="microsoft_sharepoint",
+)
+async def microsoft_sharepoint_move_files(
+    params: MoveFilesParams,
+    *,
+    token: str,
+    base_url: str = _GRAPH_BASE_URL,
+) -> MoveFilesResult:
+    """Move one or more files or folders to a destination folder in a drive.
+
+    ``destination_folder_id`` is applied to every item in the call. Per-item
+    outcomes are returned in ``items`` so partial failures surface without
+    aborting the whole bulk call.
+    """
+    item_ids = parse_csv_ids(params.item_ids)
+    if not item_ids:
+        return MoveFilesResult(success=False, error="No item IDs provided.")
+
+    items = [
+        await _move_one_item(params.drive_id, item_id, params.destination_folder_id, token, base_url)
+        for item_id in item_ids
+    ]
+    return MoveFilesResult(
+        success=True,
+        destination_folder_id=params.destination_folder_id,
+        items=items,
+    )

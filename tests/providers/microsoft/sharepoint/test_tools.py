@@ -12,7 +12,7 @@ from apron_tools.providers.microsoft.sharepoint.tools import (
     microsoft_sharepoint_explore_drive,
     microsoft_sharepoint_list_drives,
     microsoft_sharepoint_list_sites,
-    microsoft_sharepoint_move_file,
+    microsoft_sharepoint_move_files,
     microsoft_sharepoint_search,
 )
 from apron_tools.providers.microsoft.sharepoint.types import (
@@ -24,8 +24,8 @@ from apron_tools.providers.microsoft.sharepoint.types import (
     ListDrivesResult,
     ListSitesParams,
     ListSitesResult,
-    MoveFileParams,
-    MoveFileResult,
+    MoveFilesParams,
+    MoveFilesResult,
     SearchParams,
     SearchResult,
 )
@@ -272,8 +272,8 @@ class TestSearch:
 # ---------------------------------------------------------------------------
 
 
-class TestMoveFile:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+class TestMoveFiles:
+    async def test_single_item(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             method="GET",
             url=f"{_GRAPH_BASE}/drives/{_DRIVE_ID}/items/{_ITEM_ID}?%24select=id%2Cname",
@@ -285,36 +285,89 @@ class TestMoveFile:
             json=_load_json("move_file.json"),
         )
 
-        result = await microsoft_sharepoint_move_file(
-            MoveFileParams(
+        result = await microsoft_sharepoint_move_files(
+            MoveFilesParams(
                 drive_id=_DRIVE_ID,
-                item_id=_ITEM_ID,
+                item_ids=_ITEM_ID,
                 destination_folder_id=_FOLDER_ID,
             ),
             token=_TOKEN,
         )
 
-        assert isinstance(result, MoveFileResult)
+        assert isinstance(result, MoveFilesResult)
         assert result.success is True
-        assert result.item is not None
-        assert result.item.name == "budget.xlsx"
-        assert result.item.parent_reference is not None
-        assert result.item.parent_reference.id == _FOLDER_ID
+        assert result.destination_folder_id == _FOLDER_ID
+        assert len(result.items) == 1
+        entry = result.items[0]
+        assert entry.success is True
+        assert entry.item is not None
+        assert entry.item.name == "budget.xlsx"
+        assert entry.item.parent_reference is not None
+        assert entry.item.parent_reference.id == _FOLDER_ID
 
-    async def test_get_error(self, httpx_mock: HTTPXMock) -> None:
+    async def test_multiple_items(self, httpx_mock: HTTPXMock) -> None:
+        for _ in range(2):
+            httpx_mock.add_response(
+                method="GET",
+                json=_load_json("get_item.json"),
+            )
+            httpx_mock.add_response(
+                method="PATCH",
+                json=_load_json("move_file.json"),
+            )
+
+        result = await microsoft_sharepoint_move_files(
+            MoveFilesParams(
+                drive_id=_DRIVE_ID,
+                item_ids=f"{_ITEM_ID}, item-other",
+                destination_folder_id=_FOLDER_ID,
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert [entry.item_id for entry in result.items] == [_ITEM_ID, "item-other"]
+        assert all(entry.success for entry in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{_GRAPH_BASE}/drives/{_DRIVE_ID}/items/{_ITEM_ID}?%24select=id%2Cname",
+            json=_load_json("get_item.json"),
+        )
+        httpx_mock.add_response(
+            method="PATCH",
+            url=f"{_GRAPH_BASE}/drives/{_DRIVE_ID}/items/{_ITEM_ID}",
+            json=_load_json("move_file.json"),
+        )
         httpx_mock.add_response(status_code=404, text="Not Found")
 
-        result = await microsoft_sharepoint_move_file(
-            MoveFileParams(
+        result = await microsoft_sharepoint_move_files(
+            MoveFilesParams(
                 drive_id=_DRIVE_ID,
-                item_id="bad-item",
+                item_ids=f"{_ITEM_ID},bad-item",
+                destination_folder_id=_FOLDER_ID,
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "404" in result.items[1].error
+
+    async def test_empty_item_ids(self) -> None:
+        result = await microsoft_sharepoint_move_files(
+            MoveFilesParams(
+                drive_id=_DRIVE_ID,
+                item_ids=" , ",
                 destination_folder_id=_FOLDER_ID,
             ),
             token=_TOKEN,
         )
 
         assert result.success is False
-        assert "404" in result.error
+        assert result.error == "No item IDs provided."
 
     async def test_patch_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
@@ -329,21 +382,22 @@ class TestMoveFile:
             text="Forbidden",
         )
 
-        result = await microsoft_sharepoint_move_file(
-            MoveFileParams(
+        result = await microsoft_sharepoint_move_files(
+            MoveFilesParams(
                 drive_id=_DRIVE_ID,
-                item_id=_ITEM_ID,
+                item_ids=_ITEM_ID,
                 destination_folder_id=_FOLDER_ID,
             ),
             token=_TOKEN,
         )
 
-        assert result.success is False
-        assert "403" in result.error
+        assert result.success is True
+        assert result.items[0].success is False
+        assert "403" in result.items[0].error
 
     async def test_has_tool_definition(self) -> None:
-        defn = microsoft_sharepoint_move_file._tool_definition
-        assert defn.name == "microsoft_sharepoint_move_file"
+        defn = microsoft_sharepoint_move_files._tool_definition
+        assert defn.name == "microsoft_sharepoint_move_files"
         assert defn.provider == "microsoft"
         assert defn.service == "microsoft_sharepoint"
         assert "Files.ReadWrite.All" in defn.scopes

@@ -16,8 +16,9 @@ from apron_tools.providers.microsoft.sharepoint.types import (
     ListDrivesResult,
     ListSitesParams,
     ListSitesResult,
-    MoveFileParams,
-    MoveFileResult,
+    MoveFileItem,
+    MoveFilesParams,
+    MoveFilesResult,
     SearchParams,
     SearchResult,
     SiteInfo,
@@ -90,22 +91,20 @@ class TestSearchParams:
         assert params.limit == 10
 
 
-class TestMoveFileParams:
+class TestMoveFilesParams:
     def test_required(self):
-        params = MoveFileParams(drive_id="drive-001", item_id="item-002", destination_folder_id="item-003")
+        params = MoveFilesParams(drive_id="drive-001", item_ids="item-002", destination_folder_id="item-003")
         assert params.drive_id == "drive-001"
-        assert params.item_id == "item-002"
+        assert params.item_ids == "item-002"
         assert params.destination_folder_id == "item-003"
-        assert params.new_name is None
 
-    def test_with_rename(self):
-        params = MoveFileParams(
+    def test_multiple_ids(self):
+        params = MoveFilesParams(
             drive_id="drive-001",
-            item_id="item-002",
-            destination_folder_id="item-003",
-            new_name="renamed.xlsx",
+            item_ids="item-002,item-003",
+            destination_folder_id="item-004",
         )
-        assert params.new_name == "renamed.xlsx"
+        assert params.item_ids == "item-002,item-003"
 
 
 # ---------------------------------------------------------------------------
@@ -331,33 +330,54 @@ class TestSearchResult:
 
 
 # ---------------------------------------------------------------------------
-# MoveFileResult
+# MoveFilesResult
 # ---------------------------------------------------------------------------
 
 
-class TestMoveFileResult:
+class TestMoveFilesResult:
     def test_success(self):
         data = _load_json("move_file.json")
         item = DriveItem.model_validate(data)
-        result = MoveFileResult(success=True, item=item)
+        result = MoveFilesResult(
+            success=True,
+            destination_folder_id="item-003",
+            items=[MoveFileItem(item_id="item-002", success=True, item=item)],
+        )
         assert result.success is True
-        assert result.item is not None
-        assert result.item.name == "budget.xlsx"
-        assert result.item.parent_reference is not None
-        assert result.item.parent_reference.id == "item-003"
+        entry = result.items[0]
+        assert entry.item is not None
+        assert entry.item.name == "budget.xlsx"
+        assert entry.item.parent_reference is not None
+        assert entry.item.parent_reference.id == "item-003"
 
     def test_str_output(self):
         data = _load_json("move_file.json")
         item = DriveItem.model_validate(data)
-        result = MoveFileResult(success=True, item=item)
+        result = MoveFilesResult(
+            success=True,
+            destination_folder_id="item-003",
+            items=[MoveFileItem(item_id="item-002", success=True, item=item)],
+        )
         text = str(result)
         assert "budget.xlsx" in text
-        assert "moved" in text
+        assert "Moved" in text
 
-    def test_str_no_item(self):
-        result = MoveFileResult(success=True, item=None)
-        assert str(result) == "Item moved but no details returned."
+    def test_partial_failure(self):
+        result = MoveFilesResult(
+            success=True,
+            destination_folder_id="item-003",
+            items=[
+                MoveFileItem(item_id="item-002", success=True, item=None),
+                MoveFileItem(item_id="item-bad", success=False, error="404"),
+            ],
+        )
+        text = str(result)
+        assert "Failed: 404" in text
+
+    def test_str_no_items(self):
+        result = MoveFilesResult(success=True)
+        assert "No items processed" in str(result)
 
     def test_str_on_error(self):
-        result = MoveFileResult(success=False, error="Item not found")
+        result = MoveFilesResult(success=False, error="Item not found")
         assert str(result) == "Error: Item not found"

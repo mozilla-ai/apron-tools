@@ -50,13 +50,16 @@ class SearchParams(BaseModel):
     limit: int = 25
 
 
-class MoveFileParams(BaseModel):
-    """Parameters for moving a file or folder within a drive."""
+class MoveFilesParams(BaseModel):
+    """Parameters for moving one or more files or folders within a drive.
+
+    ``item_ids`` accepts a comma-separated list of item IDs to support bulk
+    operations. ``destination_folder_id`` is applied to every item.
+    """
 
     drive_id: str
-    item_id: str
+    item_ids: str
     destination_folder_id: str
-    new_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -324,25 +327,36 @@ class SearchResult(ToolResult):
         return "\n".join(lines)
 
 
-class MoveFileResult(ToolResult):
-    """Result of moving a file or folder."""
+class MoveFileItem(BaseModel):
+    """Per-item outcome of a bulk SharePoint move call."""
 
     model_config = ConfigDict(extra="ignore")
 
+    item_id: str
+    success: bool = True
+    error: str | None = None
     item: DriveItem | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+
+class MoveFilesResult(ToolResult):
+    """Result of moving one or more files or folders."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    destination_folder_id: str = ""
+    items: list[MoveFileItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable confirmation of the move."""
+        """Return an LLM-readable summary of the bulk move."""
         if not self.success:
             return f"Error: {self.error}"
-        if not self.item:
-            return "Item moved but no details returned."
-        return f"Successfully moved '{self.item.name}' to new location. URL: {self.item.web_url}"
+        if not self.items:
+            return "No items processed."
+        lines: list[str] = []
+        for entry in self.items:
+            if entry.success:
+                name = entry.item.name if entry.item else entry.item_id
+                lines.append(f"- Moved '{name}' to folder {self.destination_folder_id}.")
+            else:
+                lines.append(f"- {entry.item_id}: Failed: {entry.error}")
+        return "\n".join(lines)
