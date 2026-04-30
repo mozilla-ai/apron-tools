@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from apron_tools._utils import parse_csv_ids
 from apron_tools.providers.trello.types import (
     CreateCardParams,
     CreateCardResult,
@@ -17,10 +18,12 @@ from apron_tools.providers.trello.types import (
     ListCardsResult,
     ListListsParams,
     ListListsResult,
-    MoveCardParams,
-    MoveCardResult,
-    SetCardDueDateParams,
-    SetCardDueDateResult,
+    MoveCardItem,
+    MoveCardsParams,
+    MoveCardsResult,
+    SetCardDueDateItem,
+    SetCardDueDatesParams,
+    SetCardDueDatesResult,
     TrelloBoard,
     TrelloCard,
     TrelloCardDetail,
@@ -236,53 +239,112 @@ async def trello_create_card(
     return CreateCardResult.model_validate(resp.json())
 
 
+async def _move_one_card(
+    card_id: str,
+    query: dict[str, Any],
+    base_url: str,
+) -> MoveCardItem:
+    """Move a single Trello card and shape the per-card outcome."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.put(f"{base_url}/cards/{card_id}", params=query)
+    except httpx.HTTPError as exc:
+        return MoveCardItem(card_id=card_id, success=False, error=_redact_error(exc))
+
+    if not resp.is_success:
+        return MoveCardItem(
+            card_id=card_id,
+            success=False,
+            error=f"Trello API error {resp.status_code}: {resp.text}",
+        )
+
+    data = resp.json()
+    return MoveCardItem(card_id=data.get("id", card_id), success=True, name=data.get("name", ""))
+
+
 @tool(
-    scopes=SCOPES["trello_move_card"],
+    scopes=SCOPES["trello_move_cards"],
     api_docs=f"{_API_DOCS}api-group-cards/#api-cards-id-put",
     provider="trello",
 )
-async def trello_move_card(
-    params: MoveCardParams,
+async def trello_move_cards(
+    params: MoveCardsParams,
     *,
     token: str,
     api_key: str,
     base_url: str = _BASE_URL,
-) -> MoveCardResult:
-    """Move a Trello card to a different list."""
+) -> MoveCardsResult:
+    """Move one or more Trello cards to a different list.
+
+    ``list_id`` and ``position`` are applied to every card in the call.
+    Per-card outcomes are returned in ``items`` so partial failures surface
+    without aborting the whole bulk call.
+    """
+    card_ids = parse_csv_ids(params.card_ids)
+    if not card_ids:
+        return MoveCardsResult(success=False, error="No card IDs provided.")
+
     query: dict[str, Any] = {
         **_auth_params(api_key, token),
         "idList": params.list_id,
         "pos": params.position,
     }
 
+    items = [await _move_one_card(card_id, query, base_url) for card_id in card_ids]
+    return MoveCardsResult(success=True, list_id=params.list_id, items=items)
+
+
+async def _set_one_card_due_date(
+    card_id: str,
+    query: dict[str, Any],
+    base_url: str,
+) -> SetCardDueDateItem:
+    """Set or clear the due date on a single Trello card."""
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.put(f"{base_url}/cards/{params.card_id}", params=query)
+            resp = await client.put(f"{base_url}/cards/{card_id}", params=query)
     except httpx.HTTPError as exc:
-        return MoveCardResult(success=False, error=_redact_error(exc))
+        return SetCardDueDateItem(card_id=card_id, success=False, error=_redact_error(exc))
 
     if not resp.is_success:
-        return MoveCardResult(
+        return SetCardDueDateItem(
+            card_id=card_id,
             success=False,
             error=f"Trello API error {resp.status_code}: {resp.text}",
         )
 
-    return MoveCardResult.model_validate(resp.json())
+    data = resp.json()
+    return SetCardDueDateItem(
+        card_id=data.get("id", card_id),
+        success=True,
+        name=data.get("name", ""),
+        due=data.get("due"),
+        due_complete=data.get("dueComplete", False),
+    )
 
 
 @tool(
-    scopes=SCOPES["trello_set_card_due_date"],
+    scopes=SCOPES["trello_set_card_due_dates"],
     api_docs=f"{_API_DOCS}api-group-cards/#api-cards-id-put",
     provider="trello",
 )
-async def trello_set_card_due_date(
-    params: SetCardDueDateParams,
+async def trello_set_card_due_dates(
+    params: SetCardDueDatesParams,
     *,
     token: str,
     api_key: str,
     base_url: str = _BASE_URL,
-) -> SetCardDueDateResult:
-    """Set or clear the due date on a Trello card."""
+) -> SetCardDueDatesResult:
+    """Set or clear the due date on one or more Trello cards.
+
+    ``due_date`` and ``mark_complete`` are applied to every card in the call.
+    Per-card outcomes are returned in ``items`` so partial failures surface
+    without aborting the whole bulk call.
+    """
+    card_ids = parse_csv_ids(params.card_ids)
+    if not card_ids:
+        return SetCardDueDatesResult(success=False, error="No card IDs provided.")
+
     query: dict[str, Any] = {
         **_auth_params(api_key, token),
         "due": params.due_date or "",
@@ -290,16 +352,5 @@ async def trello_set_card_due_date(
     if params.mark_complete is not None:
         query["dueComplete"] = str(params.mark_complete).lower()
 
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.put(f"{base_url}/cards/{params.card_id}", params=query)
-    except httpx.HTTPError as exc:
-        return SetCardDueDateResult(success=False, error=_redact_error(exc))
-
-    if not resp.is_success:
-        return SetCardDueDateResult(
-            success=False,
-            error=f"Trello API error {resp.status_code}: {resp.text}",
-        )
-
-    return SetCardDueDateResult.model_validate(resp.json())
+    items = [await _set_one_card_due_date(card_id, query, base_url) for card_id in card_ids]
+    return SetCardDueDatesResult(success=True, items=items)
