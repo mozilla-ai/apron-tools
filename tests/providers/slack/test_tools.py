@@ -63,7 +63,8 @@ from apron_tools.providers.slack.types import (
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
-_TOKEN = "xoxb-test-token-abc123"
+_TOKEN = "xoxp-test-token-abc123"
+_BOT_TOKEN = "xoxb-test-token-abc123"
 _BASE_URL = "https://slack.com/api/"
 
 
@@ -105,6 +106,17 @@ class TestSlackExploreWorkspace:
     """
 
     _EMPTY_PRIVATE = {"ok": True, "channels": [], "response_metadata": {"next_cursor": ""}}
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_bot_token_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_explore_workspace(ExploreWorkspaceParams(), token=_BOT_TOKEN, base_url=_BASE_URL)
+
+        assert result.success is False
+        assert "requires a user token" in result.error
+        client.team_info.assert_not_called()
 
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
@@ -238,6 +250,21 @@ class TestSlackExploreWorkspace:
 
 
 class TestSlackListMyConversations:
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_bot_token_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_list_my_conversations(
+            ListMyConversationsParams(),
+            token=_BOT_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "requires a user token" in result.error
+        client.users_conversations.assert_not_called()
+
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
@@ -448,6 +475,21 @@ class TestSlackSendUserMessage:
 
 class TestSlackReadChannelMessages:
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_bot_token_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_read_channel_messages(
+            ReadChannelMessagesParams(channel_id="C012AB3CD"),
+            token=_BOT_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "requires a user token" in result.error
+        client.conversations_history.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -527,6 +569,21 @@ class TestSlackReadChannelMessages:
 
 class TestSlackGetChannelInfo:
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_bot_token_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_get_channel_info(
+            GetChannelInfoParams(channel_id="C012AB3CD"),
+            token=_BOT_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "requires a user token" in result.error
+        client.conversations_info.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
         mock_cls.return_value = client
@@ -574,6 +631,21 @@ class TestSlackGetChannelInfo:
 
 
 class TestSlackReadThread:
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_bot_token_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_read_thread(
+            ReadThreadParams(channel_id="C012AB3CD", thread_ts="1512085950.000216"),
+            token=_BOT_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "requires a user token" in result.error
+        client.conversations_replies.assert_not_called()
+
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_success(self, mock_cls: AsyncMock) -> None:
         client = AsyncMock()
@@ -1247,6 +1319,18 @@ class TestValidateSlackChannelId:
         assert error is not None
         assert "#X01234ABCD" not in error
         assert "find the correct channel ID" in error
+
+
+class TestValidateUserToken:
+    def test_rejects_bot_token(self) -> None:
+        error = slack_tools._validate_user_token(_BOT_TOKEN)
+        assert error is not None
+        assert "requires a user token" in error
+        assert "NOT a transient API error" in error
+
+    @pytest.mark.parametrize("token", [_TOKEN, "", "totally-not-a-slack-token"])
+    def test_non_bot_tokens_pass_through_for_scope_checks(self, token: str) -> None:
+        assert slack_tools._validate_user_token(token) is None
 
 
 class TestFormatSlackError:
