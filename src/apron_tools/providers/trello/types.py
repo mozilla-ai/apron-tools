@@ -51,22 +51,28 @@ class CreateCardParams(BaseModel):
     position: str = "bottom"
 
 
-class MoveCardParams(BaseModel):
-    """Parameters for moving a card to a different list."""
+class MoveCardsParams(BaseModel):
+    """Parameters for moving one or more cards to a different list.
 
-    card_id: str
+    ``card_ids`` accepts a comma-separated list of card IDs to support bulk
+    operations. ``list_id`` and ``position`` are applied to every card.
+    """
+
+    card_ids: str
     list_id: str
     position: str = "bottom"
 
 
-class SetCardDueDateParams(BaseModel):
-    """Parameters for setting or clearing a card's due date.
+class SetCardDueDatesParams(BaseModel):
+    """Parameters for setting or clearing one or more cards' due date.
 
-    If ``mark_complete`` is not provided, the existing completion status
-    is left unchanged.
+    ``card_ids`` accepts a comma-separated list of card IDs to support bulk
+    operations. ``due_date`` and ``mark_complete`` are applied to every card.
+    If ``mark_complete`` is not provided, the existing completion status is
+    left unchanged.
     """
 
-    card_id: str
+    card_ids: str
     due_date: str | None = None
     mark_complete: bool | None = None
 
@@ -260,49 +266,72 @@ class CreateCardResult(ToolResult):
         return f"Card '{self.name}' created.\nID: {self.id}\nURL: {self.short_url}"
 
 
-class MoveCardResult(ToolResult):
-    """Result of moving a Trello card."""
+class MoveCardItem(BaseModel):
+    """Per-card outcome of a bulk Trello move call."""
 
-    id: str = ""
+    model_config = ConfigDict(extra="ignore")
+
+    card_id: str
+    success: bool = True
+    error: str | None = None
     name: str = ""
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+
+class MoveCardsResult(ToolResult):
+    """Result of moving one or more Trello cards."""
+
+    list_id: str = ""
+    items: list[MoveCardItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the moved card."""
+        """Return an LLM-readable summary of the bulk move."""
         if not self.success:
             return f"Error: {self.error}"
-        return f"Card '{self.name}' moved.\nID: {self.id}"
+        if not self.items:
+            return "No cards processed."
+        lines: list[str] = []
+        for entry in self.items:
+            if entry.success:
+                label = f"'{entry.name}'" if entry.name else entry.card_id
+                lines.append(f"- Card {label} moved to list {self.list_id}.")
+            else:
+                lines.append(f"- {entry.card_id}: Failed: {entry.error}")
+        return "\n".join(lines)
 
 
-class SetCardDueDateResult(ToolResult):
-    """Result of setting or clearing a card's due date."""
+class SetCardDueDateItem(BaseModel):
+    """Per-card outcome of a bulk Trello due-date call."""
 
-    id: str = ""
+    model_config = ConfigDict(extra="ignore")
+
+    card_id: str
+    success: bool = True
+    error: str | None = None
     name: str = ""
     due: str | None = None
     due_complete: bool = False
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-            data["due_complete"] = data.get("dueComplete", False)
-        return data
+
+class SetCardDueDatesResult(ToolResult):
+    """Result of setting or clearing one or more cards' due date."""
+
+    items: list[SetCardDueDateItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable summary of the due date change."""
+        """Return an LLM-readable summary of the bulk due-date change."""
         if not self.success:
             return f"Error: {self.error}"
-        if self.due:
-            complete = "complete" if self.due_complete else "incomplete"
-            return f"Due date set to {self.due} ({complete}) for card '{self.name}'."
-        return f"Due date cleared for card '{self.name}'."
+        if not self.items:
+            return "No cards processed."
+        lines: list[str] = []
+        for entry in self.items:
+            if not entry.success:
+                lines.append(f"- {entry.card_id}: Failed: {entry.error}")
+                continue
+            label = f"'{entry.name}'" if entry.name else entry.card_id
+            if entry.due:
+                complete = "complete" if entry.due_complete else "incomplete"
+                lines.append(f"- Due date set to {entry.due} ({complete}) for card {label}.")
+            else:
+                lines.append(f"- Due date cleared for card {label}.")
+        return "\n".join(lines)

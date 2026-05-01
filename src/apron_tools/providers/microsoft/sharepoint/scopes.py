@@ -37,7 +37,7 @@ SCOPES: dict[str, list[MicrosoftSharePointScope]] = {
     "microsoft_sharepoint_explore_drive": [MicrosoftSharePointScope.FILES_READ_WRITE_ALL],
     "microsoft_sharepoint_create_folder": [MicrosoftSharePointScope.FILES_READ_WRITE_ALL],
     "microsoft_sharepoint_search": [MicrosoftSharePointScope.FILES_READ_WRITE_ALL],
-    "microsoft_sharepoint_move_file": [MicrosoftSharePointScope.FILES_READ_WRITE_ALL],
+    "microsoft_sharepoint_move_files": [MicrosoftSharePointScope.FILES_READ_WRITE_ALL],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

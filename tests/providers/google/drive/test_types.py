@@ -13,12 +13,14 @@ from apron_tools.providers.google.drive.types import (
     GetFileInfoResult,
     ListFilesParams,
     ListFilesResult,
-    MoveFileParams,
-    MoveFileResult,
+    MoveFileItem,
+    MoveFilesParams,
+    MoveFilesResult,
     SearchParams,
     SearchResult,
-    ShareFileParams,
-    ShareFileResult,
+    ShareFileItem,
+    ShareFilesParams,
+    ShareFilesResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -62,11 +64,15 @@ class TestGetFileInfoParams:
         assert params.file_id == "file-001"
 
 
-class TestMoveFileParams:
+class TestMoveFilesParams:
     def test_required(self):
-        params = MoveFileParams(file_id="file-001", destination_folder_id="folder-002")
-        assert params.file_id == "file-001"
+        params = MoveFilesParams(file_ids="file-001", destination_folder_id="folder-002")
+        assert params.file_ids == "file-001"
         assert params.destination_folder_id == "folder-002"
+
+    def test_multiple_ids(self):
+        params = MoveFilesParams(file_ids="file-001,file-002", destination_folder_id="folder-002")
+        assert params.file_ids == "file-001,file-002"
 
 
 class TestSearchParams:
@@ -80,20 +86,21 @@ class TestSearchParams:
         assert params.max_results == 5
 
 
-class TestShareFileParams:
+class TestShareFilesParams:
     def test_required(self):
-        params = ShareFileParams(file_id="file-001", email="bob@example.com")
-        assert params.file_id == "file-001"
+        params = ShareFilesParams(file_ids="file-001", email="bob@example.com")
+        assert params.file_ids == "file-001"
         assert params.email == "bob@example.com"
         assert params.role == "reader"
 
     def test_custom_role(self):
-        params = ShareFileParams(
-            file_id="file-001",
+        params = ShareFilesParams(
+            file_ids="file-001,file-002",
             email="bob@example.com",
             role="writer",
         )
         assert params.role == "writer"
+        assert params.file_ids == "file-001,file-002"
 
 
 # ---------------------------------------------------------------------------
@@ -207,30 +214,42 @@ class TestGetFileInfoResult:
 
 
 # ---------------------------------------------------------------------------
-# MoveFileResult
+# MoveFilesResult
 # ---------------------------------------------------------------------------
 
 
-class TestMoveFileResult:
-    def test_parse_real_api_response(self):
-        data = _load_json("move_file.json")
-        result = MoveFileResult.model_validate(data)
-
-        assert result.success is True
-        assert result.id == "file-001"
-        assert result.name == "Project Plan"
-        assert result.parents == ["folder-002"]
-
+class TestMoveFilesResult:
     def test_str_output(self):
-        data = _load_json("move_file.json")
-        result = MoveFileResult.model_validate(data)
+        result = MoveFilesResult(
+            success=True,
+            destination_folder_id="folder-002",
+            items=[
+                MoveFileItem(file_id="file-001", success=True, name="Project Plan"),
+            ],
+        )
         text = str(result)
 
         assert "Project Plan" in text
         assert "folder-002" in text
 
+    def test_partial_failure(self):
+        result = MoveFilesResult(
+            success=True,
+            destination_folder_id="folder-002",
+            items=[
+                MoveFileItem(file_id="file-001", success=True, name="A"),
+                MoveFileItem(file_id="file-002", success=False, error="403"),
+            ],
+        )
+        text = str(result)
+        assert "Failed: 403" in text
+
+    def test_empty_items(self):
+        result = MoveFilesResult(success=True)
+        assert "No files processed" in str(result)
+
     def test_str_on_error(self):
-        result = MoveFileResult(success=False, error="Permission denied")
+        result = MoveFilesResult(success=False, error="Permission denied")
         assert str(result) == "Error: Permission denied"
 
 
@@ -266,31 +285,51 @@ class TestSearchResult:
 
 
 # ---------------------------------------------------------------------------
-# ShareFileResult
+# ShareFilesResult
 # ---------------------------------------------------------------------------
 
 
-class TestShareFileResult:
-    def test_parse_real_api_response(self):
-        data = _load_json("share_file.json")
-        result = ShareFileResult.model_validate(data)
-
-        assert result.success is True
-        assert result.id == "perm-001"
-        assert result.type == "user"
-        assert result.role == "writer"
-        assert result.email_address == "bob@example.com"
-        assert result.display_name == "Bob Jones"
-
+class TestShareFilesResult:
     def test_str_output(self):
-        data = _load_json("share_file.json")
-        result = ShareFileResult.model_validate(data)
+        result = ShareFilesResult(
+            success=True,
+            email="bob@example.com",
+            role="writer",
+            items=[
+                ShareFileItem(
+                    file_id="file-001",
+                    success=True,
+                    permission_id="perm-001",
+                    type="user",
+                    role="writer",
+                    emailAddress="bob@example.com",
+                    displayName="Bob Jones",
+                ),
+            ],
+        )
         text = str(result)
 
-        assert "Bob Jones" in text
+        assert "file-001" in text
         assert "bob@example.com" in text
         assert "writer" in text
 
+    def test_partial_failure(self):
+        result = ShareFilesResult(
+            success=True,
+            email="bob@example.com",
+            role="reader",
+            items=[
+                ShareFileItem(file_id="file-001", success=True),
+                ShareFileItem(file_id="file-002", success=False, error="403"),
+            ],
+        )
+        text = str(result)
+        assert "Failed: 403" in text
+
+    def test_empty_items(self):
+        result = ShareFilesResult(success=True)
+        assert "No files processed" in str(result)
+
     def test_str_on_error(self):
-        result = ShareFileResult(success=False, error="User not found")
+        result = ShareFilesResult(success=False, error="User not found")
         assert str(result) == "Error: User not found"

@@ -551,7 +551,7 @@ async def google_slides_update_slide_text(
 
     return UpdateSlideTextResult(
         success=True,
-        presentation_id=params.presentation_id,
+        presentation_id=params.presentation_id,  # ty: ignore[unknown-argument]
         shape_id=target_shape_id,
         fallback_reason=fallback_reason,
     )
@@ -661,7 +661,7 @@ async def google_slides_insert_element(
 
     return InsertElementResult(
         success=True,
-        presentation_id=params.presentation_id,
+        presentation_id=params.presentation_id,  # ty: ignore[unknown-argument]
         element_id=element_id,
     )
 
@@ -722,7 +722,7 @@ async def google_slides_update_table_cell(
 
     return UpdateTableCellResult(
         success=True,
-        presentation_id=params.presentation_id,
+        presentation_id=params.presentation_id,  # ty: ignore[unknown-argument]
         table_id=params.table_id,
         row=params.row,
         column=params.column,
@@ -816,7 +816,7 @@ async def google_slides_format_text(
 
     return FormatTextResult(
         success=True,
-        presentation_id=params.presentation_id,
+        presentation_id=params.presentation_id,  # ty: ignore[unknown-argument]
         object_id=params.object_id,
     )
 

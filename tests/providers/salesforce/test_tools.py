@@ -15,7 +15,7 @@ from apron_tools.providers.salesforce.tools import (
     salesforce_get_record,
     salesforce_query_records,
     salesforce_search_records,
-    salesforce_update_record,
+    salesforce_update_records,
 )
 from apron_tools.providers.salesforce.types import (
     CreateRecordParams,
@@ -28,8 +28,8 @@ from apron_tools.providers.salesforce.types import (
     QueryRecordsResult,
     SearchRecordsParams,
     SearchRecordsResult,
-    UpdateRecordParams,
-    UpdateRecordResult,
+    UpdateRecordsParams,
+    UpdateRecordsResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -327,36 +327,93 @@ class TestCreateRecord:
 
 
 # ---------------------------------------------------------------------------
-# salesforce_update_record
+# salesforce_update_records
 # ---------------------------------------------------------------------------
 
 
-class TestUpdateRecord:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+class TestUpdateRecords:
+    async def test_single_record(self, httpx_mock: HTTPXMock) -> None:
         _mock_userinfo(httpx_mock)
         httpx_mock.add_response(status_code=204)
 
-        result = await salesforce_update_record(
-            UpdateRecordParams(
+        result = await salesforce_update_records(
+            UpdateRecordsParams(
                 object_type="Account",
-                record_id="001-001",
+                record_ids="001-001",
                 fields={"Name": "Updated Corp"},
             ),
             token=_TOKEN,
             userinfo_url=_USERINFO_URL,
         )
 
-        assert isinstance(result, UpdateRecordResult)
+        assert isinstance(result, UpdateRecordsResult)
         assert result.success is True
+        assert result.object_type == "Account"
+        assert len(result.items) == 1
+        assert result.items[0].record_id == "001-001"
+        assert result.items[0].success is True
+
+    async def test_multiple_records(self, httpx_mock: HTTPXMock) -> None:
+        _mock_userinfo(httpx_mock)
+        httpx_mock.add_response(status_code=204)
+        httpx_mock.add_response(status_code=204)
+
+        result = await salesforce_update_records(
+            UpdateRecordsParams(
+                object_type="Account",
+                record_ids="001-001, 001-002",
+                fields={"Industry": "Finance"},
+            ),
+            token=_TOKEN,
+            userinfo_url=_USERINFO_URL,
+        )
+
+        assert result.success is True
+        assert [item.record_id for item in result.items] == ["001-001", "001-002"]
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        _mock_userinfo(httpx_mock)
+        httpx_mock.add_response(status_code=204)
+        httpx_mock.add_response(status_code=404, text="Entity not found")
+
+        result = await salesforce_update_records(
+            UpdateRecordsParams(
+                object_type="Account",
+                record_ids="001-001,missing",
+                fields={"Name": "X"},
+            ),
+            token=_TOKEN,
+            userinfo_url=_USERINFO_URL,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "404" in result.items[1].error
+
+    async def test_empty_record_ids(self) -> None:
+        result = await salesforce_update_records(
+            UpdateRecordsParams(
+                object_type="Account",
+                record_ids=" , ",
+                fields={"Name": "X"},
+            ),
+            token=_TOKEN,
+            userinfo_url=_USERINFO_URL,
+        )
+
+        assert result.success is False
+        assert result.error == "No record IDs provided."
 
     async def test_sends_patch_with_json(self, httpx_mock: HTTPXMock) -> None:
         _mock_userinfo(httpx_mock)
         httpx_mock.add_response(status_code=204)
 
-        await salesforce_update_record(
-            UpdateRecordParams(
+        await salesforce_update_records(
+            UpdateRecordsParams(
                 object_type="Account",
-                record_id="001-001",
+                record_ids="001-001",
                 fields={"Industry": "Finance"},
             ),
             token=_TOKEN,
@@ -372,10 +429,10 @@ class TestUpdateRecord:
         _mock_userinfo(httpx_mock)
         httpx_mock.add_response(status_code=204)
 
-        await salesforce_update_record(
-            UpdateRecordParams(
+        await salesforce_update_records(
+            UpdateRecordsParams(
                 object_type="Contact",
-                record_id="003-001",
+                record_ids="003-001",
                 fields={"Email": "new@example.com"},
             ),
             token=_TOKEN,
@@ -386,30 +443,13 @@ class TestUpdateRecord:
         api_request = requests[-1]
         assert "/sobjects/Contact/003-001" in str(api_request.url)
 
-    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
-        _mock_userinfo(httpx_mock)
-        httpx_mock.add_response(status_code=404, text="Entity not found")
-
-        result = await salesforce_update_record(
-            UpdateRecordParams(
-                object_type="Account",
-                record_id="missing",
-                fields={"Name": "X"},
-            ),
-            token=_TOKEN,
-            userinfo_url=_USERINFO_URL,
-        )
-
-        assert result.success is False
-        assert "404" in result.error
-
     async def test_has_tool_definition(self) -> None:
-        defn = salesforce_update_record._tool_definition
-        assert defn.name == "salesforce_update_record"
+        defn = salesforce_update_records._tool_definition
+        assert defn.name == "salesforce_update_records"
         assert defn.provider == "salesforce"
         assert defn.service == "salesforce"
         assert defn.scopes == ["api"]
-        assert "resources_sobject_retrieve" in defn.api_docs_url
+        assert "resources_sobject_update" in defn.api_docs_url
 
 
 # ---------------------------------------------------------------------------

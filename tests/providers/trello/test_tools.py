@@ -13,8 +13,8 @@ from apron_tools.providers.trello.tools import (
     trello_list_boards,
     trello_list_cards,
     trello_list_lists,
-    trello_move_card,
-    trello_set_card_due_date,
+    trello_move_cards,
+    trello_set_card_due_dates,
 )
 from apron_tools.providers.trello.types import (
     CreateCardParams,
@@ -27,10 +27,10 @@ from apron_tools.providers.trello.types import (
     ListCardsResult,
     ListListsParams,
     ListListsResult,
-    MoveCardParams,
-    MoveCardResult,
-    SetCardDueDateParams,
-    SetCardDueDateResult,
+    MoveCardsParams,
+    MoveCardsResult,
+    SetCardDueDatesParams,
+    SetCardDueDatesResult,
 )
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
@@ -259,66 +259,110 @@ class TestCreateCard:
 # ---------------------------------------------------------------------------
 
 
-class TestMoveCard:
-    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+class TestMoveCards:
+    async def test_single_card(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("move_card.json"))
 
-        result = await trello_move_card(
-            MoveCardParams(card_id="card-001", list_id="list-002"),
+        result = await trello_move_cards(
+            MoveCardsParams(card_ids="card-001", list_id="list-002"),
             token=_TOKEN,
             api_key=_API_KEY,
         )
 
-        assert isinstance(result, MoveCardResult)
+        assert isinstance(result, MoveCardsResult)
         assert result.success is True
-        assert result.name == "Implement login page"
+        assert result.list_id == "list-002"
+        assert len(result.items) == 1
+        assert result.items[0].name == "Implement login page"
+        assert result.items[0].success is True
 
-    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+    async def test_multiple_cards(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("move_card.json"))
+        httpx_mock.add_response(json=_load_json("move_card.json"))
+
+        result = await trello_move_cards(
+            MoveCardsParams(card_ids="card-001, card-002", list_id="list-002"),
+            token=_TOKEN,
+            api_key=_API_KEY,
+        )
+
+        assert result.success is True
+        assert len(result.items) == 2
+        assert all(item.success for item in result.items)
+
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("move_card.json"))
         httpx_mock.add_response(status_code=403, text="Forbidden")
 
-        result = await trello_move_card(
-            MoveCardParams(card_id="card-001", list_id="list-002"),
+        result = await trello_move_cards(
+            MoveCardsParams(card_ids="card-001,bad-card", list_id="list-002"),
+            token=_TOKEN,
+            api_key=_API_KEY,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "403" in result.items[1].error
+
+    async def test_empty_card_ids(self) -> None:
+        result = await trello_move_cards(
+            MoveCardsParams(card_ids=" , ", list_id="list-002"),
             token=_TOKEN,
             api_key=_API_KEY,
         )
 
         assert result.success is False
-        assert "403" in result.error
+        assert result.error == "No card IDs provided."
 
     async def test_has_tool_definition(self) -> None:
-        defn = trello_move_card._tool_definition
-        assert defn.name == "trello_move_card"
+        defn = trello_move_cards._tool_definition
+        assert defn.name == "trello_move_cards"
         assert defn.provider == "trello"
         assert defn.scopes == ["write"]
 
 
 # ---------------------------------------------------------------------------
-# set_card_due_date
+# set_card_due_dates
 # ---------------------------------------------------------------------------
 
 
-class TestSetCardDueDate:
-    async def test_set_due_date(self, httpx_mock: HTTPXMock) -> None:
+class TestSetCardDueDates:
+    async def test_set_single_due_date(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("set_due_date.json"))
 
-        result = await trello_set_card_due_date(
-            SetCardDueDateParams(card_id="card-001", due_date="2026-04-15T17:00:00.000Z"),
+        result = await trello_set_card_due_dates(
+            SetCardDueDatesParams(card_ids="card-001", due_date="2026-04-15T17:00:00.000Z"),
             token=_TOKEN,
             api_key=_API_KEY,
         )
 
-        assert isinstance(result, SetCardDueDateResult)
+        assert isinstance(result, SetCardDueDatesResult)
         assert result.success is True
-        assert result.due == "2026-04-15T17:00:00.000Z"
+        assert result.items[0].due == "2026-04-15T17:00:00.000Z"
         assert "Due date set" in str(result)
+
+    async def test_multiple_cards(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("set_due_date.json"))
+        httpx_mock.add_response(json=_load_json("set_due_date.json"))
+
+        result = await trello_set_card_due_dates(
+            SetCardDueDatesParams(card_ids="card-001,card-002", due_date="2026-04-15T17:00:00.000Z"),
+            token=_TOKEN,
+            api_key=_API_KEY,
+        )
+
+        assert result.success is True
+        assert len(result.items) == 2
+        assert all(item.success for item in result.items)
 
     async def test_clear_due_date(self, httpx_mock: HTTPXMock) -> None:
         resp = _load_json("set_due_date.json")
         resp["due"] = None
         httpx_mock.add_response(json=resp)
 
-        result = await trello_set_card_due_date(
-            SetCardDueDateParams(card_id="card-001", due_date=None),
+        result = await trello_set_card_due_dates(
+            SetCardDueDatesParams(card_ids="card-001", due_date=None),
             token=_TOKEN,
             api_key=_API_KEY,
         )
@@ -326,20 +370,33 @@ class TestSetCardDueDate:
         assert result.success is True
         assert "cleared" in str(result).lower()
 
-    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+    async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("set_due_date.json"))
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
-        result = await trello_set_card_due_date(
-            SetCardDueDateParams(card_id="card-001", due_date="invalid"),
+        result = await trello_set_card_due_dates(
+            SetCardDueDatesParams(card_ids="card-001,bad", due_date="2026-04-15T17:00:00.000Z"),
+            token=_TOKEN,
+            api_key=_API_KEY,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+        assert result.items[1].success is False
+        assert "400" in result.items[1].error
+
+    async def test_empty_card_ids(self) -> None:
+        result = await trello_set_card_due_dates(
+            SetCardDueDatesParams(card_ids=" , ", due_date=None),
             token=_TOKEN,
             api_key=_API_KEY,
         )
 
         assert result.success is False
-        assert "400" in result.error
+        assert result.error == "No card IDs provided."
 
     async def test_has_tool_definition(self) -> None:
-        defn = trello_set_card_due_date._tool_definition
-        assert defn.name == "trello_set_card_due_date"
+        defn = trello_set_card_due_dates._tool_definition
+        assert defn.name == "trello_set_card_due_dates"
         assert defn.provider == "trello"
         assert defn.scopes == ["write"]

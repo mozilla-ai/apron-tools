@@ -271,9 +271,9 @@ async def microsoft_excel_append_row(
                         row_data = add_resp.json()
                         range_data = RangeData(
                             address=f"table:{table_name}",
-                            row_count=len(params.values),
-                            column_count=len(params.values[0]),
-                            cell_count=len(params.values) * len(params.values[0]),
+                            row_count=len(params.values),  # ty: ignore[unknown-argument]
+                            column_count=len(params.values[0]),  # ty: ignore[unknown-argument]
+                            cell_count=len(params.values) * len(params.values[0]),  # ty: ignore[unknown-argument]
                             values=row_data.get("values", params.values),
                         )
                         return AppendRowResult(success=True, range_data=range_data)

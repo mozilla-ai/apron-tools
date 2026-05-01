@@ -39,7 +39,7 @@ SCOPES: dict[str, list[SalesforceScope]] = {
     "salesforce_query_records": [SalesforceScope.API],
     "salesforce_get_record": [SalesforceScope.API],
     "salesforce_create_record": [SalesforceScope.API],
-    "salesforce_update_record": [SalesforceScope.API],
+    "salesforce_update_records": [SalesforceScope.API],
     "salesforce_search_records": [SalesforceScope.API],
 }
 

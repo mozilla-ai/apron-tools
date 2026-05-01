@@ -46,10 +46,14 @@ class EditIssueParams(BaseModel):
     priority: str | None = None
 
 
-class AssignIssueParams(BaseModel):
-    """Parameters for assigning a Jira issue."""
+class AssignIssuesParams(BaseModel):
+    """Parameters for assigning one or more Jira issues.
 
-    issue_key: str
+    ``issue_keys`` accepts a comma-separated list of issue keys to support
+    bulk operations. ``assign_to_me`` is applied to every issue in the call.
+    """
+
+    issue_keys: str
     assign_to_me: bool = True
 
 
@@ -342,29 +346,38 @@ class EditIssueResult(ToolResult):
         return f"Issue {self.issue_key} updated successfully."
 
 
-class AssignIssueResult(ToolResult):
-    """Result of assigning a Jira issue."""
+class AssignIssueItem(BaseModel):
+    """Per-issue outcome of a bulk Jira assign call."""
 
     model_config = ConfigDict(extra="ignore")
 
-    issue_key: str = ""
-    assigned: bool = True
+    issue_key: str
+    success: bool = True
+    error: str | None = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def _set_success(cls, data: Any) -> Any:
-        """Set success=True when parsing raw API JSON."""
-        if isinstance(data, dict) and "success" not in data:
-            data["success"] = True
-        return data
+
+class AssignIssuesResult(ToolResult):
+    """Result of assigning one or more Jira issues."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    assigned: bool = True
+    items: list[AssignIssueItem] = []
 
     def __str__(self) -> str:
-        """Return an LLM-readable confirmation of the assignment."""
+        """Return an LLM-readable summary of the bulk assignment."""
         if not self.success:
             return f"Error: {self.error}"
-        if self.assigned:
-            return f"Issue {self.issue_key} assigned to you."
-        return f"Issue {self.issue_key} unassigned."
+        if not self.items:
+            return "No issues processed."
+        verb = "assigned to you" if self.assigned else "unassigned"
+        lines: list[str] = []
+        for item in self.items:
+            if item.success:
+                lines.append(f"- Issue {item.issue_key} {verb}.")
+            else:
+                lines.append(f"- {item.issue_key}: Failed: {item.error}")
+        return "\n".join(lines)
 
 
 class AddCommentResult(ToolResult):

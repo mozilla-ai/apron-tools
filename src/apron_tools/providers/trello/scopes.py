@@ -30,8 +30,8 @@ SCOPES: dict[str, list[TrelloScope]] = {
     "trello_list_cards": [TrelloScope.READ],
     "trello_get_card": [TrelloScope.READ],
     "trello_create_card": [TrelloScope.WRITE],
-    "trello_move_card": [TrelloScope.WRITE],
-    "trello_set_card_due_date": [TrelloScope.WRITE],
+    "trello_move_cards": [TrelloScope.WRITE],
+    "trello_set_card_due_dates": [TrelloScope.WRITE],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(
