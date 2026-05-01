@@ -154,7 +154,8 @@ def _validate_user_token(token: str) -> str | None:
     """Return an error string when a bot token is used for user-scoped reads."""
     if token.startswith(_BOT_TOKEN_PREFIX):
         return (
-            "Error: this tool requires a user token (xoxp-) but received a bot token (xoxb-). "
+            f"Error: this tool requires a user token ({_USER_TOKEN_PREFIX}) "
+            f"but received a bot token ({_BOT_TOKEN_PREFIX}). "
             "Bot tokens authenticate fine but return empty/incorrect data for user-perspective fields. "
             "Re-authorize the Slack connection with user scopes and retry. "
             "This is NOT a transient API error."
@@ -331,7 +332,10 @@ async def slack_explore_workspace(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ExploreWorkspaceResult:
-    """Explore the Slack workspace structure, including channels and users."""
+    """Explore the Slack workspace structure, including channels and users.
+
+    Requires a user token (xoxp-).
+    """
     if token_error := _validate_user_token(token):
         return ExploreWorkspaceResult(success=False, error=token_error)
 
@@ -412,7 +416,10 @@ async def slack_list_my_conversations(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ListMyConversationsResult:
-    """List conversations the calling user is a member of."""
+    """List conversations the calling user is a member of.
+
+    Requires a user token (xoxp-).
+    """
     if token_error := _validate_user_token(token):
         return ListMyConversationsResult(success=False, error=token_error)
 
@@ -524,7 +531,10 @@ async def slack_read_channel_messages(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ReadChannelMessagesResult:
-    """Read recent messages from a Slack channel."""
+    """Read recent messages from a Slack channel.
+
+    Requires a user token (xoxp-).
+    """
     if token_error := _validate_user_token(token):
         return ReadChannelMessagesResult(success=False, error=token_error)
 
@@ -581,7 +591,10 @@ async def slack_get_channel_info(
     token: str,
     base_url: str = _BASE_URL,
 ) -> GetChannelInfoResult:
-    """Get information about a Slack channel."""
+    """Get information about a Slack channel.
+
+    Requires a user token (xoxp-).
+    """
     if token_error := _validate_user_token(token):
         return GetChannelInfoResult(success=False, error=token_error)
 
@@ -622,7 +635,10 @@ async def slack_read_thread(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ReadThreadResult:
-    """Read replies in a Slack thread."""
+    """Read replies in a Slack thread.
+
+    Requires a user token (xoxp-).
+    """
     if token_error := _validate_user_token(token):
         return ReadThreadResult(success=False, error=token_error)
 
