@@ -167,6 +167,15 @@ SCOPES: dict[str, list[SlackScope]] = {
         SlackScope.IM_READ,
         SlackScope.MPIM_READ,
     ],
+    # users.conversations validates scope per requested conversation type,
+    # so list read scopes for all four supported types here. This ensures
+    # the missing-scope modal can recommend whichever scope is absent.
+    "slack_list_my_conversations": [
+        SlackScope.CHANNELS_READ,
+        SlackScope.GROUPS_READ,
+        SlackScope.IM_READ,
+        SlackScope.MPIM_READ,
+    ],
     "slack_read_thread": [
         SlackScope.CHANNELS_HISTORY,
         SlackScope.GROUPS_HISTORY,

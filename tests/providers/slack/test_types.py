@@ -25,6 +25,8 @@ from apron_tools.providers.slack.types import (
     GetReactionsResult,
     JoinChannelParams,
     JoinChannelResult,
+    ListMyConversationsParams,
+    ListMyConversationsResult,
     ReadChannelMessagesParams,
     ReadChannelMessagesResult,
     ReadThreadParams,
@@ -34,6 +36,7 @@ from apron_tools.providers.slack.types import (
     SendUserMessageParams,
     SendUserMessageResult,
     SlackChannel,
+    SlackConversation,
     SlackFile,
     SlackMessage,
     SlackReaction,
@@ -68,6 +71,20 @@ class TestSendChannelMessageParams:
     def test_with_thread(self):
         params = SendChannelMessageParams(channel_id="C012AB3CD", message="reply", thread_ts="1503435956.000247")
         assert params.thread_ts == "1503435956.000247"
+
+
+class TestListMyConversationsParams:
+    def test_defaults(self):
+        params = ListMyConversationsParams()
+        assert params.types == "im,mpim,public_channel,private_channel"
+        assert params.exclude_archived is True
+        assert params.limit == 200
+
+    def test_custom_values(self):
+        params = ListMyConversationsParams(types="im,public_channel", exclude_archived=False, limit=50)
+        assert params.types == "im,public_channel"
+        assert params.exclude_archived is False
+        assert params.limit == 50
 
 
 class TestSendUserMessageParams:
@@ -192,6 +209,35 @@ class TestSlackChannel:
         assert not hasattr(channel, "is_channel")
 
 
+class TestSlackConversation:
+    def test_parse_im_conversation(self):
+        conversation = SlackConversation.model_validate(
+            {
+                "id": "D012AB3CD",
+                "is_im": True,
+                "is_private": True,
+                "user": "U012A3CDE",
+                "updated": 1735689601,
+            }
+        )
+        assert conversation.id == "D012AB3CD"
+        assert conversation.is_im is True
+        assert conversation.user == "U012A3CDE"
+
+    def test_extra_fields_ignored(self):
+        conversation = SlackConversation.model_validate(
+            {
+                "id": "C012AB3CD",
+                "name": "general",
+                "is_private": False,
+                "updated": 1735689600,
+                "unexpected": "ignored",
+            }
+        )
+        assert conversation.name == "general"
+        assert not hasattr(conversation, "unexpected")
+
+
 class TestSlackUser:
     def test_parse_from_api_data(self):
         data = _load_json("users_list.json")
@@ -314,6 +360,33 @@ class TestSendChannelMessageResult:
     def test_str_on_error(self):
         result = SendChannelMessageResult(success=False, error="channel_not_found")
         assert str(result) == "Error: channel_not_found"
+
+
+# ---------------------------------------------------------------------------
+# ListMyConversationsResult
+# ---------------------------------------------------------------------------
+
+
+class TestListMyConversationsResult:
+    def test_str_output(self):
+        result = ListMyConversationsResult(
+            success=True,
+            conversations=[
+                SlackConversation(id="C012AB3CD", name="general", updated=1735689600),
+                SlackConversation(id="D012AB3CD", is_im=True, user="U012A3CDE", is_private=True),
+            ],
+        )
+        text = str(result)
+        assert "#general (C012AB3CD)" in text
+        assert "DM (U012A3CDE) (D012AB3CD)" in text
+
+    def test_str_empty(self):
+        result = ListMyConversationsResult(success=True, conversations=[])
+        assert str(result) == "No conversations found."
+
+    def test_str_on_error(self):
+        result = ListMyConversationsResult(success=False, error="invalid_auth")
+        assert str(result) == "Error: invalid_auth"
 
 
 # ---------------------------------------------------------------------------

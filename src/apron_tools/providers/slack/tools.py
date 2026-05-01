@@ -33,6 +33,8 @@ from apron_tools.providers.slack.types import (
     GetReactionsResult,
     JoinChannelParams,
     JoinChannelResult,
+    ListMyConversationsParams,
+    ListMyConversationsResult,
     ReadChannelMessagesParams,
     ReadChannelMessagesResult,
     ReadThreadParams,
@@ -44,6 +46,7 @@ from apron_tools.providers.slack.types import (
     SendUserMessageParams,
     SendUserMessageResult,
     SlackChannel,
+    SlackConversation,
     SlackFile,
     SlackMessage,
     SlackReaction,
@@ -96,6 +99,8 @@ _TEXT_NODE_TYPES = frozenset({"mrkdwn", "plain_text", "text"})
 # each field's ``title`` inside ``fields`` children, and ``fallback`` is the
 # last-resort alternative for clients that can't render attachments.
 _RAW_TEXT_KEYS = ("pretext", "title", "text", "value", "fallback")
+
+_USERS_CONVERSATIONS_ALLOWED_TYPES = frozenset({"im", "mpim", "public_channel", "private_channel"})
 
 
 def _validate_slack_channel_id(channel_id: str) -> str | None:
@@ -227,6 +232,22 @@ def _get_message_text(msg: dict) -> str:
     # to the empty string instead.
     fallback_text = msg.get("text")
     return fallback_text if isinstance(fallback_text, str) else ""
+
+
+def _normalize_users_conversation_types(raw_types: str) -> tuple[str | None, str | None]:
+    """Normalize and validate ``users.conversations`` ``types`` CSV input."""
+    parsed = parse_csv_ids(raw_types)
+    if not parsed:
+        return None, "types must include at least one value."
+
+    invalid = sorted({t for t in parsed if t not in _USERS_CONVERSATIONS_ALLOWED_TYPES})
+    if invalid:
+        allowed = ", ".join(sorted(_USERS_CONVERSATIONS_ALLOWED_TYPES))
+        bad = ", ".join(invalid)
+        return None, f"Unsupported conversation type(s): {bad}. Allowed values: {allowed}."
+
+    deduped = list(dict.fromkeys(parsed))
+    return ",".join(deduped), None
 
 
 # Allowed base domains for Slack private file download URLs (SSRF prevention).
@@ -361,6 +382,50 @@ async def slack_explore_workspace(
         channels=channels,
         users=users,
     )
+
+
+@tool(
+    scopes=SCOPES["slack_list_my_conversations"],
+    api_docs="https://docs.slack.dev/reference/web-api/users/conversations",
+    provider="slack",
+)
+async def slack_list_my_conversations(
+    params: ListMyConversationsParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ListMyConversationsResult:
+    """List conversations the calling user is a member of."""
+    types, type_error = _normalize_users_conversation_types(params.types)
+    if type_error:
+        return ListMyConversationsResult(success=False, error=type_error)
+
+    client = _client(token, base_url)
+    try:
+        resp = await client.users_conversations(
+            types=types,
+            exclude_archived=params.exclude_archived,
+            limit=min(params.limit, 1000),
+        )
+        conversations = [
+            SlackConversation(
+                id=conversation.get("id", ""),
+                name=conversation.get("name", ""),
+                is_im=conversation.get("is_im", False),
+                is_mpim=conversation.get("is_mpim", False),
+                is_private=conversation.get("is_private", False),
+                user=conversation.get("user"),
+                updated=conversation.get("updated", 0),
+            )
+            for conversation in resp.get("channels", [])
+        ]
+        return ListMyConversationsResult(success=True, conversations=conversations)
+    except SlackApiError as exc:
+        code = exc.response.get("error", str(exc))
+        return ListMyConversationsResult(
+            success=False,
+            error=_format_slack_error("list conversations", None, code),
+        )
 
 
 @tool(
