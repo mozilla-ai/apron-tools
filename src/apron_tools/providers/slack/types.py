@@ -17,6 +17,14 @@ class ExploreWorkspaceParams(BaseModel):
     """Parameters for exploring the Slack workspace."""
 
 
+class ListMyConversationsParams(BaseModel):
+    """Parameters for listing the caller's Slack conversations."""
+
+    types: str = "im,mpim,public_channel,private_channel"
+    exclude_archived: bool = True
+    limit: int = Field(default=200, gt=0, le=1000)
+
+
 class SendChannelMessageParams(BaseModel):
     """Parameters for sending a message to a Slack channel."""
 
@@ -141,6 +149,20 @@ class SlackChannel(BaseModel):
     num_members: int = 0
 
 
+class SlackConversation(BaseModel):
+    """A Slack conversation summary (channels, DMs, and group DMs)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    name: str = ""
+    is_im: bool = False
+    is_mpim: bool = False
+    is_private: bool = False
+    user: str | None = None
+    updated: int = 0
+
+
 class SlackUser(BaseModel):
     """A Slack user summary."""
 
@@ -232,6 +254,34 @@ class ExploreWorkspaceResult(ToolResult):
                 lines.append(f"- {display} ({u.id})")
         else:
             lines.append("- (no users found)")
+        return "\n".join(lines)
+
+
+class ListMyConversationsResult(ToolResult):
+    """Result of listing the caller's Slack conversations."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    conversations: list[SlackConversation] = []
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of conversations."""
+        if not self.success:
+            return f"Error: {self.error}"
+        if not self.conversations:
+            return "No conversations found."
+
+        lines: list[str] = []
+        for c in self.conversations:
+            if c.is_im:
+                label = f"DM ({c.user or 'unknown'})"
+            elif c.is_mpim:
+                label = f"Group DM {c.name}" if c.name else "Group DM"
+            elif c.name:
+                label = f"#{c.name}"
+            else:
+                label = c.id
+            lines.append(f"- {label} ({c.id})")
         return "\n".join(lines)
 
 

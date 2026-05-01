@@ -22,6 +22,7 @@ from apron_tools.providers.slack.tools import (
     slack_get_permalink,
     slack_get_reactions,
     slack_join_channel,
+    slack_list_my_conversations,
     slack_read_channel_messages,
     slack_read_thread,
     slack_save_file_for_upload,
@@ -47,6 +48,8 @@ from apron_tools.providers.slack.types import (
     GetReactionsResult,
     JoinChannelParams,
     JoinChannelResult,
+    ListMyConversationsParams,
+    ListMyConversationsResult,
     ReadChannelMessagesParams,
     ReadChannelMessagesResult,
     ReadThreadParams,
@@ -227,6 +230,97 @@ class TestSlackExploreWorkspace:
         assert "groups:read" in defn.scopes
         assert "channels:read" in defn.scopes
         assert "users:read" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# slack_list_my_conversations
+# ---------------------------------------------------------------------------
+
+
+class TestSlackListMyConversations:
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_success(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.users_conversations.return_value = _mock_response(
+            {
+                "ok": True,
+                "channels": [
+                    {
+                        "id": "C012AB3CD",
+                        "name": "general",
+                        "is_im": False,
+                        "is_mpim": False,
+                        "is_private": False,
+                        "updated": 1735689600,
+                    },
+                    {
+                        "id": "D012AB3CD",
+                        "is_im": True,
+                        "is_private": True,
+                        "user": "U012A3CDE",
+                        "updated": 1735689601,
+                    },
+                ],
+            }
+        )
+
+        result = await slack_list_my_conversations(
+            ListMyConversationsParams(),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert isinstance(result, ListMyConversationsResult)
+        assert result.success is True
+        assert len(result.conversations) == 2
+        assert result.conversations[0].name == "general"
+        assert result.conversations[1].is_im is True
+        client.users_conversations.assert_called_once_with(
+            types="im,mpim,public_channel,private_channel",
+            exclude_archived=True,
+            limit=200,
+        )
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_invalid_types_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_list_my_conversations(
+            ListMyConversationsParams(types="im,not_a_real_type"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "Unsupported conversation type" in result.error
+        client.users_conversations.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_api_error(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.users_conversations.side_effect = _slack_api_error("invalid_arguments")
+
+        result = await slack_list_my_conversations(
+            ListMyConversationsParams(),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "invalid_arguments" in result.error
+        assert "NOT a permissions error" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = slack_list_my_conversations._tool_definition
+        assert defn.name == "slack_list_my_conversations"
+        assert defn.provider == "slack"
+        assert "channels:read" in defn.scopes
+        assert "groups:read" in defn.scopes
+        assert "im:read" in defn.scopes
+        assert "mpim:read" in defn.scopes
 
 
 # ---------------------------------------------------------------------------
