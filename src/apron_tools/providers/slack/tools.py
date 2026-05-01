@@ -66,6 +66,8 @@ _REACTION_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_+-]+(?:::[A-Za-z0-9_+-]+)*$")
 # hyphens/underscores/periods/digits and so can never match — that's what lets
 # us distinguish a name like ``any-forge-test`` from an ID like ``C01234ABCD``.
 _SLACK_CHANNEL_ID_PATTERN = re.compile(r"^[CGD][A-Z0-9]{8,}$")
+_USER_TOKEN_PREFIX = "xoxp-"
+_BOT_TOKEN_PREFIX = "xoxb-"
 
 # Slack API error codes that are NOT permissions/scope failures. Returning them
 # via the bare error code caused agents to misdiagnose them as missing-scope
@@ -146,6 +148,19 @@ def _validate_slack_channel_id(channel_id: str) -> str | None:
         + lookup_clause
         + "This is NOT a permissions error — do not call request_app_connection."
     )
+
+
+def _validate_user_token(token: str) -> str | None:
+    """Return an error string when a bot token is used for user-scoped reads."""
+    if token.startswith(_BOT_TOKEN_PREFIX):
+        return (
+            f"Error: this tool requires a user token ({_USER_TOKEN_PREFIX}) "
+            f"but received a bot token ({_BOT_TOKEN_PREFIX}). "
+            "Bot tokens authenticate fine but return empty/incorrect data for user-perspective fields. "
+            "Re-authorize the Slack connection with user scopes and retry. "
+            "This is NOT a transient API error."
+        )
+    return None
 
 
 def _format_slack_error(verb: str, subject: str | None, error_code: str) -> str:
@@ -317,7 +332,13 @@ async def slack_explore_workspace(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ExploreWorkspaceResult:
-    """Explore the Slack workspace structure, including channels and users."""
+    """Explore the Slack workspace structure, including channels and users.
+
+    Requires a user token (xoxp-).
+    """
+    if token_error := _validate_user_token(token):
+        return ExploreWorkspaceResult(success=False, error=token_error)
+
     client = _client(token, base_url)
     workspace_name = "Slack Workspace"
     channels: list[SlackChannel] = []
@@ -395,7 +416,13 @@ async def slack_list_my_conversations(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ListMyConversationsResult:
-    """List conversations the calling user is a member of."""
+    """List conversations the calling user is a member of.
+
+    Requires a user token (xoxp-).
+    """
+    if token_error := _validate_user_token(token):
+        return ListMyConversationsResult(success=False, error=token_error)
+
     types, type_error = _normalize_users_conversation_types(params.types)
     if type_error:
         return ListMyConversationsResult(success=False, error=type_error)
@@ -504,7 +531,13 @@ async def slack_read_channel_messages(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ReadChannelMessagesResult:
-    """Read recent messages from a Slack channel."""
+    """Read recent messages from a Slack channel.
+
+    Requires a user token (xoxp-).
+    """
+    if token_error := _validate_user_token(token):
+        return ReadChannelMessagesResult(success=False, error=token_error)
+
     if id_error := _validate_slack_channel_id(params.channel_id):
         return ReadChannelMessagesResult(success=False, error=id_error)
     client = _client(token, base_url)
@@ -558,7 +591,13 @@ async def slack_get_channel_info(
     token: str,
     base_url: str = _BASE_URL,
 ) -> GetChannelInfoResult:
-    """Get information about a Slack channel."""
+    """Get information about a Slack channel.
+
+    Requires a user token (xoxp-).
+    """
+    if token_error := _validate_user_token(token):
+        return GetChannelInfoResult(success=False, error=token_error)
+
     if id_error := _validate_slack_channel_id(params.channel_id):
         return GetChannelInfoResult(success=False, error=id_error)
     client = _client(token, base_url)
@@ -596,7 +635,13 @@ async def slack_read_thread(
     token: str,
     base_url: str = _BASE_URL,
 ) -> ReadThreadResult:
-    """Read replies in a Slack thread."""
+    """Read replies in a Slack thread.
+
+    Requires a user token (xoxp-).
+    """
+    if token_error := _validate_user_token(token):
+        return ReadThreadResult(success=False, error=token_error)
+
     if id_error := _validate_slack_channel_id(params.channel_id):
         return ReadThreadResult(success=False, error=id_error)
     client = _client(token, base_url)
