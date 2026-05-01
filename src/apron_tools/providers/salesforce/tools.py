@@ -272,17 +272,17 @@ async def _update_one_record(
     record_id: str,
     fields: dict[str, Any],
     token: str,
+    client: httpx.AsyncClient,
 ) -> UpdateRecordItem:
     """Patch a single Salesforce record and shape the per-record outcome."""
     headers = {**_headers(token), "Content-Type": "application/json"}
 
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            response = await client.patch(
-                _api_url(instance_url, f"/sobjects/{object_type}/{record_id}"),
-                headers=headers,
-                json=fields,
-            )
+        response = await client.patch(
+            _api_url(instance_url, f"/sobjects/{object_type}/{record_id}"),
+            headers=headers,
+            json=fields,
+        )
     except httpx.HTTPError as exc:
         return UpdateRecordItem(record_id=record_id, success=False, error=str(exc))
 
@@ -298,7 +298,7 @@ async def _update_one_record(
 
 @tool(
     scopes=SCOPES["salesforce_update_records"],
-    api_docs="https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_retrieve.htm",
+    api_docs="https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_sobject_update.htm",
     provider="salesforce",
     service="salesforce",
 )
@@ -323,10 +323,11 @@ async def salesforce_update_records(
     except RuntimeError as exc:
         return UpdateRecordsResult(success=False, error=str(exc))
 
-    items = [
-        await _update_one_record(instance_url, params.object_type, record_id, params.fields, token)
-        for record_id in record_ids
-    ]
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [
+            await _update_one_record(instance_url, params.object_type, record_id, params.fields, token, client)
+            for record_id in record_ids
+        ]
     return UpdateRecordsResult(success=True, object_type=params.object_type, items=items)
 
 

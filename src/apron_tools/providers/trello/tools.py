@@ -243,11 +243,11 @@ async def _move_one_card(
     card_id: str,
     query: dict[str, Any],
     base_url: str,
+    client: httpx.AsyncClient,
 ) -> MoveCardItem:
     """Move a single Trello card and shape the per-card outcome."""
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.put(f"{base_url}/cards/{card_id}", params=query)
+        resp = await client.put(f"{base_url}/cards/{card_id}", params=query)
     except httpx.HTTPError as exc:
         return MoveCardItem(card_id=card_id, success=False, error=_redact_error(exc))
 
@@ -290,7 +290,8 @@ async def trello_move_cards(
         "pos": params.position,
     }
 
-    items = [await _move_one_card(card_id, query, base_url) for card_id in card_ids]
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [await _move_one_card(card_id, query, base_url, client) for card_id in card_ids]
     return MoveCardsResult(success=True, list_id=params.list_id, items=items)
 
 
@@ -298,11 +299,11 @@ async def _set_one_card_due_date(
     card_id: str,
     query: dict[str, Any],
     base_url: str,
+    client: httpx.AsyncClient,
 ) -> SetCardDueDateItem:
     """Set or clear the due date on a single Trello card."""
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.put(f"{base_url}/cards/{card_id}", params=query)
+        resp = await client.put(f"{base_url}/cards/{card_id}", params=query)
     except httpx.HTTPError as exc:
         return SetCardDueDateItem(card_id=card_id, success=False, error=_redact_error(exc))
 
@@ -352,5 +353,6 @@ async def trello_set_card_due_dates(
     if params.mark_complete is not None:
         query["dueComplete"] = str(params.mark_complete).lower()
 
-    items = [await _set_one_card_due_date(card_id, query, base_url) for card_id in card_ids]
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [await _set_one_card_due_date(card_id, query, base_url, client) for card_id in card_ids]
     return SetCardDueDatesResult(success=True, items=items)

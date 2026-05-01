@@ -449,7 +449,7 @@ class TestUpdateRecords:
         assert defn.provider == "salesforce"
         assert defn.service == "salesforce"
         assert defn.scopes == ["api"]
-        assert "resources_sobject_retrieve" in defn.api_docs_url
+        assert "resources_sobject_update" in defn.api_docs_url
 
 
 # ---------------------------------------------------------------------------

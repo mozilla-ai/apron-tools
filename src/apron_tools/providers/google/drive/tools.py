@@ -178,39 +178,39 @@ async def _move_one_file(
     destination_folder_id: str,
     token: str,
     base_url: str,
+    client: httpx.AsyncClient,
 ) -> MoveFileItem:
     """Move a single Drive file and shape the per-file outcome."""
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            meta_resp = await client.get(
-                f"{base_url}/{file_id}",
-                headers=_headers(token),
-                params={
-                    "fields": "parents",
-                    "supportsAllDrives": "true",
-                },
+        meta_resp = await client.get(
+            f"{base_url}/{file_id}",
+            headers=_headers(token),
+            params={
+                "fields": "parents",
+                "supportsAllDrives": "true",
+            },
+        )
+        if not meta_resp.is_success:
+            return MoveFileItem(
+                file_id=file_id,
+                success=False,
+                error=f"Drive API error {meta_resp.status_code}: {meta_resp.text}",
             )
-            if not meta_resp.is_success:
-                return MoveFileItem(
-                    file_id=file_id,
-                    success=False,
-                    error=f"Drive API error {meta_resp.status_code}: {meta_resp.text}",
-                )
 
-            current_parents = meta_resp.json().get("parents", [])
-            remove_parents = ",".join(current_parents)
+        current_parents = meta_resp.json().get("parents", [])
+        remove_parents = ",".join(current_parents)
 
-            resp = await client.patch(
-                f"{base_url}/{file_id}",
-                headers=_headers(token, content_type=True),
-                params={
-                    "addParents": destination_folder_id,
-                    "removeParents": remove_parents,
-                    "fields": "id,name,parents",
-                    "supportsAllDrives": "true",
-                },
-                json={},
-            )
+        resp = await client.patch(
+            f"{base_url}/{file_id}",
+            headers=_headers(token, content_type=True),
+            params={
+                "addParents": destination_folder_id,
+                "removeParents": remove_parents,
+                "fields": "id,name,parents",
+                "supportsAllDrives": "true",
+            },
+            json={},
+        )
     except httpx.HTTPError as exc:
         return MoveFileItem(file_id=file_id, success=False, error=str(exc))
 
@@ -252,7 +252,10 @@ async def google_drive_move_files(
     if not file_ids:
         return MoveFilesResult(success=False, error="No file IDs provided.")
 
-    items = [await _move_one_file(file_id, params.destination_folder_id, token, base_url) for file_id in file_ids]
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [
+            await _move_one_file(file_id, params.destination_folder_id, token, base_url, client) for file_id in file_ids
+        ]
     return MoveFilesResult(
         success=True,
         destination_folder_id=params.destination_folder_id,
@@ -309,6 +312,7 @@ async def _share_one_file(
     role: str,
     token: str,
     base_url: str,
+    client: httpx.AsyncClient,
 ) -> ShareFileItem:
     """Create a single Drive permission and shape the per-file outcome."""
     body = {
@@ -318,13 +322,12 @@ async def _share_one_file(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                f"{base_url}/{file_id}/permissions",
-                headers=_headers(token, content_type=True),
-                params={"supportsAllDrives": "true"},
-                json=body,
-            )
+        resp = await client.post(
+            f"{base_url}/{file_id}/permissions",
+            headers=_headers(token, content_type=True),
+            params={"supportsAllDrives": "true"},
+            json=body,
+        )
     except httpx.HTTPError as exc:
         return ShareFileItem(file_id=file_id, success=False, error=str(exc))
 
@@ -369,7 +372,10 @@ async def google_drive_share_files(
     if not file_ids:
         return ShareFilesResult(success=False, error="No file IDs provided.")
 
-    items = [await _share_one_file(file_id, params.email, params.role, token, base_url) for file_id in file_ids]
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [
+            await _share_one_file(file_id, params.email, params.role, token, base_url, client) for file_id in file_ids
+        ]
     return ShareFilesResult(
         success=True,
         email=params.email,

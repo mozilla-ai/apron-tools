@@ -234,33 +234,33 @@ async def _move_one_item(
     destination_folder_id: str,
     token: str,
     base_url: str,
+    client: httpx.AsyncClient,
 ) -> MoveFileItem:
     """Move a single SharePoint drive item and shape the per-item outcome."""
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            get_resp = await client.get(
-                f"{base_url}/drives/{drive_id}/items/{item_id}",
-                headers=_headers(token),
-                params={"$select": "id,name"},
+        get_resp = await client.get(
+            f"{base_url}/drives/{drive_id}/items/{item_id}",
+            headers=_headers(token),
+            params={"$select": "id,name"},
+        )
+        if not get_resp.is_success:
+            return MoveFileItem(
+                item_id=item_id,
+                success=False,
+                error=f"Graph API error {get_resp.status_code}: {get_resp.text}",
             )
-            if not get_resp.is_success:
-                return MoveFileItem(
-                    item_id=item_id,
-                    success=False,
-                    error=f"Graph API error {get_resp.status_code}: {get_resp.text}",
-                )
 
-            patch_resp = await client.patch(
-                f"{base_url}/drives/{drive_id}/items/{item_id}",
-                headers=_headers(token, content_type=True),
-                json={"parentReference": {"id": destination_folder_id}},
+        patch_resp = await client.patch(
+            f"{base_url}/drives/{drive_id}/items/{item_id}",
+            headers=_headers(token, content_type=True),
+            json={"parentReference": {"id": destination_folder_id}},
+        )
+        if not patch_resp.is_success:
+            return MoveFileItem(
+                item_id=item_id,
+                success=False,
+                error=f"Graph API error {patch_resp.status_code}: {patch_resp.text}",
             )
-            if not patch_resp.is_success:
-                return MoveFileItem(
-                    item_id=item_id,
-                    success=False,
-                    error=f"Graph API error {patch_resp.status_code}: {patch_resp.text}",
-                )
 
     except httpx.HTTPError as exc:
         return MoveFileItem(item_id=item_id, success=False, error=str(exc))
@@ -294,10 +294,11 @@ async def microsoft_sharepoint_move_files(
     if not item_ids:
         return MoveFilesResult(success=False, error="No item IDs provided.")
 
-    items = [
-        await _move_one_item(params.drive_id, item_id, params.destination_folder_id, token, base_url)
-        for item_id in item_ids
-    ]
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        items = [
+            await _move_one_item(params.drive_id, item_id, params.destination_folder_id, token, base_url, client)
+            for item_id in item_ids
+        ]
     return MoveFilesResult(
         success=True,
         destination_folder_id=params.destination_folder_id,

@@ -315,15 +315,15 @@ async def _assign_one_issue(
     account_id: str | None,
     token: str,
     base_url: str,
+    client: httpx.AsyncClient,
 ) -> AssignIssueItem:
     """Run a single assignee PUT and shape the per-issue outcome."""
     try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.put(
-                _api_url(cloud_id, f"/issue/{issue_key}/assignee", base_url=base_url),
-                headers=_headers(token, content_type=True),
-                json={"accountId": account_id},
-            )
+        resp = await client.put(
+            _api_url(cloud_id, f"/issue/{issue_key}/assignee", base_url=base_url),
+            headers=_headers(token, content_type=True),
+            json={"accountId": account_id},
+        )
     except httpx.HTTPError as exc:
         return AssignIssueItem(issue_key=issue_key, success=False, error=str(exc))
 
@@ -368,25 +368,25 @@ async def atlassian_jira_assign_issues(
         )
 
     account_id: str | None = None
-    if params.assign_to_me:
-        try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        if params.assign_to_me:
+            try:
                 myself_resp = await client.get(
                     _api_url(cloud_id, "/myself", base_url=base_url),
                     headers=_headers(token),
                 )
                 if myself_resp.is_success:
                     account_id = myself_resp.json().get("accountId")
-        except httpx.HTTPError:
-            pass
+            except httpx.HTTPError:
+                pass
 
-        if not account_id:
-            return AssignIssuesResult(
-                success=False,
-                error="Could not retrieve current user account ID.",
-            )
+            if not account_id:
+                return AssignIssuesResult(
+                    success=False,
+                    error="Could not retrieve current user account ID.",
+                )
 
-    items = [await _assign_one_issue(cloud_id, key, account_id, token, base_url) for key in issue_keys]
+        items = [await _assign_one_issue(cloud_id, key, account_id, token, base_url, client) for key in issue_keys]
     return AssignIssuesResult(success=True, assigned=params.assign_to_me, items=items)
 
 
