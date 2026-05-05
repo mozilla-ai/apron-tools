@@ -54,6 +54,7 @@ from apron_tools.providers.slack.types import (
 )
 from apron_tools.tool import tool
 
+from . import BOT_TOKEN_PREFIX, USER_TOKEN_PREFIX, is_bot_token
 from .scopes import SCOPES
 
 _BASE_URL = "https://slack.com/api/"
@@ -66,8 +67,6 @@ _REACTION_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_+-]+(?:::[A-Za-z0-9_+-]+)*$")
 # hyphens/underscores/periods/digits and so can never match — that's what lets
 # us distinguish a name like ``any-forge-test`` from an ID like ``C01234ABCD``.
 _SLACK_CHANNEL_ID_PATTERN = re.compile(r"^[CGD][A-Z0-9]{8,}$")
-_USER_TOKEN_PREFIX = "xoxp-"
-_BOT_TOKEN_PREFIX = "xoxb-"
 
 # Slack API error codes that are NOT permissions/scope failures. Returning them
 # via the bare error code caused agents to misdiagnose them as missing-scope
@@ -152,10 +151,10 @@ def _validate_slack_channel_id(channel_id: str) -> str | None:
 
 def _validate_user_token(token: str) -> str | None:
     """Return an error string when a bot token is used for user-scoped reads."""
-    if token.startswith(_BOT_TOKEN_PREFIX):
+    if is_bot_token(token):
         return (
-            f"Error: this tool requires a user token ({_USER_TOKEN_PREFIX}) "
-            f"but received a bot token ({_BOT_TOKEN_PREFIX}). "
+            f"Error: this tool requires a user token ({USER_TOKEN_PREFIX}) "
+            f"but received a bot token ({BOT_TOKEN_PREFIX}). "
             "Bot tokens authenticate fine but return empty/incorrect data for user-perspective fields. "
             "Re-authorize the Slack connection with user scopes and retry. "
             "This is NOT a transient API error."
