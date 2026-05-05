@@ -24,9 +24,11 @@ from apron_tools.providers.slack.tools import (
     slack_get_reactions,
     slack_join_channel,
     slack_list_my_conversations,
+    slack_list_saved_items,
     slack_read_channel_messages,
     slack_read_thread,
     slack_save_file_for_upload,
+    slack_search_messages,
     slack_send_channel_message,
     slack_send_user_message,
 )
@@ -51,12 +53,16 @@ from apron_tools.providers.slack.types import (
     JoinChannelResult,
     ListMyConversationsParams,
     ListMyConversationsResult,
+    ListSavedItemsParams,
+    ListSavedItemsResult,
     ReadChannelMessagesParams,
     ReadChannelMessagesResult,
     ReadThreadParams,
     ReadThreadResult,
     SaveFileForUploadParams,
     SaveFileForUploadResult,
+    SearchMessagesParams,
+    SearchMessagesResult,
     SendChannelMessageParams,
     SendChannelMessageResult,
     SendUserMessageParams,
@@ -1252,6 +1258,302 @@ class TestSlackSaveFileForUpload:
 
         assert result.success is False
         assert "Failed to save file" in result.error
+
+
+# ---------------------------------------------------------------------------
+# slack_search_messages
+# ---------------------------------------------------------------------------
+
+
+class TestSlackSearchMessages:
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_bot_token_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_search_messages(
+            SearchMessagesParams(query="hello"),
+            token=_BOT_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "requires a user token" in result.error
+        client.search_messages.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_success(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.search_messages.return_value = _mock_response(_load_json("search_messages.json"))
+
+        result = await slack_search_messages(
+            SearchMessagesParams(query="meaning of life"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert isinstance(result, SearchMessagesResult)
+        assert result.success is True
+        assert len(result.matches) == 2
+        first = result.matches[0]
+        assert first.channel_id == "C012AB3GH"
+        assert first.channel_name == "general"
+        assert first.is_im is False
+        assert first.user == "U2U85N1RV"
+        assert first.username == "roach"
+        assert first.permalink.startswith("https://")
+        # Bot/integration messages have user="" and the display name in username.
+        bot_match = result.matches[1]
+        assert bot_match.user == ""
+        assert bot_match.username == "robot overlord"
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_passes_sort_defaults(self, mock_cls: AsyncMock) -> None:
+        """Defaults to timestamp/desc (newest first), not Slack's score/desc."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.search_messages.return_value = _mock_response({"ok": True, "messages": {"matches": []}})
+
+        await slack_search_messages(
+            SearchMessagesParams(query="hello"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.search_messages.assert_called_once_with(
+            query="hello",
+            count=20,
+            sort="timestamp",
+            sort_dir="desc",
+        )
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_empty_matches(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.search_messages.return_value = _mock_response({"ok": True, "messages": {"matches": []}})
+
+        result = await slack_search_messages(
+            SearchMessagesParams(query="nothing matches"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert result.matches == []
+        assert "No matches found" in str(result)
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_im_match_detected_via_match_type(self, mock_cls: AsyncMock) -> None:
+        """Slack sets ``type: 'im'`` at the match level for DM hits even when
+        ``channel.is_im`` is absent — the parser must honour that signal."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.search_messages.return_value = _mock_response(
+            {
+                "ok": True,
+                "messages": {
+                    "matches": [
+                        {
+                            "type": "im",
+                            "channel": {"id": "D012AB3CD", "name": "U999XYZ"},
+                            "user": "U999XYZ",
+                            "text": "ping",
+                            "ts": "1700000000.000100",
+                            "permalink": "https://example.slack.com/archives/D012AB3CD/p1700000000000100",
+                        }
+                    ]
+                },
+            }
+        )
+
+        result = await slack_search_messages(
+            SearchMessagesParams(query="ping"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert len(result.matches) == 1
+        assert result.matches[0].is_im is True
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_api_error(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.search_messages.side_effect = _slack_api_error("ratelimited")
+
+        result = await slack_search_messages(
+            SearchMessagesParams(query="hello"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "ratelimited" in result.error
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_str_shows_username_and_user_id_when_both_present(self, mock_cls: AsyncMock) -> None:
+        """For human-authored messages the LLM-readable summary surfaces the
+        display name plus the user ID (``username (user_id)``); bot/integration
+        posts with no user ID surface the name alone."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.search_messages.return_value = _mock_response(_load_json("search_messages.json"))
+
+        result = await slack_search_messages(
+            SearchMessagesParams(query="meaning of life"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        rendered = str(result)
+        # First match is human-authored (user + username both present).
+        assert "roach (U2U85N1RV)" in rendered
+        # Second match is a bot post (user empty, only username).
+        assert "robot overlord" in rendered
+        assert "robot overlord (" not in rendered
+
+    async def test_has_tool_definition(self) -> None:
+        defn = slack_search_messages._tool_definition
+        assert defn.name == "slack_search_messages"
+        assert defn.provider == "slack"
+        assert "search:read" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# slack_list_saved_items
+# ---------------------------------------------------------------------------
+
+
+class TestSlackListSavedItems:
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_rejects_bot_token_before_api_call(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+
+        result = await slack_list_saved_items(
+            ListSavedItemsParams(),
+            token=_BOT_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "requires a user token" in result.error
+        client.stars_list.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_success(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.stars_list.return_value = _mock_response(_load_json("stars_list.json"))
+
+        result = await slack_list_saved_items(
+            ListSavedItemsParams(),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert isinstance(result, ListSavedItemsResult)
+        assert result.success is True
+        assert len(result.items) == 1
+        item = result.items[0]
+        assert item.type == "message"
+        assert item.channel_id == "C012AB3GH"
+        assert item.message_ts == "1655762568.324229"
+        # The fixture's bot_message subtype carries empty text — content is in
+        # attachments. The parser surfaces the empty text faithfully rather
+        # than guessing at attachment content.
+        assert item.text == ""
+        client.stars_list.assert_called_once_with(limit=100)
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_empty_items(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.stars_list.return_value = _mock_response({"ok": True, "items": []})
+
+        result = await slack_list_saved_items(
+            ListSavedItemsParams(),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert result.items == []
+        assert "No saved items" in str(result)
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_channel_type_item_has_no_message_text(self, mock_cls: AsyncMock) -> None:
+        """For type=channel|im|group items the saved item is the channel
+        itself; ``text`` and ``message_ts`` stay empty."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.stars_list.return_value = _mock_response(
+            {
+                "ok": True,
+                "items": [
+                    {"type": "channel", "channel": "C0G9QF9GZ"},
+                    {"type": "im", "channel": "D0K3F9GZ1"},
+                ],
+            }
+        )
+
+        result = await slack_list_saved_items(
+            ListSavedItemsParams(),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert len(result.items) == 2
+        assert result.items[0].type == "channel"
+        assert result.items[0].channel_id == "C0G9QF9GZ"
+        assert result.items[0].text == ""
+        assert result.items[0].message_ts == ""
+        assert result.items[1].type == "im"
+        assert result.items[1].channel_id == "D0K3F9GZ1"
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_passes_custom_limit(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.stars_list.return_value = _mock_response({"ok": True, "items": []})
+
+        await slack_list_saved_items(
+            ListSavedItemsParams(limit=50),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        client.stars_list.assert_called_once_with(limit=50)
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_api_error(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.stars_list.side_effect = _slack_api_error("ratelimited")
+
+        result = await slack_list_saved_items(
+            ListSavedItemsParams(),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "ratelimited" in result.error
+
+    def test_rejects_limit_at_or_above_1000(self) -> None:
+        """Slack documents the ``stars.list`` cap as 'limit value under 1000'."""
+        with pytest.raises(ValueError):
+            ListSavedItemsParams(limit=1000)
+
+    async def test_has_tool_definition(self) -> None:
+        defn = slack_list_saved_items._tool_definition
+        assert defn.name == "slack_list_saved_items"
+        assert defn.provider == "slack"
+        assert "stars:read" in defn.scopes
 
 
 # ---------------------------------------------------------------------------

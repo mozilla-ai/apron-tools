@@ -1,0 +1,43 @@
+{
+  "ok": true,
+  "items": [
+    {
+      "type": "message",
+      "channel": "C012AB3GH",
+      "message": {
+        "type": "message",
+        "subtype": "bot_message",
+        "text": "",
+        "ts": "1655762568.324229",
+        "username": "username",
+        "icons": {
+          "emoji": ":test:"
+        },
+        "bot_id": "BSLACKBOT",
+        "attachments": [
+          {
+            "color": "ecb438",
+            "ts": 1655762568,
+            "id": 1,
+            "fallback": "some text",
+            "text": "some text",
+            "pretext": "*chat.postMessage*",
+            "mrkdwn_in": [
+              "pretext",
+              "text"
+            ]
+          }
+        ],
+        "permalink": "https://your-workspace.slack.com/archives/C123ABC456/p123456789"
+      },
+      "date_create": 1656014995
+    }
+  ],
+  "paging": {
+    "per_page": 100,
+    "spill": 0,
+    "page": 1,
+    "total": 1,
+    "pages": 1
+  }
+}

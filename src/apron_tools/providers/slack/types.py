@@ -133,6 +133,27 @@ class AddReactionsParams(BaseModel):
     reaction_name: str
 
 
+class SearchMessagesParams(BaseModel):
+    """Parameters for searching Slack messages the caller has access to."""
+
+    query: str = Field(min_length=1)
+    count: int = Field(default=20, gt=0, le=100)
+    sort: str = "timestamp"
+    sort_dir: str = "desc"
+
+
+class ListSavedItemsParams(BaseModel):
+    """Parameters for listing the caller's saved (bookmarked) Slack items.
+
+    ``limit`` is hard-capped at 999 to match Slack's documented constraint
+    of "limit value under 1000" on the underlying ``stars.list`` endpoint.
+    Slack also recommends no more than 200 per call; that is left as caller
+    guidance rather than enforced here.
+    """
+
+    limit: int = Field(default=100, gt=0, lt=1000)
+
+
 # ---------------------------------------------------------------------------
 # Shared nested models
 # ---------------------------------------------------------------------------
@@ -194,6 +215,49 @@ class SlackReaction(BaseModel):
     name: str
     count: int = 0
     users: list[str] = []
+
+
+class SlackSearchHit(BaseModel):
+    """A single message match returned by ``search.messages``.
+
+    For human-authored messages ``user`` carries the user ID and
+    ``username`` carries the display name. For bot, app, or integration
+    posts ``user`` is typically empty and only ``username`` is set.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    channel_id: str = ""
+    channel_name: str = ""
+    is_im: bool = False
+    user: str = ""
+    username: str = ""
+    text: str = ""
+    ts: str = ""
+    permalink: str = ""
+
+
+class SlackSavedItem(BaseModel):
+    """A single item the caller has saved in Slack.
+
+    Flattens ``stars.list``'s per-type item shapes (``message``, ``file``,
+    ``file_comment``, ``channel``, ``im``, ``group``) into a common surface
+    so callers do not need to branch on item type. ``text`` and
+    ``message_ts`` are populated for ``message``-typed items; for
+    channel/file types they remain empty and only ``type`` and
+    ``channel_id`` carry meaning.
+
+    A per-item identifier suitable for un-saving is intentionally omitted
+    because no tool mutates saved state today — worth re-introducing as a
+    typed field if a "remove saved item" tool is added.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    type: str = ""
+    channel_id: str = ""
+    message_ts: str = ""
+    text: str = ""
 
 
 class SlackFile(BaseModel):
@@ -654,4 +718,53 @@ class AddReactionsResult(ToolResult):
                 )
             else:
                 lines.append(f"- {item.timestamp}: Failed: {item.error}")
+        return "\n".join(lines)
+
+
+class SearchMessagesResult(ToolResult):
+    """Result of searching Slack messages."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    matches: list[SlackSearchHit] = []
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of search hits."""
+        if not self.success:
+            return f"Error: {self.error}"
+        if not self.matches:
+            return "No matches found."
+        lines: list[str] = []
+        for hit in self.matches:
+            label = "DM" if hit.is_im else (f"#{hit.channel_name}" if hit.channel_name else hit.channel_id)
+            # Show display name plus user ID when both are present so the LLM
+            # gets readable attribution and a stable identifier for follow-up
+            # tool calls. Bot/integration posts have no user ID, so the name
+            # stands alone.
+            who = f"{hit.username} ({hit.user})" if hit.username and hit.user else hit.username or hit.user or "unknown"
+            lines.append(f"- [{label}] [ts:{hit.ts}] {who}: {hit.text}")
+            if hit.permalink:
+                lines.append(f"  {hit.permalink}")
+        return "\n".join(lines)
+
+
+class ListSavedItemsResult(ToolResult):
+    """Result of listing the caller's saved Slack items."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    items: list[SlackSavedItem] = []
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of saved items."""
+        if not self.success:
+            return f"Error: {self.error}"
+        if not self.items:
+            return "No saved items."
+        lines: list[str] = []
+        for item in self.items:
+            location = item.channel_id or "(unknown)"
+            ts_part = f" [ts:{item.message_ts}]" if item.message_ts else ""
+            type_part = f"[{item.type}] " if item.type else ""
+            lines.append(f"- {type_part}{location}{ts_part}: {item.text}")
         return "\n".join(lines)
