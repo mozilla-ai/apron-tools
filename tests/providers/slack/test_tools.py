@@ -1393,6 +1393,28 @@ class TestSlackSearchMessages:
         assert result.success is False
         assert "ratelimited" in result.error
 
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_str_shows_username_and_user_id_when_both_present(self, mock_cls: AsyncMock) -> None:
+        """For human-authored messages the LLM-readable summary surfaces the
+        display name plus the user ID (``username (user_id)``); bot/integration
+        posts with no user ID surface the name alone."""
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.search_messages.return_value = _mock_response(_load_json("search_messages.json"))
+
+        result = await slack_search_messages(
+            SearchMessagesParams(query="meaning of life"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        rendered = str(result)
+        # First match is human-authored (user + username both present).
+        assert "roach (U2U85N1RV)" in rendered
+        # Second match is a bot post (user empty, only username).
+        assert "robot overlord" in rendered
+        assert "robot overlord (" not in rendered
+
     async def test_has_tool_definition(self) -> None:
         defn = slack_search_messages._tool_definition
         assert defn.name == "slack_search_messages"

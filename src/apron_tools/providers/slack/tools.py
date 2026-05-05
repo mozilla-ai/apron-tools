@@ -1134,7 +1134,7 @@ async def slack_search_messages(
 
 @tool(
     scopes=SCOPES["slack_list_saved_items"],
-    api_docs="https://docs.slack.dev/reference/methods/saved.list/",
+    api_docs="https://docs.slack.dev/reference/methods/stars.list/",
     provider="slack",
 )
 async def slack_list_saved_items(
@@ -1159,9 +1159,11 @@ async def slack_list_saved_items(
 
     Returns up to ``params.limit`` items (default 100, hard-capped at
     999 per Slack's documented "limit value under 1000"; Slack recommends
-    no more than 200 per call). The underlying endpoint supports
-    cursor-based pagination via ``response_metadata.next_cursor``;
-    pagination is currently not supported by this tool.
+    no more than 200 per call). Responses always include a legacy
+    ``paging`` envelope (``page``/``per_page``/``pages``/``total``); per
+    Slack's docs the endpoint also supports cursor-based pagination,
+    surfacing ``response_metadata.next_cursor`` when a next page exists.
+    This tool exposes neither today.
     """
     if token_error := _validate_user_token(token):
         return ListSavedItemsResult(success=False, error=token_error)

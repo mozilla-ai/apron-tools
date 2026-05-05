@@ -240,13 +240,15 @@ class SlackSearchHit(BaseModel):
 class SlackSavedItem(BaseModel):
     """A single item the caller has saved in Slack.
 
-    Normalised across the ``saved.list`` and ``stars.list`` response shapes
-    so callers do not need to branch on which endpoint produced the data.
+    Flattens ``stars.list``'s per-type item shapes (``message``, ``file``,
+    ``file_comment``, ``channel``, ``im``, ``group``) into a common surface
+    so callers do not need to branch on item type. ``text`` and
+    ``message_ts`` are populated for ``message``-typed items; for
+    channel/file types they remain empty and only ``type`` and
+    ``channel_id`` carry meaning.
 
-    ``saved.list`` exposes a per-item ``item_id`` used for un-saving via
-    ``saved.remove``; ``stars.list`` does not surface an equivalent
-    identifier. ``item_id`` is not exposed on this type because there is
-    currently no tool that mutates saved state — worth re-introducing as a
+    A per-item identifier suitable for un-saving is intentionally omitted
+    because no tool mutates saved state today — worth re-introducing as a
     typed field if a "remove saved item" tool is added.
     """
 
@@ -735,7 +737,11 @@ class SearchMessagesResult(ToolResult):
         lines: list[str] = []
         for hit in self.matches:
             label = "DM" if hit.is_im else (f"#{hit.channel_name}" if hit.channel_name else hit.channel_id)
-            who = hit.user or hit.username or "unknown"
+            # Show display name plus user ID when both are present so the LLM
+            # gets readable attribution and a stable identifier for follow-up
+            # tool calls. Bot/integration posts have no user ID, so the name
+            # stands alone.
+            who = f"{hit.username} ({hit.user})" if hit.username and hit.user else hit.username or hit.user or "unknown"
             lines.append(f"- [{label}] [ts:{hit.ts}] {who}: {hit.text}")
             if hit.permalink:
                 lines.append(f"  {hit.permalink}")
