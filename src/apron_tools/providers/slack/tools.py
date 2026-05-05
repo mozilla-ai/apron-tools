@@ -35,12 +35,16 @@ from apron_tools.providers.slack.types import (
     JoinChannelResult,
     ListMyConversationsParams,
     ListMyConversationsResult,
+    ListSavedItemsParams,
+    ListSavedItemsResult,
     ReadChannelMessagesParams,
     ReadChannelMessagesResult,
     ReadThreadParams,
     ReadThreadResult,
     SaveFileForUploadParams,
     SaveFileForUploadResult,
+    SearchMessagesParams,
+    SearchMessagesResult,
     SendChannelMessageParams,
     SendChannelMessageResult,
     SendUserMessageParams,
@@ -50,6 +54,8 @@ from apron_tools.providers.slack.types import (
     SlackFile,
     SlackMessage,
     SlackReaction,
+    SlackSavedItem,
+    SlackSearchHit,
     SlackUser,
 )
 from apron_tools.tool import tool
@@ -417,7 +423,11 @@ async def slack_list_my_conversations(
 ) -> ListMyConversationsResult:
     """List conversations the calling user is a member of.
 
-    Requires a user token (xoxp-).
+    Requires a user token, not a bot token.
+
+    Returns up to ``params.limit`` conversations (default 200, capped at
+    1000) from the first page of results; pagination is currently not
+    supported by this tool.
     """
     if token_error := _validate_user_token(token):
         return ListMyConversationsResult(success=False, error=token_error)
@@ -1054,4 +1064,159 @@ async def slack_add_reactions(
         reaction_name=normalized,
         channel_id=params.channel_id,
         items=items,
+    )
+
+
+@tool(
+    scopes=SCOPES["slack_search_messages"],
+    api_docs="https://docs.slack.dev/reference/methods/search.messages/",
+    provider="slack",
+)
+async def slack_search_messages(
+    params: SearchMessagesParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SearchMessagesResult:
+    """Search messages the calling user has access to.
+
+    Requires a user token, not a bot token. ``search:read`` is a user-only
+    scope, so bot tokens return ``missing_scope`` from this endpoint.
+
+    Defaults to ``sort=timestamp`` / ``sort_dir=desc`` (newest first); the
+    underlying API defaults to ``sort=score`` (relevance-ranked). Newest-first
+    is the expected default for agent-driven triage feeds — adjust the
+    parameters if relevance ranking suits the caller better.
+
+    Returns up to ``params.count`` matches (default 20, capped at 100)
+    from the first page of results; pagination is currently not supported
+    by this tool.
+
+    Slack's ``highlight`` option wraps matching terms in private-use
+    Unicode code points (U+E000 / U+E001) for clients that apply visual
+    styling. This tool does not expose it: LLM consumers have no rendering
+    layer to act on the markers, so they would appear as opaque characters
+    in returned text.
+
+    Wraps the ``search.messages`` endpoint
+    (https://docs.slack.dev/reference/methods/search.messages/). Slack
+    labels this method legacy and suggests ``assistant.search.context``
+    (https://docs.slack.dev/reference/methods/assistant.search.context)
+    for new builds, but the two are not drop-in replacements:
+    ``search.messages`` returns a flat list of hits (the shape this tool
+    surfaces), whereas ``assistant.search.context`` returns context
+    bundles, requires six fine-grained scopes instead of one, caps pages
+    at 20, and has tighter rate limits. Worth re-reviewing if a use case
+    emerges that needs conversation context, or if Slack publishes a
+    deprecation timeline for ``search.messages``.
+    """
+    if token_error := _validate_user_token(token):
+        return SearchMessagesResult(success=False, error=token_error)
+
+    client = _client(token, base_url)
+    try:
+        resp = await client.search_messages(
+            query=params.query,
+            count=params.count,
+            sort=params.sort,
+            sort_dir=params.sort_dir,
+        )
+        raw_matches = resp.get("messages", {}).get("matches", []) or []
+        matches = [_parse_search_match(match) for match in raw_matches]
+        return SearchMessagesResult(success=True, matches=matches)
+    except SlackApiError as exc:
+        code = exc.response.get("error", str(exc))
+        return SearchMessagesResult(
+            success=False,
+            error=_format_slack_error("search messages", None, code),
+        )
+
+
+@tool(
+    scopes=SCOPES["slack_list_saved_items"],
+    api_docs="https://docs.slack.dev/reference/methods/saved.list/",
+    provider="slack",
+)
+async def slack_list_saved_items(
+    params: ListSavedItemsParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ListSavedItemsResult:
+    """List items the calling user has saved (bookmarked) in Slack.
+
+    Requires a user token, not a bot token. ``stars:read`` is a user-only
+    scope, so bot tokens return ``missing_scope`` from this endpoint.
+
+    Wraps the ``stars.list`` endpoint
+    (https://docs.slack.dev/reference/methods/stars.list/), which Slack
+    describes as "a user's saved items, formerly known as stars". Slack
+    flags a freshness limitation on this endpoint: items saved via the
+    in-product "Later" view will not appear here, and saves made after
+    the transition may not be reflected. The replacement Later APIs are
+    not yet publicly available — worth re-reviewing this tool when they
+    ship.
+
+    Returns up to ``params.limit`` items (default 100, hard-capped at
+    999 per Slack's documented "limit value under 1000"; Slack recommends
+    no more than 200 per call). The underlying endpoint supports
+    cursor-based pagination via ``response_metadata.next_cursor``;
+    pagination is currently not supported by this tool.
+    """
+    if token_error := _validate_user_token(token):
+        return ListSavedItemsResult(success=False, error=token_error)
+
+    client = _client(token, base_url)
+    try:
+        resp = await client.stars_list(limit=params.limit)
+        raw_items = resp.get("items", []) or []
+        items = [_parse_saved_item(item) for item in raw_items]
+        return ListSavedItemsResult(success=True, items=items)
+    except SlackApiError as exc:
+        code = exc.response.get("error", str(exc))
+        return ListSavedItemsResult(
+            success=False,
+            error=_format_slack_error("list saved items", None, code),
+        )
+
+
+def _parse_search_match(raw: dict) -> SlackSearchHit:
+    """Normalise a raw ``search.messages`` match into ``SlackSearchHit``.
+
+    For IM messages Slack sets the match-level ``type`` to ``im``; the
+    nested ``channel`` block may also carry ``is_im: true`` for the same
+    case. Either signal marks the hit as a DM.
+    """
+    channel = raw.get("channel") or {}
+    is_im = raw.get("type") == "im" or channel.get("is_im", False)
+    return SlackSearchHit(
+        channel_id=channel.get("id", ""),
+        channel_name=channel.get("name", ""),
+        is_im=is_im,
+        user=raw.get("user", ""),
+        username=raw.get("username", ""),
+        text=raw.get("text", ""),
+        ts=raw.get("ts", ""),
+        permalink=raw.get("permalink", ""),
+    )
+
+
+def _parse_saved_item(raw: dict) -> SlackSavedItem:
+    """Normalise a raw ``stars.list`` item into ``SlackSavedItem``.
+
+    For ``type=message`` Slack carries the channel ID at the item level
+    (``channel``) and the message body inside a nested ``message`` object.
+    For ``type=channel|im|group`` only ``channel`` is present and the
+    item itself is the saved channel, so ``text`` and ``message_ts``
+    remain empty. ``type=file`` and ``type=file_comment`` carry their
+    payload in different sub-structures (``file``, ``comment``); this
+    parser does not currently surface those — extend it if the agent
+    needs file-saves enriched.
+    """
+    message = raw.get("message") or {}
+    return SlackSavedItem(
+        type=raw.get("type", ""),
+        channel_id=raw.get("channel", ""),
+        message_ts=message.get("ts", ""),
+        text=message.get("text", ""),
     )

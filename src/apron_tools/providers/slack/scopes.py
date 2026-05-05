@@ -106,6 +106,20 @@ class SlackScope(Scope):
         "write",
         False,
     )
+    SEARCH_READ = (
+        "search:read",
+        "Search",
+        "Search messages, files, and other content you have access to",
+        "read",
+        False,
+    )
+    STARS_READ = (
+        "stars:read",
+        "View Saved Items",
+        "View messages and files you've saved (bookmarked) in Slack",
+        "read",
+        False,
+    )
     TEAM_READ = (
         "team:read",
         "View Workspace",
@@ -201,6 +215,8 @@ SCOPES: dict[str, list[SlackScope]] = {
     "slack_save_file_for_upload": [SlackScope.FILES_READ],
     "slack_get_reactions": [SlackScope.REACTIONS_READ],
     "slack_add_reactions": [SlackScope.REACTIONS_WRITE],
+    "slack_search_messages": [SlackScope.SEARCH_READ],
+    "slack_list_saved_items": [SlackScope.STARS_READ],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(

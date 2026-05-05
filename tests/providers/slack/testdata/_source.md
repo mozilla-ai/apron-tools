@@ -16,6 +16,8 @@
   - files.info: https://docs.slack.dev/reference/web-api/files/info
   - reactions.get: https://docs.slack.dev/reference/web-api/reactions/get
   - reactions.add: https://docs.slack.dev/reference/web-api/reactions/add
+  - search.messages: https://docs.slack.dev/reference/methods/search.messages/
+  - stars.list: https://docs.slack.dev/reference/methods/stars.list/
 - **Auth:** Bearer token (OAuth)
 - **team_info.json:** Based on example response from team.info docs.
 - **conversations_list.json:** Based on example response from conversations.list docs.
@@ -37,3 +39,5 @@
 - **conversations_history_blocks_with_files.json:** conversations.history shape with a single message that carries both blocks and a files array, used to verify files keep surfacing alongside block text.
 - **conversations_replies_parent_blocks.json:** conversations.replies shape with a Block Kit parent and a plain-text reply.
 - **conversations_replies_reply_attachments.json:** conversations.replies shape with a plain-text parent and an attachment-carrying reply.
+- **search_messages.json:** Based on example response from search.messages docs.
+- **stars_list.json:** Based on example response from stars.list docs.
