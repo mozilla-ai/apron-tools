@@ -11,6 +11,7 @@ from pytest_httpx import HTTPXMock
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
+from apron_tools.providers import slack as slack_pkg
 from apron_tools.providers.slack import tools as slack_tools
 from apron_tools.providers.slack.tools import (
     slack_add_reactions,
@@ -1331,6 +1332,36 @@ class TestValidateUserToken:
     @pytest.mark.parametrize("token", [_TOKEN, "", "totally-not-a-slack-token"])
     def test_non_bot_tokens_pass_through_for_scope_checks(self, token: str) -> None:
         assert slack_tools._validate_user_token(token) is None
+
+
+class TestTokenPrefixHelpers:
+    def test_constants_match_slack_token_scheme(self) -> None:
+        assert slack_pkg.USER_TOKEN_PREFIX == "xoxp-"
+        assert slack_pkg.BOT_TOKEN_PREFIX == "xoxb-"
+
+    @pytest.mark.parametrize(
+        ("token", "expected"),
+        [
+            (_TOKEN, True),
+            (_BOT_TOKEN, False),
+            ("", False),
+            ("xoxa-not-a-user-token", False),
+        ],
+    )
+    def test_is_user_token(self, token: str, expected: bool) -> None:
+        assert slack_pkg.is_user_token(token) is expected
+
+    @pytest.mark.parametrize(
+        ("token", "expected"),
+        [
+            (_BOT_TOKEN, True),
+            (_TOKEN, False),
+            ("", False),
+            ("xoxa-not-a-bot-token", False),
+        ],
+    )
+    def test_is_bot_token(self, token: str, expected: bool) -> None:
+        assert slack_pkg.is_bot_token(token) is expected
 
 
 class TestFormatSlackError:
