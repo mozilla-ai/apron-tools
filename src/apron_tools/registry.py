@@ -5,12 +5,19 @@ from __future__ import annotations
 import importlib
 import logging
 import pkgutil
+import re
 from collections.abc import Sequence
 
 import apron_tools.providers as _providers_pkg
 from apron_tools.types import CapabilityGroup, Scope, ToolDefinition
 
 _log = logging.getLogger(__name__)
+
+# Top-level provider subpackages are single Python identifiers (lowercase letters,
+# digits, underscores). Reject anything else — including dotted strings like
+# ``"slack.tools"`` — before passing to ``importlib.import_module``, so the
+# helper's "never load tools modules" contract holds for all inputs.
+_PROVIDER_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _collect_tools(package_path: str, package_fs_path: Sequence[str]) -> list[ToolDefinition]:
@@ -152,9 +159,12 @@ def get_scopes_for_provider(provider: str) -> set[Scope | str]:
         OAuth provider. Elements are :class:`Scope` enum members where
         sourced from a provider scope enum, or raw ``str`` for ad-hoc
         scopes; either is usable directly as a scope string. Returns an
-        empty set for unknown providers, mirroring
-        :func:`get_tools_for_provider`.
+        empty set for unknown or syntactically invalid providers,
+        mirroring :func:`get_tools_for_provider`.
     """
+    if not _PROVIDER_NAME_RE.fullmatch(provider):
+        return set()
+
     try:
         pkg = importlib.import_module(f"apron_tools.providers.{provider}")
     except ModuleNotFoundError:
