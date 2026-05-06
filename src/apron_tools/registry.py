@@ -8,7 +8,7 @@ import pkgutil
 from collections.abc import Sequence
 
 import apron_tools.providers as _providers_pkg
-from apron_tools.types import CapabilityGroup, ToolDefinition
+from apron_tools.types import CapabilityGroup, Scope, ToolDefinition
 
 _log = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ def get_tools_for_provider(provider: str) -> list[ToolDefinition]:
     """Get all tools for an OAuth provider (e.g. 'google' returns Sheets + Gmail + Drive + ...).
 
     Args:
-        provider: OAuth provider / company name to filter by.
+        provider: OAuth provider name to filter by.
     """
     return [td for td in discover_tools() if td.provider == provider]
 
@@ -133,3 +133,34 @@ def get_tools_for_service(service: str) -> list[ToolDefinition]:
         service: Service name to filter by.
     """
     return [td for td in discover_tools() if td.service == service]
+
+
+def get_scopes_for_provider(provider: str) -> set[Scope | str]:
+    """Union of every OAuth scope this provider's tools require.
+
+    Aggregated from each service's ``CAPABILITY_GROUP`` metadata, so it
+    only loads ``scopes`` modules — never ``tools`` modules or their SDK
+    dependencies. Use this to configure an OAuth client at startup with
+    the full scope surface area for an OAuth provider preset.
+
+    Args:
+        provider: OAuth provider name (e.g. ``"google"``,
+            ``"atlassian"``, ``"slack"``).
+
+    Returns:
+        Deduplicated union of scopes across every service under this
+        OAuth provider. Elements are :class:`Scope` enum members where
+        sourced from a provider scope enum, or raw ``str`` for ad-hoc
+        scopes; either is usable directly as a scope string. Returns an
+        empty set for unknown providers, mirroring
+        :func:`get_tools_for_provider`.
+    """
+    try:
+        pkg = importlib.import_module(f"apron_tools.providers.{provider}")
+    except ModuleNotFoundError:
+        return set()
+
+    scopes: set[Scope | str] = set()
+    for cg in _collect_capability_groups(f"apron_tools.providers.{provider}", pkg.__path__):
+        scopes.update(cg.scopes)
+    return scopes

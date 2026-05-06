@@ -125,7 +125,7 @@ class ToolDefinition:
     """Tool name, e.g. ``typeform_explore_workspace``."""
 
     provider: str
-    """OAuth provider / company, e.g. ``google``, ``atlassian``, ``slack``."""
+    """OAuth provider, e.g. ``google``, ``atlassian``, ``slack``."""
 
     service: str
     """Specific product, e.g. ``google_sheets``, ``atlassian_jira``, ``slack``."""

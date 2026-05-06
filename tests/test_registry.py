@@ -1,10 +1,11 @@
 from apron_tools.registry import (
     discover_capability_groups,
     discover_tools,
+    get_scopes_for_provider,
     get_tools_for_provider,
     get_tools_for_service,
 )
-from apron_tools.types import CapabilityGroup, ToolDefinition
+from apron_tools.types import CapabilityGroup, Scope, ToolDefinition
 
 
 class TestDiscoverTools:
@@ -190,3 +191,70 @@ class TestDiscoverCapabilityGroups:
         groups = discover_capability_groups()
         for cg in groups:
             assert cg.display_name, f"{cg.provider} has no display_name"
+
+
+class TestGetScopesForProvider:
+    def test_returns_set(self) -> None:
+        scopes = get_scopes_for_provider("typeform")
+        assert isinstance(scopes, set)
+
+    def test_unknown_provider_returns_empty(self) -> None:
+        scopes = get_scopes_for_provider("nonexistent_provider")
+        assert scopes == set()
+
+    def test_flat_provider_returns_service_scopes(self) -> None:
+        scopes = get_scopes_for_provider("slack")
+        assert len(scopes) > 0
+
+    def test_flat_provider_matches_capability_group(self) -> None:
+        groups = discover_capability_groups()
+        slack_group = next(cg for cg in groups if cg.provider == "slack")
+        assert get_scopes_for_provider("slack") == set(slack_group.scopes)
+
+    def test_hierarchical_google_unions_all_services(self) -> None:
+        scopes = get_scopes_for_provider("google")
+        groups = discover_capability_groups()
+        google_services = {
+            "gmail",
+            "google_calendar",
+            "google_docs",
+            "google_drive",
+            "google_sheets",
+            "google_slides",
+            "google_tasks",
+        }
+        expected: set[Scope | str] = set()
+        for cg in groups:
+            if cg.provider in google_services:
+                expected.update(cg.scopes)
+        assert scopes == expected
+        # Each individual service's scopes are a subset of the union.
+        for cg in groups:
+            if cg.provider in google_services:
+                assert set(cg.scopes).issubset(scopes)
+
+    def test_hierarchical_atlassian_unions_jira_and_confluence(self) -> None:
+        scopes = get_scopes_for_provider("atlassian")
+        groups = discover_capability_groups()
+        jira = next(cg for cg in groups if cg.provider == "atlassian_jira")
+        confluence = next(cg for cg in groups if cg.provider == "atlassian_confluence")
+        assert set(jira.scopes).issubset(scopes)
+        assert set(confluence.scopes).issubset(scopes)
+        assert scopes == set(jira.scopes) | set(confluence.scopes)
+
+    def test_hierarchical_microsoft_unions_services(self) -> None:
+        scopes = get_scopes_for_provider("microsoft")
+        assert len(scopes) > 0
+        groups = discover_capability_groups()
+        teams = next(cg for cg in groups if cg.provider == "microsoft_teams")
+        assert set(teams.scopes).issubset(scopes)
+
+    def test_elements_are_scope_or_str(self) -> None:
+        # Scope is a str subclass (StrEnum), so every element is at least a str.
+        for scopes in (
+            get_scopes_for_provider("google"),
+            get_scopes_for_provider("atlassian"),
+            get_scopes_for_provider("slack"),
+        ):
+            for s in scopes:
+                assert isinstance(s, str)
