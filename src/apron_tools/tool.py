@@ -26,7 +26,7 @@ def tool(
     Args:
         scopes: OAuth scopes required to call this tool.
         api_docs: URL to the provider API documentation for this endpoint.
-        provider: OAuth provider / company name (e.g. ``google``, ``slack``).
+        provider: OAuth provider name (e.g. ``google``, ``slack``).
         service: Specific product name (e.g. ``google_sheets``). Defaults
             to ``provider`` for standalone providers.
     """

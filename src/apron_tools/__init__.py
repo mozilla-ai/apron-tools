@@ -8,6 +8,7 @@ from apron_tools.fileio import resolve_file_input
 from apron_tools.registry import (
     discover_capability_groups,
     discover_tools,
+    get_scopes_for_provider,
     get_tools_for_provider,
     get_tools_for_service,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "ToolResult",
     "discover_capability_groups",
     "discover_tools",
+    "get_scopes_for_provider",
     "get_tools_for_provider",
     "get_tools_for_service",
     "resolve_file_input",

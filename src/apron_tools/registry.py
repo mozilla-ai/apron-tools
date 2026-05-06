@@ -5,12 +5,19 @@ from __future__ import annotations
 import importlib
 import logging
 import pkgutil
+import re
 from collections.abc import Sequence
 
 import apron_tools.providers as _providers_pkg
 from apron_tools.types import CapabilityGroup, ToolDefinition
 
 _log = logging.getLogger(__name__)
+
+# Top-level provider subpackages are single Python identifiers (lowercase letters,
+# digits, underscores). Reject anything else — including dotted strings like
+# ``"slack.tools"`` — before passing to ``importlib.import_module``, so the
+# helper's "never load tools modules" contract holds for all inputs.
+_PROVIDER_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _collect_tools(package_path: str, package_fs_path: Sequence[str]) -> list[ToolDefinition]:
@@ -121,7 +128,7 @@ def get_tools_for_provider(provider: str) -> list[ToolDefinition]:
     """Get all tools for an OAuth provider (e.g. 'google' returns Sheets + Gmail + Drive + ...).
 
     Args:
-        provider: OAuth provider / company name to filter by.
+        provider: OAuth provider name to filter by.
     """
     return [td for td in discover_tools() if td.provider == provider]
 
@@ -133,3 +140,46 @@ def get_tools_for_service(service: str) -> list[ToolDefinition]:
         service: Service name to filter by.
     """
     return [td for td in discover_tools() if td.service == service]
+
+
+def get_scopes_for_provider(provider: str) -> set[str]:
+    """Union of every OAuth scope this provider's tools require.
+
+    Aggregated from each service's ``CAPABILITY_GROUP`` metadata, so it
+    only loads ``scopes`` modules — never ``tools`` modules or their SDK
+    dependencies. Use this to configure an OAuth client at startup with
+    the full scope surface area for an OAuth provider preset.
+
+    Args:
+        provider: OAuth provider name (e.g. ``"google"``,
+            ``"atlassian"``, ``"slack"``).
+
+    Returns:
+        Deduplicated union of scope strings across every service under
+        this OAuth provider, suitable for direct use in an OAuth client
+        configuration. Returns an empty set for unknown or
+        syntactically invalid providers, mirroring
+        :func:`get_tools_for_provider`.
+
+        The return type is intentionally ``set[str]`` rather than
+        ``set[Scope | str]``: at the OAuth-provider aggregation level,
+        the same scope string can appear in multiple service enums with
+        differing consent metadata (e.g. ``"Files.ReadWrite"`` across
+        Microsoft Excel/OneDrive/PowerPoint/Word), so any preserved
+        :class:`Scope` member would be ambiguous. Consumers that need
+        per-scope consent metadata should call
+        :func:`discover_capability_groups` and use
+        :meth:`CapabilityGroup.metadata` on the relevant service.
+    """
+    if not _PROVIDER_NAME_RE.fullmatch(provider):
+        return set()
+
+    try:
+        pkg = importlib.import_module(f"apron_tools.providers.{provider}")
+    except ModuleNotFoundError:
+        return set()
+
+    scopes: set[str] = set()
+    for cg in _collect_capability_groups(f"apron_tools.providers.{provider}", pkg.__path__):
+        scopes.update(str(s) for s in cg.scopes)
+    return scopes

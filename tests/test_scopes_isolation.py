@@ -76,6 +76,73 @@ if loaded:
 """
 
 
+# Same invariants applied to ``get_scopes_for_provider``: the helper exists
+# specifically to avoid the SDK-import cost of ``discover_tools()``, so isolation
+# is a load-bearing contract rather than an implementation detail.
+_GET_SCOPES_STRUCTURAL_ISOLATION_SCRIPT = """\
+import sys
+from apron_tools.registry import get_scopes_for_provider
+
+get_scopes_for_provider("google")
+get_scopes_for_provider("atlassian")
+get_scopes_for_provider("slack")
+
+leaked = sorted(
+    name for name in sys.modules
+    if name.startswith("apron_tools.providers.") and name.endswith(".tools")
+)
+if leaked:
+    print(",".join(leaked))
+    sys.exit(1)
+"""
+
+
+_GET_SCOPES_SDK_ISOLATION_SCRIPT = f"""\
+import sys
+from apron_tools.registry import get_scopes_for_provider
+
+get_scopes_for_provider("google")
+get_scopes_for_provider("atlassian")
+get_scopes_for_provider("slack")
+
+sdk_packages = {SDK_PACKAGES!r}
+loaded = [pkg for pkg in sdk_packages if pkg in sys.modules]
+if loaded:
+    print(",".join(loaded))
+    sys.exit(1)
+"""
+
+
+# Inputs containing ``.`` (or other non-identifier chars) used to slip past the
+# ModuleNotFoundError catch and import the underlying tools module — pulling in
+# its SDK dependencies — before failing on ``__path__``. Guard the contract
+# explicitly with adversarial inputs alongside the normal-path checks above.
+_GET_SCOPES_MALFORMED_INPUT_SDK_ISOLATION_SCRIPT = f"""\
+import sys
+from apron_tools.registry import get_scopes_for_provider
+
+for bad in ("slack.tools", "google.gmail.tools", "..", "../escape", "google.tools"):
+    result = get_scopes_for_provider(bad)
+    if result != set():
+        print(f"non-empty result for {{bad!r}}: {{result!r}}")
+        sys.exit(1)
+
+sdk_packages = {SDK_PACKAGES!r}
+loaded = [pkg for pkg in sdk_packages if pkg in sys.modules]
+if loaded:
+    print(",".join(loaded))
+    sys.exit(1)
+
+leaked = sorted(
+    name for name in sys.modules
+    if name.startswith("apron_tools.providers.") and name.endswith(".tools")
+)
+if leaked:
+    print(",".join(leaked))
+    sys.exit(1)
+"""
+
+
 class TestScopesImportIsolation:
     def test_all_scopes_modules_discovered(self):
         """Sanity check — we find all 21 scopes modules."""
@@ -114,5 +181,39 @@ class TestScopesImportIsolation:
         )
         assert result.returncode == 0, (
             f"discover_capability_groups() loaded SDK packages: "
+            f"{result.stdout.strip()} | stderr: {result.stderr.strip()}"
+        )
+
+    def test_get_scopes_for_provider_does_not_load_tool_modules(self) -> None:
+        """``get_scopes_for_provider`` must not load any provider ``tools`` modules."""
+        result = subprocess.run(
+            [sys.executable, "-c", _GET_SCOPES_STRUCTURAL_ISOLATION_SCRIPT],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"get_scopes_for_provider() loaded tool modules: {result.stdout.strip()} | stderr: {result.stderr.strip()}"
+        )
+
+    def test_get_scopes_for_provider_does_not_load_sdks(self) -> None:
+        """``get_scopes_for_provider`` must not pull in any provider SDK packages."""
+        result = subprocess.run(
+            [sys.executable, "-c", _GET_SCOPES_SDK_ISOLATION_SCRIPT],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"get_scopes_for_provider() loaded SDK packages: {result.stdout.strip()} | stderr: {result.stderr.strip()}"
+        )
+
+    def test_get_scopes_for_provider_rejects_malformed_input(self) -> None:
+        """Adversarial inputs (dotted, escape attempts) must not load tools or SDKs."""
+        result = subprocess.run(
+            [sys.executable, "-c", _GET_SCOPES_MALFORMED_INPUT_SDK_ISOLATION_SCRIPT],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, (
+            f"get_scopes_for_provider() leaked on malformed input: "
             f"{result.stdout.strip()} | stderr: {result.stderr.strip()}"
         )
