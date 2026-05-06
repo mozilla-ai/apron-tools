@@ -9,7 +9,7 @@ import re
 from collections.abc import Sequence
 
 import apron_tools.providers as _providers_pkg
-from apron_tools.types import CapabilityGroup, Scope, ToolDefinition
+from apron_tools.types import CapabilityGroup, ToolDefinition
 
 _log = logging.getLogger(__name__)
 
@@ -142,7 +142,7 @@ def get_tools_for_service(service: str) -> list[ToolDefinition]:
     return [td for td in discover_tools() if td.service == service]
 
 
-def get_scopes_for_provider(provider: str) -> set[Scope | str]:
+def get_scopes_for_provider(provider: str) -> set[str]:
     """Union of every OAuth scope this provider's tools require.
 
     Aggregated from each service's ``CAPABILITY_GROUP`` metadata, so it
@@ -155,12 +155,21 @@ def get_scopes_for_provider(provider: str) -> set[Scope | str]:
             ``"atlassian"``, ``"slack"``).
 
     Returns:
-        Deduplicated union of scopes across every service under this
-        OAuth provider. Elements are :class:`Scope` enum members where
-        sourced from a provider scope enum, or raw ``str`` for ad-hoc
-        scopes; either is usable directly as a scope string. Returns an
-        empty set for unknown or syntactically invalid providers,
-        mirroring :func:`get_tools_for_provider`.
+        Deduplicated union of scope strings across every service under
+        this OAuth provider, suitable for direct use in an OAuth client
+        configuration. Returns an empty set for unknown or
+        syntactically invalid providers, mirroring
+        :func:`get_tools_for_provider`.
+
+        The return type is intentionally ``set[str]`` rather than
+        ``set[Scope | str]``: at the OAuth-provider aggregation level,
+        the same scope string can appear in multiple service enums with
+        differing consent metadata (e.g. ``"Files.ReadWrite"`` across
+        Microsoft Excel/OneDrive/PowerPoint/Word), so any preserved
+        :class:`Scope` member would be ambiguous. Consumers that need
+        per-scope consent metadata should call
+        :func:`discover_capability_groups` and use
+        :meth:`CapabilityGroup.metadata` on the relevant service.
     """
     if not _PROVIDER_NAME_RE.fullmatch(provider):
         return set()
@@ -170,7 +179,7 @@ def get_scopes_for_provider(provider: str) -> set[Scope | str]:
     except ModuleNotFoundError:
         return set()
 
-    scopes: set[Scope | str] = set()
+    scopes: set[str] = set()
     for cg in _collect_capability_groups(f"apron_tools.providers.{provider}", pkg.__path__):
-        scopes.update(cg.scopes)
+        scopes.update(str(s) for s in cg.scopes)
     return scopes

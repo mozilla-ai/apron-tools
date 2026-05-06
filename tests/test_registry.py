@@ -5,7 +5,7 @@ from apron_tools.registry import (
     get_tools_for_provider,
     get_tools_for_service,
 )
-from apron_tools.types import CapabilityGroup, Scope, ToolDefinition
+from apron_tools.types import CapabilityGroup, ToolDefinition
 
 
 class TestDiscoverTools:
@@ -209,7 +209,7 @@ class TestGetScopesForProvider:
     def test_flat_provider_matches_capability_group(self) -> None:
         groups = discover_capability_groups()
         slack_group = next(cg for cg in groups if cg.provider == "slack")
-        assert get_scopes_for_provider("slack") == set(slack_group.scopes)
+        assert get_scopes_for_provider("slack") == {str(s) for s in slack_group.scopes}
 
     def test_hierarchical_google_unions_all_services(self) -> None:
         scopes = get_scopes_for_provider("google")
@@ -223,38 +223,51 @@ class TestGetScopesForProvider:
             "google_slides",
             "google_tasks",
         }
-        expected: set[Scope | str] = set()
+        expected: set[str] = set()
         for cg in groups:
             if cg.provider in google_services:
-                expected.update(cg.scopes)
+                expected.update(str(s) for s in cg.scopes)
         assert scopes == expected
         # Each individual service's scopes are a subset of the union.
         for cg in groups:
             if cg.provider in google_services:
-                assert set(cg.scopes).issubset(scopes)
+                assert {str(s) for s in cg.scopes}.issubset(scopes)
 
     def test_hierarchical_atlassian_unions_jira_and_confluence(self) -> None:
         scopes = get_scopes_for_provider("atlassian")
         groups = discover_capability_groups()
         jira = next(cg for cg in groups if cg.provider == "atlassian_jira")
         confluence = next(cg for cg in groups if cg.provider == "atlassian_confluence")
-        assert set(jira.scopes).issubset(scopes)
-        assert set(confluence.scopes).issubset(scopes)
-        assert scopes == set(jira.scopes) | set(confluence.scopes)
+        jira_strs = {str(s) for s in jira.scopes}
+        confluence_strs = {str(s) for s in confluence.scopes}
+        assert jira_strs.issubset(scopes)
+        assert confluence_strs.issubset(scopes)
+        assert scopes == jira_strs | confluence_strs
 
     def test_hierarchical_microsoft_unions_services(self) -> None:
         scopes = get_scopes_for_provider("microsoft")
         assert len(scopes) > 0
         groups = discover_capability_groups()
         teams = next(cg for cg in groups if cg.provider == "microsoft_teams")
-        assert set(teams.scopes).issubset(scopes)
+        assert {str(s) for s in teams.scopes}.issubset(scopes)
 
-    def test_elements_are_scope_or_str(self) -> None:
-        # Scope is a str subclass (StrEnum), so every element is at least a str.
+    def test_microsoft_files_readwrite_deduplicated_across_services(self) -> None:
+        # ``Files.ReadWrite`` is defined in excel/onedrive/powerpoint/word with
+        # different consent metadata. The aggregated union must collapse them
+        # to a single raw scope string regardless of which service "wins".
+        scopes = get_scopes_for_provider("microsoft")
+        files_readwrite = [s for s in scopes if s == "Files.ReadWrite"]
+        assert files_readwrite == ["Files.ReadWrite"]
+
+    def test_elements_are_strings(self) -> None:
+        # Returned elements are bare ``str`` — never enum members — so
+        # consumers cannot accidentally read ambiguous consent metadata
+        # off them at the OAuth-provider aggregation level.
         for scopes in (
             get_scopes_for_provider("google"),
             get_scopes_for_provider("atlassian"),
             get_scopes_for_provider("slack"),
+            get_scopes_for_provider("microsoft"),
         ):
             for s in scopes:
-                assert isinstance(s, str)
+                assert type(s) is str
