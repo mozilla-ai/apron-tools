@@ -15,6 +15,13 @@ class GmailScope(Scope):
         "read",
         False,
     )
+    SEND = (
+        "https://www.googleapis.com/auth/gmail.send",
+        "Send Emails",
+        "Send messages on your behalf (no read or modify access to your mailbox)",
+        "write",
+        False,
+    )
     COMPOSE = (
         "https://www.googleapis.com/auth/gmail.compose",
         "Compose, Send & Manage Drafts",
@@ -50,7 +57,7 @@ class GmailScope(Scope):
 SCOPES: dict[str, list[GmailScope]] = {
     "gmail_list_emails": [GmailScope.READONLY],
     "gmail_read_email": [GmailScope.READONLY],
-    "gmail_send_email": [GmailScope.COMPOSE],
+    "gmail_send_email": [GmailScope.SEND],
     "gmail_create_draft": [GmailScope.COMPOSE],
     "gmail_edit_draft": [GmailScope.COMPOSE],
     "gmail_reply_to_email": [GmailScope.COMPOSE],
