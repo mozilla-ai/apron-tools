@@ -6,6 +6,8 @@ import typing
 from collections.abc import Sequence
 from typing import Any
 
+from pydantic import BaseModel
+
 from apron_tools.types import ToolDefinition
 
 
@@ -29,16 +31,28 @@ def tool(
         provider: OAuth provider name (e.g. ``google``, ``slack``).
         service: Specific product name (e.g. ``google_sheets``). Defaults
             to ``provider`` for standalone providers.
+
+    Raises:
+        TypeError: If the decorated function lacks a ``params`` argument
+            annotated with a Pydantic ``BaseModel`` subclass.
     """
 
     def decorator(func: Any) -> Any:
+        # ``typing.get_type_hints`` resolves PEP 563 string annotations to
+        # real classes, which is what consumers downstream of
+        # ``ToolDefinition.params_class`` rely on. ``inspect.signature``
+        # would return the raw string annotation here.
         hints = typing.get_type_hints(func)
         params_type = hints.get("params")
         return_type = hints.get("return")
 
-        input_schema: dict[str, Any] = {}
-        if params_type is not None and hasattr(params_type, "model_json_schema"):
-            input_schema = params_type.model_json_schema()
+        if not (isinstance(params_type, type) and issubclass(params_type, BaseModel)):
+            raise TypeError(
+                f"@tool function {func.__name__!r} must declare a 'params' argument "
+                "annotated with a Pydantic BaseModel subclass.",
+            )
+
+        input_schema = params_type.model_json_schema()
 
         output_schema: dict[str, Any] = {}
         if return_type is not None and hasattr(return_type, "model_json_schema"):
@@ -54,6 +68,7 @@ def tool(
             service=resolved_service,
             integration=resolved_service,
             description=description,
+            params_class=params_type,
             input_schema=input_schema,
             output_schema=output_schema,
             scopes=list(scopes),
