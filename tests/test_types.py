@@ -1,4 +1,4 @@
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 
 from apron_tools.types import (
     CapabilityGroup,
@@ -8,6 +8,10 @@ from apron_tools.types import (
     ToolDefinition,
     ToolResult,
 )
+
+
+class _DummyParams(BaseModel):
+    query: str
 
 
 class TestToolResult:
@@ -69,6 +73,7 @@ class TestToolDefinition:
             service="test",
             integration="test",
             description="A test tool.",
+            params_class=_DummyParams,
             input_schema={"type": "object"},
             output_schema={"type": "object"},
             scopes=["read"],
@@ -78,6 +83,7 @@ class TestToolDefinition:
         assert td.provider == "test"
         assert td.service == "test"
         assert td.integration == "test"
+        assert td.params_class is _DummyParams
         assert td.scopes == ["read"]
 
         try:

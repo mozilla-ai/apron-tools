@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 
+import pytest
 from pydantic import BaseModel
 
 from apron_tools.tool import tool
@@ -81,6 +84,39 @@ class TestToolDecorator:
         schema = my_tool._tool_definition.output_schema
         assert schema["type"] == "object"
         assert "items" in schema["properties"]
+
+    def test_resolves_params_class_under_future_annotations(self) -> None:
+        # `from __future__ import annotations` is active at the top of this
+        # file, so ``params: DummyParams`` is stored as the *string*
+        # ``"DummyParams"`` on the function. The decorator must hand back
+        # the resolved class — not the string — otherwise adapters that
+        # do ``td.params_class(**kwargs)`` blow up with
+        # ``TypeError: 'str' object is not callable``.
+        @tool(scopes=["read"], api_docs="https://example.com/docs")
+        async def my_tool(params: DummyParams, *, token: str) -> DummyResult:
+            """A tool."""
+            ...
+
+        params_class = my_tool._tool_definition.params_class
+        assert params_class is DummyParams
+        instance = params_class(query="hello")
+        assert isinstance(instance, DummyParams)
+        assert instance.query == "hello"
+
+    def test_rejects_function_without_pydantic_params(self) -> None:
+        with pytest.raises(TypeError, match="must declare a 'params' argument"):
+
+            @tool(scopes=["read"], api_docs="https://example.com/docs")
+            async def bad_tool(*, token: str) -> DummyResult:  # type: ignore[misc]
+                """Missing params."""
+                ...
+
+        with pytest.raises(TypeError, match="must declare a 'params' argument"):
+
+            @tool(scopes=["read"], api_docs="https://example.com/docs")
+            async def also_bad(params: dict, *, token: str) -> DummyResult:  # type: ignore[misc]
+                """Wrong params type."""
+                ...
 
     def test_extracts_provider_from_kwarg(self):
         @tool(scopes=["read"], api_docs="https://example.com/docs", provider="custom")

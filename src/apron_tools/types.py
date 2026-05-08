@@ -136,6 +136,18 @@ class ToolDefinition:
     description: str
     """Human-readable description of what the tool does."""
 
+    params_class: type[BaseModel]
+    """Pydantic class for the tool's ``params`` argument.
+
+    Resolved at decoration time, so adapters that bridge ``@tool``
+    callables to flat-kwargs calling conventions can do
+    ``td.params_class(**kwargs)`` without re-introspecting the
+    function signature. This avoids the PEP 563 trap where
+    ``inspect.signature(fn).parameters['params'].annotation`` returns
+    the annotation as a *string* (because provider modules use
+    ``from __future__ import annotations``) and breaks at first call.
+    """
+
     input_schema: dict[str, Any]
     """JSON Schema for the tool's input parameters."""
 
