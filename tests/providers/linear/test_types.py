@@ -69,6 +69,7 @@ class TestListIssuesParams:
         assert params.assignee_id is None
         assert params.state is None
         assert params.project_id is None
+        assert params.priority is None
         assert params.created_after is None
         assert params.updated_after is None
 
@@ -83,6 +84,10 @@ class TestListIssuesParams:
         assert params.assignee_id == "user-001"
         assert params.state == "In Progress"
         assert params.limit == 10
+
+    def test_priority_filter(self) -> None:
+        params = ListIssuesParams(priority=[1, 2])
+        assert params.priority == [1, 2]
 
 
 class TestReadIssueParams:

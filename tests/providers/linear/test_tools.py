@@ -205,6 +205,28 @@ class TestListIssues:
         assert "team" in body["query"]
         assert "state" in body["query"]
 
+    async def test_priority_filter_passed_through(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("list_issues.json"))
+
+        params = ListIssuesParams(priority=[1, 2])
+        result = await linear_list_issues(params, token=_TOKEN)
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        body = json.loads(request.content)
+        assert "priority: { in: [1, 2] }" in body["query"]
+
+    async def test_priority_filter_omitted_when_none(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("list_issues.json"))
+
+        await linear_list_issues(ListIssuesParams(), token=_TOKEN)
+
+        request = httpx_mock.get_request()
+        assert request is not None
+        body = json.loads(request.content)
+        assert "priority: {" not in body["query"]
+
     async def test_graphql_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("error.json"))
 
