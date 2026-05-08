@@ -222,6 +222,9 @@ def _build_list_issues_query(params: ListIssuesParams) -> str:
         filter_parts.append(f'state: {{ name: {{ eq: "{params.state}" }} }}')
     if params.project_id:
         filter_parts.append(f'project: {{ id: {{ eq: "{params.project_id}" }} }}')
+    if params.priority:
+        priority_values = ", ".join(str(int(p)) for p in params.priority)
+        filter_parts.append(f"priority: {{ in: [{priority_values}] }}")
     if params.created_after:
         filter_parts.append(f'createdAt: {{ gte: "{params.created_after}" }}')
     if params.updated_after:

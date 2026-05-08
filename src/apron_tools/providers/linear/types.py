@@ -26,12 +26,19 @@ class ListUsersParams(BaseModel):
 
 
 class ListIssuesParams(BaseModel):
-    """Parameters for listing issues with optional filters."""
+    """Parameters for listing issues with optional filters.
+
+    ``priority`` accepts one or more Linear priority enum values
+    (``1=Urgent, 2=High, 3=Medium, 4=Low``; ``0`` means no priority set).
+    Values are passed through to the server-side ``priority: { in: [...] }``
+    filter so callers do not need to over-fetch and post-filter.
+    """
 
     team_id: str | None = None
     assignee_id: str | None = None
     state: str | None = None
     project_id: str | None = None
+    priority: list[int] | None = None
     limit: int = 50
     created_after: str | None = None
     updated_after: str | None = None
