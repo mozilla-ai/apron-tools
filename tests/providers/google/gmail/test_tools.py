@@ -203,7 +203,7 @@ class TestSendEmail:
         assert defn.name == "gmail_send_email"
         assert defn.provider == "google"
         assert defn.service == "gmail"
-        assert "https://www.googleapis.com/auth/gmail.compose" in defn.scopes
+        assert "https://www.googleapis.com/auth/gmail.send" in defn.scopes
 
 
 # ---------------------------------------------------------------------------
