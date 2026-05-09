@@ -38,6 +38,7 @@ SCOPES: dict[str, list[GitHubScope]] = {
     "github_get_file_content": [GitHubScope.REPO],
     "github_update_file": [GitHubScope.REPO],
     "github_list_branches": [GitHubScope.REPO],
+    "github_list_commits": [GitHubScope.REPO],
     "github_create_branch": [GitHubScope.REPO],
     "github_explore_releases": [GitHubScope.REPO],
     "github_generate_release_notes": [GitHubScope.REPO],

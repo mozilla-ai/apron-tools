@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from github import Github, GithubException
@@ -18,6 +18,7 @@ from .types import (
     AddIssueCommentsParams,
     AddIssueCommentsResult,
     BranchSummary,
+    CommitSummary,
     CreateBranchParams,
     CreateBranchResult,
     CreateIssueParams,
@@ -48,6 +49,8 @@ from .types import (
     LabelSummary,
     ListBranchesParams,
     ListBranchesResult,
+    ListCommitsParams,
+    ListCommitsResult,
     ListIssuesParams,
     ListIssuesResult,
     ListMilestonesParams,
@@ -697,6 +700,65 @@ async def github_list_branches(
             return ListBranchesResult(success=True, branches=items)
         except GithubException as exc:
             return ListBranchesResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+def _commit_summary(commit: Any) -> CommitSummary:
+    """Extract a CommitSummary from a PyGithub Commit."""
+    inner = commit.commit
+    author = getattr(inner, "author", None)
+    author_name = getattr(author, "name", None) if author is not None else None
+    author_email = getattr(author, "email", None) if author is not None else None
+    author_dt = getattr(author, "date", None) if author is not None else None
+    author_date = author_dt.isoformat() + "Z" if author_dt else None
+    sha = commit.sha
+    return CommitSummary(
+        sha=sha,
+        short_sha=sha[:7],
+        message=inner.message,
+        author_name=author_name,
+        author_email=author_email,
+        author_date=author_date,
+        html_url=commit.html_url,
+    )
+
+
+@tool(
+    scopes=SCOPES["github_list_commits"],
+    api_docs="https://docs.github.com/en/rest/commits/commits#list-commits",
+    provider="github",
+)
+async def github_list_commits(
+    params: ListCommitsParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ListCommitsResult:
+    """List commits in a GitHub repository, in reverse chronological order."""
+
+    def _call() -> ListCommitsResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = g.get_repo(f"{params.owner}/{params.repo}")
+            kwargs: dict[str, Any] = {}
+            if params.sha:
+                kwargs["sha"] = params.sha
+            if params.path:
+                kwargs["path"] = params.path
+            if params.author:
+                kwargs["author"] = params.author
+            if params.since:
+                kwargs["since"] = datetime.fromisoformat(params.since.replace("Z", "+00:00")).replace(tzinfo=UTC)
+            if params.until:
+                kwargs["until"] = datetime.fromisoformat(params.until.replace("Z", "+00:00")).replace(tzinfo=UTC)
+            commits = repo.get_commits(**kwargs)
+            items = [_commit_summary(c) for c in commits[: params.limit]]
+            return ListCommitsResult(success=True, commits=items)
+        except GithubException as exc:
+            return ListCommitsResult(success=False, error=f"GitHub API error {exc.status}: {exc.data}")
         finally:
             g.close()
 

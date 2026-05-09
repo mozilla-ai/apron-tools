@@ -13,6 +13,7 @@
   - List milestones: https://docs.github.com/en/rest/issues/milestones#list-milestones
   - Get repository content: https://docs.github.com/en/rest/repos/contents#get-repository-content
   - List branches: https://docs.github.com/en/rest/branches/branches#list-branches
+  - List commits: https://docs.github.com/en/rest/commits/commits#list-commits
   - Create a reference (branch): https://docs.github.com/en/rest/git/refs#create-a-reference
   - Create or update file contents: https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents
   - Create a pull request: https://docs.github.com/en/rest/pulls/pulls#create-a-pull-request

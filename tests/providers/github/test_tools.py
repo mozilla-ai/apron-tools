@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from github import GithubException
+
 from apron_tools.providers.github.tools import (
     github_add_issue_comments,
     github_create_branch,
@@ -22,6 +24,7 @@ from apron_tools.providers.github.tools import (
     github_get_repo_tree,
     github_get_repository,
     github_list_branches,
+    github_list_commits,
     github_list_issues,
     github_list_milestones,
     github_list_pull_requests,
@@ -57,6 +60,8 @@ from apron_tools.providers.github.types import (
     GetRepoTreeResult,
     ListBranchesParams,
     ListBranchesResult,
+    ListCommitsParams,
+    ListCommitsResult,
     ListIssuesParams,
     ListIssuesResult,
     ListMilestonesParams,
@@ -241,6 +246,26 @@ def _mock_branch(data: dict) -> MagicMock:
     branch.name = data["name"]
     branch.protected = data.get("protected", False)
     return branch
+
+
+def _mock_commit(data: dict) -> MagicMock:
+    """Build a mock PyGithub Commit from testdata dict."""
+    commit = MagicMock()
+    commit.sha = data["sha"]
+    commit.html_url = data.get("html_url", "")
+    inner = MagicMock()
+    inner.message = data["commit"]["message"]
+    author_data = data["commit"].get("author") or {}
+    if author_data:
+        author = MagicMock()
+        author.name = author_data.get("name")
+        author.email = author_data.get("email")
+        author.date = _dt(author_data["date"]) if author_data.get("date") else None
+        inner.author = author
+    else:
+        inner.author = None
+    commit.commit = inner
+    return commit
 
 
 def _mock_release_asset(data: dict) -> MagicMock:
@@ -988,6 +1013,150 @@ class TestListBranches:
         defn = github_list_branches._tool_definition
         assert defn.name == "github_list_branches"
         assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_list_commits
+# ---------------------------------------------------------------------------
+
+
+class TestListCommits:
+    async def test_success(self) -> None:
+        data = _load_json("list_commits.json")
+        mock_commits = [_mock_commit(c) for c in data]
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.get_commits.return_value.__getitem__ = lambda self, s: (
+                mock_commits[s] if isinstance(s, slice) else mock_commits[s]
+            )
+
+            result = await github_list_commits(
+                ListCommitsParams(owner="octocat", repo="Hello-World"),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, ListCommitsResult)
+        assert result.success is True
+        assert len(result.commits) == 2
+        first = result.commits[0]
+        assert first.sha == "aa11bb22cc33"
+        assert first.short_sha == "aa11bb2"
+        assert first.message == "Fix all the bugs"
+        assert first.author_name == "Monalisa Octocat"
+        assert first.author_email == "support@github.com"
+        assert first.author_date is not None
+        assert "2011-04-14" in first.author_date
+
+    async def test_filters_passed_through(self) -> None:
+        data = _load_json("list_commits.json")
+        mock_commits = [_mock_commit(c) for c in data]
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            paginated = MagicMock()
+            paginated.__getitem__ = lambda self, s: mock_commits[s] if isinstance(s, slice) else mock_commits[s]
+            mock_repo.get_commits.return_value = paginated
+
+            await github_list_commits(
+                ListCommitsParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    sha="main",
+                    path="README.md",
+                    author="octocat",
+                    since="2024-01-01T00:00:00Z",
+                    until="2024-12-31T23:59:59Z",
+                ),
+                token=_TOKEN,
+            )
+
+        kwargs = mock_repo.get_commits.call_args.kwargs
+        assert kwargs["sha"] == "main"
+        assert kwargs["path"] == "README.md"
+        assert kwargs["author"] == "octocat"
+        assert kwargs["since"].year == 2024
+        assert kwargs["until"].year == 2024
+
+    async def test_empty_string_filters_skipped(self) -> None:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            paginated = MagicMock()
+            paginated.__getitem__ = lambda self, s: [] if isinstance(s, slice) else None
+            mock_repo.get_commits.return_value = paginated
+
+            await github_list_commits(
+                ListCommitsParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    sha="",
+                    path="",
+                    author="",
+                    since="",
+                    until="",
+                ),
+                token=_TOKEN,
+            )
+
+        assert mock_repo.get_commits.call_args.kwargs == {}
+
+    async def test_handles_missing_author(self) -> None:
+        commit = MagicMock()
+        commit.sha = "feedfacecafe"
+        commit.html_url = "https://github.com/o/r/commit/feedface"
+        inner = MagicMock()
+        inner.message = "Orphan commit"
+        inner.author = None
+        commit.commit = inner
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_repo.get_commits.return_value.__getitem__ = lambda self, s: (
+                [commit][s] if isinstance(s, slice) else [commit][s]
+            )
+
+            result = await github_list_commits(
+                ListCommitsParams(owner="octocat", repo="Hello-World"),
+                token=_TOKEN,
+            )
+
+        assert result.success is True
+        assert len(result.commits) == 1
+        assert result.commits[0].author_name is None
+        assert result.commits[0].author_email is None
+        assert result.commits[0].author_date is None
+
+    async def test_error(self) -> None:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_g.get_repo.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_list_commits(
+                ListCommitsParams(owner="octocat", repo="missing"),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_list_commits._tool_definition
+        assert defn.name == "github_list_commits"
+        assert defn.provider == "github"
+        assert defn.scopes == ["repo"]
 
 
 # ---------------------------------------------------------------------------
