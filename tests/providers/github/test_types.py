@@ -5,10 +5,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from apron_tools.providers.github.types import (
     AddIssueCommentItem,
     AddIssueCommentsParams,
     AddIssueCommentsResult,
+    CommitSummary,
     CreateBranchParams,
     CreateBranchResult,
     CreateIssueParams,
@@ -37,6 +40,8 @@ from apron_tools.providers.github.types import (
     IssueSummary,
     ListBranchesParams,
     ListBranchesResult,
+    ListCommitsParams,
+    ListCommitsResult,
     ListIssuesParams,
     ListIssuesResult,
     ListMilestonesParams,
@@ -156,6 +161,31 @@ class TestListBranchesParams:
     def test_required_fields(self):
         params = ListBranchesParams(owner="octocat", repo="Hello-World")
         assert params.owner == "octocat"
+
+
+class TestListCommitsParams:
+    def test_defaults(self) -> None:
+        params = ListCommitsParams(owner="octocat", repo="Hello-World")
+        assert params.sha is None
+        assert params.path is None
+        assert params.author is None
+        assert params.since is None
+        assert params.until is None
+        assert params.limit == 30
+
+    def test_limit_clamped(self) -> None:
+        try:
+            ListCommitsParams(owner="o", repo="r", limit=0)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError("limit=0 should fail validation")
+        try:
+            ListCommitsParams(owner="o", repo="r", limit=101)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError("limit=101 should fail validation")
 
 
 class TestExploreReleasesParams:
@@ -666,6 +696,50 @@ class TestListBranchesResult:
 
     def test_str_on_error(self):
         result = ListBranchesResult(success=False, error="Not found")
+        assert str(result) == "Error: Not found"
+
+
+# ---------------------------------------------------------------------------
+# ListCommitsResult
+# ---------------------------------------------------------------------------
+
+
+class TestListCommitsResult:
+    def test_str_output(self) -> None:
+        commits = [
+            CommitSummary(
+                sha="aa11bb22cc33",
+                short_sha="aa11bb2",
+                message="Fix all the bugs",
+                author_name="Monalisa Octocat",
+                author_email="support@github.com",
+                author_date="2011-04-14T16:00:49Z",
+                html_url="https://github.com/octocat/Hello-World/commit/aa11bb2",
+            ),
+        ]
+        result = ListCommitsResult(success=True, commits=commits)
+        text = str(result)
+
+        assert "1 commit(s)" in text
+        assert "aa11bb2 Fix all the bugs" in text
+        assert "Monalisa Octocat" in text
+
+    def test_str_uses_first_line_of_multiline_message(self) -> None:
+        commits = [
+            CommitSummary(
+                sha="aa11bb22",
+                short_sha="aa11bb2",
+                message="Subject line\n\nBody paragraph that should not appear.",
+            ),
+        ]
+        result = ListCommitsResult(success=True, commits=commits)
+        text = str(result)
+
+        assert "Subject line" in text
+        assert "Body paragraph" not in text
+
+    def test_str_on_error(self) -> None:
+        result = ListCommitsResult(success=False, error="Not found")
         assert str(result) == "Error: Not found"
 
 

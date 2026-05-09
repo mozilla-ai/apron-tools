@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from apron_tools.types import ToolResult
 
@@ -207,6 +207,25 @@ class GetRepoTreeParams(BaseModel):
     path_filter: str = ""
 
 
+class ListCommitsParams(BaseModel):
+    """Parameters for listing commits in a repository.
+
+    Optional filters default to ``None``. The tool also treats empty strings
+    as unset so that ``sha=""`` falls back to the repository's default
+    branch instead of being forwarded to the API (which returns no results
+    when ``sha`` is empty).
+    """
+
+    owner: str
+    repo: str
+    sha: str | None = None
+    path: str | None = None
+    author: str | None = None
+    since: str | None = None
+    until: str | None = None
+    limit: int = Field(default=30, ge=1, le=100)
+
+
 # ---------------------------------------------------------------------------
 # Shared nested models
 # ---------------------------------------------------------------------------
@@ -391,6 +410,20 @@ class ReleaseSummary(BaseModel):
     published_at: str | None = None
     author: UserSummary | None = None
     assets: list[ReleaseAsset] = []
+    html_url: str | None = None
+
+
+class CommitSummary(BaseModel):
+    """Lightweight commit representation for list endpoints."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    sha: str
+    short_sha: str
+    message: str
+    author_name: str | None = None
+    author_email: str | None = None
+    author_date: str | None = None
     html_url: str | None = None
 
 
@@ -1056,4 +1089,33 @@ class GetRepoTreeResult(ToolResult):
         lines.append("")
         for entry in self.files:
             lines.append(f"{entry.path} ({self._fmt_size(entry.size)})")
+        return "\n".join(lines)
+
+
+class ListCommitsResult(ToolResult):
+    """Result of listing commits."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    commits: list[CommitSummary] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _set_success(cls, data: Any) -> Any:
+        """Set success=True when parsing raw API JSON."""
+        if isinstance(data, dict) and "success" not in data:
+            data["success"] = True
+        return data
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the listed commits."""
+        if not self.success:
+            return f"Error: {self.error}"
+        lines = [f"Found {len(self.commits)} commit(s):"]
+        for c in self.commits:
+            first_line = c.message.splitlines()[0] if c.message else ""
+            author = c.author_name or "unknown"
+            date = c.author_date or "unknown"
+            lines.append(f"  - {c.short_sha} {first_line}")
+            lines.append(f"    Author: {author} | Date: {date}")
         return "\n".join(lines)
