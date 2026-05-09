@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from apron_tools.types import ToolResult
+
+
+def _validate_iso_datetime(value: str | None) -> str | None:
+    """Validate an optional ISO 8601 datetime string at the model boundary.
+
+    Returns ``None`` for ``None`` or empty input so callers can omit the field
+    using either form. Raises ``ValueError`` for malformed timestamps; Pydantic
+    surfaces this as a ``ValidationError`` alongside other param-shape errors,
+    instead of letting ``datetime.fromisoformat`` raise from inside a tool's
+    ``except GithubException`` block.
+    """
+    if not value:
+        return None
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid ISO 8601 datetime: {value!r}") from exc
+    return value
+
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -38,6 +58,8 @@ class ListIssuesParams(BaseModel):
     milestone: str | None = None
     limit: int = 30
     since: str | None = None
+
+    _validate_since = field_validator("since")(_validate_iso_datetime)
 
 
 class GetIssueParams(BaseModel):
@@ -224,6 +246,8 @@ class ListCommitsParams(BaseModel):
     since: str | None = None
     until: str | None = None
     limit: int = Field(default=30, ge=1, le=100)
+
+    _validate_datetime_fields = field_validator("since", "until")(_validate_iso_datetime)
 
 
 # ---------------------------------------------------------------------------
