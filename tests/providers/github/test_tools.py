@@ -1048,8 +1048,7 @@ class TestListCommits:
         assert first.message == "Fix all the bugs"
         assert first.author_name == "Monalisa Octocat"
         assert first.author_email == "support@github.com"
-        assert first.author_date is not None
-        assert "2011-04-14" in first.author_date
+        assert first.author_date == "2011-04-14T16:00:49Z"
 
     async def test_filters_passed_through(self) -> None:
         data = _load_json("list_commits.json")
@@ -1081,8 +1080,30 @@ class TestListCommits:
         assert kwargs["sha"] == "main"
         assert kwargs["path"] == "README.md"
         assert kwargs["author"] == "octocat"
-        assert kwargs["since"].year == 2024
-        assert kwargs["until"].year == 2024
+        assert kwargs["since"] == datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+        assert kwargs["until"] == datetime(2024, 12, 31, 23, 59, 59, tzinfo=UTC)
+
+    async def test_non_utc_since_is_converted_to_utc_instant(self) -> None:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            paginated = MagicMock()
+            paginated.__getitem__ = lambda self, s: [] if isinstance(s, slice) else None
+            mock_repo.get_commits.return_value = paginated
+
+            await github_list_commits(
+                ListCommitsParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    since="2024-01-01T00:00:00+02:00",
+                ),
+                token=_TOKEN,
+            )
+
+        # +02:00 -> the same instant in UTC is 2023-12-31T22:00:00Z, not 2024-01-01T00:00:00Z.
+        assert mock_repo.get_commits.call_args.kwargs["since"] == datetime(2023, 12, 31, 22, 0, 0, tzinfo=UTC)
 
     async def test_empty_string_filters_skipped(self) -> None:
         with patch("apron_tools.providers.github.tools._build_client") as mock_build:

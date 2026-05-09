@@ -707,13 +707,22 @@ async def github_list_branches(
 
 
 def _commit_summary(commit: Any) -> CommitSummary:
-    """Extract a CommitSummary from a PyGithub Commit."""
+    """Extract a CommitSummary from a PyGithub Commit.
+
+    PyGithub returns timezone-aware datetimes; normalize to UTC and emit a
+    ``...Z`` suffix instead of ``+00:00`` so the string is a valid RFC3339
+    UTC timestamp.
+    """
     inner = commit.commit
     author = getattr(inner, "author", None)
     author_name = getattr(author, "name", None) if author is not None else None
     author_email = getattr(author, "email", None) if author is not None else None
     author_dt = getattr(author, "date", None) if author is not None else None
-    author_date = author_dt.isoformat() + "Z" if author_dt else None
+    author_date = None
+    if author_dt is not None:
+        if author_dt.tzinfo is not None:
+            author_dt = author_dt.astimezone(UTC).replace(tzinfo=None)
+        author_date = author_dt.isoformat() + "Z"
     sha = commit.sha
     return CommitSummary(
         sha=sha,
@@ -751,9 +760,9 @@ async def github_list_commits(
             if params.author:
                 kwargs["author"] = params.author
             if params.since:
-                kwargs["since"] = datetime.fromisoformat(params.since.replace("Z", "+00:00")).replace(tzinfo=UTC)
+                kwargs["since"] = datetime.fromisoformat(params.since.replace("Z", "+00:00")).astimezone(UTC)
             if params.until:
-                kwargs["until"] = datetime.fromisoformat(params.until.replace("Z", "+00:00")).replace(tzinfo=UTC)
+                kwargs["until"] = datetime.fromisoformat(params.until.replace("Z", "+00:00")).astimezone(UTC)
             commits = repo.get_commits(**kwargs)
             items = [_commit_summary(c) for c in commits[: params.limit]]
             return ListCommitsResult(success=True, commits=items)

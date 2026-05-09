@@ -210,9 +210,10 @@ class GetRepoTreeParams(BaseModel):
 class ListCommitsParams(BaseModel):
     """Parameters for listing commits in a repository.
 
-    Empty-string filters are coerced to ``None`` so that ``sha=""`` falls back
-    to the repository's default branch instead of being forwarded to the API
-    (which returns no results when ``sha`` is empty).
+    Optional filters default to ``None``. The tool also treats empty strings
+    as unset so that ``sha=""`` falls back to the repository's default
+    branch instead of being forwarded to the API (which returns no results
+    when ``sha`` is empty).
     """
 
     owner: str
