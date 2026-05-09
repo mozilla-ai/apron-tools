@@ -100,6 +100,26 @@ class TestListIssuesParams:
         assert params.limit == 30
         assert params.since is None
 
+    def test_since_accepts_iso_z_suffix(self) -> None:
+        params = ListIssuesParams(owner="o", repo="r", since="2024-01-15T00:00:00Z")
+        assert params.since == "2024-01-15T00:00:00Z"
+
+    def test_since_accepts_offset_form(self) -> None:
+        params = ListIssuesParams(owner="o", repo="r", since="2024-01-15T00:00:00+00:00")
+        assert params.since == "2024-01-15T00:00:00+00:00"
+
+    def test_since_empty_string_normalized_to_none(self) -> None:
+        params = ListIssuesParams(owner="o", repo="r", since="")
+        assert params.since is None
+
+    def test_since_rejects_malformed_string(self) -> None:
+        try:
+            ListIssuesParams(owner="o", repo="r", since="not-a-date")
+        except ValidationError as exc:
+            assert "Invalid ISO 8601 datetime" in str(exc)
+        else:
+            raise AssertionError("malformed since should fail validation")
+
 
 class TestGetIssueParams:
     def test_required_fields(self):
@@ -186,6 +206,37 @@ class TestListCommitsParams:
             pass
         else:
             raise AssertionError("limit=101 should fail validation")
+
+    def test_since_until_accept_iso_strings(self) -> None:
+        params = ListCommitsParams(
+            owner="o",
+            repo="r",
+            since="2024-01-15T00:00:00Z",
+            until="2024-02-01T12:30:00+00:00",
+        )
+        assert params.since == "2024-01-15T00:00:00Z"
+        assert params.until == "2024-02-01T12:30:00+00:00"
+
+    def test_since_until_empty_string_normalized_to_none(self) -> None:
+        params = ListCommitsParams(owner="o", repo="r", since="", until="")
+        assert params.since is None
+        assert params.until is None
+
+    def test_since_rejects_malformed_string(self) -> None:
+        try:
+            ListCommitsParams(owner="o", repo="r", since="not-a-date")
+        except ValidationError as exc:
+            assert "Invalid ISO 8601 datetime" in str(exc)
+        else:
+            raise AssertionError("malformed since should fail validation")
+
+    def test_until_rejects_malformed_string(self) -> None:
+        try:
+            ListCommitsParams(owner="o", repo="r", until="2024-13-40")
+        except ValidationError as exc:
+            assert "Invalid ISO 8601 datetime" in str(exc)
+        else:
+            raise AssertionError("malformed until should fail validation")
 
 
 class TestExploreReleasesParams:
