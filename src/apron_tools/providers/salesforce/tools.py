@@ -373,5 +373,5 @@ async def salesforce_search_records(
     data = response.json()
     return SearchRecordsResult(
         success=True,
-        search_records=data.get("searchRecords", []),
+        search_records=data.get("searchRecords", []),  # ty: ignore[unknown-argument]
     )
