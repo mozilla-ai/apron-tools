@@ -112,8 +112,11 @@ async def google_tasks_list_tasks(
         "maxResults": _clamp_max_results(params.max_results),
         # Strings "true"/"false" because the Tasks API expects query-string
         # booleans rather than python's capitalised "True"/"False".
+        # The Tasks API marks completed items as hidden, so showHidden must be
+        # coupled to showCompleted; otherwise completed tasks are filtered back
+        # out even when the caller opts in.
         "showCompleted": "true" if params.show_completed else "false",
-        "showHidden": "false",
+        "showHidden": "true" if params.show_completed else "false",
         "showDeleted": "false",
     }
     if params.due_min:

@@ -100,7 +100,9 @@ class TestListTasks:
         await google_tasks_list_tasks(ListTasksParams(), token=_TOKEN)
 
         request = httpx_mock.get_request()
-        assert "showCompleted=false" in str(request.url)
+        url = str(request.url)
+        assert "showCompleted=false" in url
+        assert "showHidden=false" in url
 
     async def test_show_completed_opt_in(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("list_tasks.json"))
@@ -108,7 +110,11 @@ class TestListTasks:
         await google_tasks_list_tasks(ListTasksParams(show_completed=True), token=_TOKEN)
 
         request = httpx_mock.get_request()
-        assert "showCompleted=true" in str(request.url)
+        url = str(request.url)
+        assert "showCompleted=true" in url
+        # Completed tasks are marked hidden by the Tasks API, so surfacing them
+        # requires showHidden coupled to showCompleted.
+        assert "showHidden=true" in url
 
     async def test_clamps_max_results_upper(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("list_tasks.json"))
