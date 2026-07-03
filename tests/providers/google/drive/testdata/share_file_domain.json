@@ -1,0 +1,6 @@
+{
+  "id": "perm-domain-001",
+  "type": "domain",
+  "role": "reader",
+  "domain": "example.com"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "perm-group-001",
+  "type": "group",
+  "role": "reader",
+  "emailAddress": "team@example.com",
+  "displayName": "Example Team"
+}

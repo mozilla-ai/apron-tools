@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -52,15 +52,53 @@ class SearchParams(BaseModel):
 
 
 class ShareFilesParams(BaseModel):
-    """Parameters for sharing one or more files with another user.
+    """Parameters for sharing one or more files with a user, group, or domain.
 
     ``file_ids`` accepts a comma-separated list of file IDs to support bulk
-    operations. ``email`` and ``role`` are applied to every file.
+    operations. ``role`` and the resolved permission target are applied to
+    every file.
+
+    The share target is selected by ``share_type``:
+
+    - ``user`` (default) requires ``email``.
+    - ``group`` requires ``group_email``.
+    - ``domain`` requires ``domain`` and grants org-wide visibility.
+
+    ``allow_anyone_with_link`` is a separate, explicit opt-in for
+    anyone-with-the-link sharing (``type=anyone``). It is deliberately kept
+    out of ``share_type`` because it exposes the file to anyone who has the
+    link; when set, it overrides ``share_type``.
+
+    NOTE: callers must supply the field matching ``share_type``; a mismatch
+    raises a validation error before any request is made.
     """
 
     file_ids: str
-    email: str
     role: str = "reader"
+    share_type: Literal["user", "group", "domain"] = "user"
+    email: str = ""
+    group_email: str = ""
+    domain: str = ""
+    allow_anyone_with_link: bool = False
+
+    @model_validator(mode="after")
+    def _require_target_for_share_type(self) -> ShareFilesParams:
+        """Require the field that matches the selected share target.
+
+        ``allow_anyone_with_link`` needs no target, so it short-circuits the
+        per-``share_type`` requirement.
+        """
+        if self.allow_anyone_with_link:
+            return self
+        required = {
+            "user": ("email", self.email),
+            "group": ("group_email", self.group_email),
+            "domain": ("domain", self.domain),
+        }
+        field_name, value = required[self.share_type]
+        if not value:
+            raise ValueError(f"share_type={self.share_type!r} requires a non-empty {field_name!r}.")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +305,7 @@ class ShareFilesResult(ToolResult):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    email: str = ""
+    target: str = ""
     role: str = ""
     items: list[ShareFileItem] = []
 
@@ -280,7 +318,7 @@ class ShareFilesResult(ToolResult):
         lines: list[str] = []
         for item in self.items:
             if item.success:
-                lines.append(f"- File {item.file_id} shared with {self.email} as {self.role}.")
+                lines.append(f"- File {item.file_id} shared with {self.target} as {self.role}.")
             else:
                 lines.append(f"- {item.file_id}: Failed: {item.error}")
         return "\n".join(lines)

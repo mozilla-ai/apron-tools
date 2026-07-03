@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from apron_tools.providers.google.drive.types import (
     CreateFolderParams,
     CreateFolderResult,
@@ -92,6 +95,7 @@ class TestShareFilesParams:
         assert params.file_ids == "file-001"
         assert params.email == "bob@example.com"
         assert params.role == "reader"
+        assert params.share_type == "user"
 
     def test_custom_role(self):
         params = ShareFilesParams(
@@ -101,6 +105,44 @@ class TestShareFilesParams:
         )
         assert params.role == "writer"
         assert params.file_ids == "file-001,file-002"
+
+    def test_group_share(self):
+        params = ShareFilesParams(
+            file_ids="file-001",
+            share_type="group",
+            group_email="team@example.com",
+        )
+        assert params.share_type == "group"
+        assert params.group_email == "team@example.com"
+
+    def test_domain_share(self):
+        params = ShareFilesParams(
+            file_ids="file-001",
+            share_type="domain",
+            domain="example.com",
+        )
+        assert params.share_type == "domain"
+        assert params.domain == "example.com"
+
+    def test_anyone_with_link_needs_no_target(self):
+        params = ShareFilesParams(file_ids="file-001", allow_anyone_with_link=True)
+        assert params.allow_anyone_with_link is True
+
+    def test_user_share_requires_email(self):
+        with pytest.raises(ValidationError):
+            ShareFilesParams(file_ids="file-001")
+
+    def test_group_share_requires_group_email(self):
+        with pytest.raises(ValidationError):
+            ShareFilesParams(file_ids="file-001", share_type="group")
+
+    def test_domain_share_requires_domain(self):
+        with pytest.raises(ValidationError):
+            ShareFilesParams(file_ids="file-001", share_type="domain")
+
+    def test_invalid_share_type_rejected(self):
+        with pytest.raises(ValidationError):
+            ShareFilesParams(file_ids="file-001", share_type="anyone", email="bob@example.com")
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +335,7 @@ class TestShareFilesResult:
     def test_str_output(self):
         result = ShareFilesResult(
             success=True,
-            email="bob@example.com",
+            target="bob@example.com",
             role="writer",
             items=[
                 ShareFileItem(
@@ -316,7 +358,7 @@ class TestShareFilesResult:
     def test_partial_failure(self):
         result = ShareFilesResult(
             success=True,
-            email="bob@example.com",
+            target="bob@example.com",
             role="reader",
             items=[
                 ShareFileItem(file_id="file-001", success=True),

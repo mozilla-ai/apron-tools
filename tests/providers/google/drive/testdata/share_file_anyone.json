@@ -1,0 +1,5 @@
+{
+  "id": "perm-anyone-001",
+  "type": "anyone",
+  "role": "reader"
+}
