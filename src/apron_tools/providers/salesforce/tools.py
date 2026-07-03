@@ -163,12 +163,7 @@ async def salesforce_query_records(
         )
 
     data = response.json()
-    return QueryRecordsResult(
-        success=True,
-        total_size=data.get("totalSize", 0),  # ty: ignore[unknown-argument]
-        done=data.get("done", True),
-        records=data.get("records", []),
-    )
+    return QueryRecordsResult.model_validate(data)
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +366,4 @@ async def salesforce_search_records(
         )
 
     data = response.json()
-    return SearchRecordsResult(
-        success=True,
-        search_records=data.get("searchRecords", []),  # ty: ignore[unknown-argument]
-    )
+    return SearchRecordsResult.model_validate(data)
