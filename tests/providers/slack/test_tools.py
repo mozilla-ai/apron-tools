@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 from slack_sdk.errors import SlackApiError
@@ -513,6 +514,56 @@ class TestSlackSendChannelMessageWithFile:
             content=b"resolved-bytes",
             filename="report.pdf",
         )
+
+    @patch("apron_tools.providers.slack.tools.resolve_file_input", new_callable=AsyncMock)
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_file_from_url_resolution_http_status_error_returns_domain_error(
+        self,
+        mock_cls: AsyncMock,
+        mock_resolve_file_input: AsyncMock,
+    ) -> None:
+        request = httpx.Request("GET", "https://example.com/report.pdf")
+        response = httpx.Response(404, request=request)
+        mock_resolve_file_input.side_effect = httpx.HTTPStatusError(
+            "not found",
+            request=request,
+            response=response,
+        )
+
+        result = await slack_send_channel_message_with_file(
+            SendChannelMessageWithFileParams(
+                channel_id="C012AB3CD",
+                file=FileFromUrl(url="https://example.com/report.pdf"),
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert result.error == "Failed to resolve file input URL: HTTP 404."
+        mock_cls.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.resolve_file_input", new_callable=AsyncMock)
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_file_from_url_resolution_http_error_returns_domain_error(
+        self,
+        mock_cls: AsyncMock,
+        mock_resolve_file_input: AsyncMock,
+    ) -> None:
+        mock_resolve_file_input.side_effect = httpx.HTTPError("network error")
+
+        result = await slack_send_channel_message_with_file(
+            SendChannelMessageWithFileParams(
+                channel_id="C012AB3CD",
+                file=FileFromUrl(url="https://example.com/report.pdf"),
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert result.error == "Failed to resolve file input URL."
+        mock_cls.assert_not_called()
 
     @patch("apron_tools.providers.slack.tools.AsyncWebClient")
     async def test_upload_failure_returns_domain_error(self, mock_cls: AsyncMock) -> None:
