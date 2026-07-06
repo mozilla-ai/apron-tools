@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 from slack_sdk.errors import SlackApiError
@@ -30,6 +31,7 @@ from apron_tools.providers.slack.tools import (
     slack_save_file_for_upload,
     slack_search_messages,
     slack_send_channel_message,
+    slack_send_channel_message_with_file,
     slack_send_user_message,
 )
 from apron_tools.providers.slack.types import (
@@ -65,9 +67,12 @@ from apron_tools.providers.slack.types import (
     SearchMessagesResult,
     SendChannelMessageParams,
     SendChannelMessageResult,
+    SendChannelMessageWithFileParams,
+    SendChannelMessageWithFileResult,
     SendUserMessageParams,
     SendUserMessageResult,
 )
+from apron_tools.types import FileFromBytes, FileFromUrl
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
 _TOKEN = "xoxp-test-token-abc123"
@@ -427,6 +432,169 @@ class TestSlackSendChannelMessage:
         # request_app_connection on unrelated failures because the
         # missing-scope modal recommended a scope the user cannot grant.
         assert "channels:join" not in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# slack_send_channel_message_with_file
+# ---------------------------------------------------------------------------
+
+
+class TestSlackSendChannelMessageWithFile:
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_uploads_file_from_bytes_with_comment(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.files_upload_v2.return_value = _mock_response(
+            {
+                "ok": True,
+                "file": {
+                    "id": "F123",
+                    "permalink": "https://example.slack.com/files/F123",
+                },
+            }
+        )
+
+        result = await slack_send_channel_message_with_file(
+            SendChannelMessageWithFileParams(
+                channel_id="C012AB3CD",
+                file=FileFromBytes(
+                    data=b"aGVsbG8sIHNsYWNr",
+                    filename="hello.txt",
+                    mime_type="text/plain",
+                ),
+                comment="Please review",
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert isinstance(result, SendChannelMessageWithFileResult)
+        assert result.success is True
+        assert result.channel == "C012AB3CD"
+        assert result.file_id == "F123"
+        assert result.file_permalink == "https://example.slack.com/files/F123"
+        client.files_upload_v2.assert_called_once_with(
+            channel="C012AB3CD",
+            content=b"hello, slack",
+            filename="hello.txt",
+            initial_comment="Please review",
+        )
+
+    @patch("apron_tools.providers.slack.tools.resolve_file_input", new_callable=AsyncMock)
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_file_from_url_is_resolved_before_upload(
+        self,
+        mock_cls: AsyncMock,
+        mock_resolve_file_input: AsyncMock,
+    ) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        mock_resolve_file_input.return_value = (b"resolved-bytes", "report.pdf", "application/pdf")
+        client.files_upload_v2.return_value = _mock_response(
+            {
+                "ok": True,
+                "files": [{"id": "F456", "permalink": "https://example.slack.com/files/F456"}],
+            }
+        )
+
+        file_input = FileFromUrl(url="https://example.com/report.pdf")
+        result = await slack_send_channel_message_with_file(
+            SendChannelMessageWithFileParams(
+                channel_id="C012AB3CD",
+                file=file_input,
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        mock_resolve_file_input.assert_awaited_once_with(file_input)
+        client.files_upload_v2.assert_called_once_with(
+            channel="C012AB3CD",
+            content=b"resolved-bytes",
+            filename="report.pdf",
+        )
+
+    @patch("apron_tools.providers.slack.tools.resolve_file_input", new_callable=AsyncMock)
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_file_from_url_resolution_http_status_error_returns_domain_error(
+        self,
+        mock_cls: AsyncMock,
+        mock_resolve_file_input: AsyncMock,
+    ) -> None:
+        request = httpx.Request("GET", "https://example.com/report.pdf")
+        response = httpx.Response(404, request=request)
+        mock_resolve_file_input.side_effect = httpx.HTTPStatusError(
+            "not found",
+            request=request,
+            response=response,
+        )
+
+        result = await slack_send_channel_message_with_file(
+            SendChannelMessageWithFileParams(
+                channel_id="C012AB3CD",
+                file=FileFromUrl(url="https://example.com/report.pdf"),
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert result.error == "Failed to resolve file input URL: HTTP 404."
+        mock_cls.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.resolve_file_input", new_callable=AsyncMock)
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_file_from_url_resolution_http_error_returns_domain_error(
+        self,
+        mock_cls: AsyncMock,
+        mock_resolve_file_input: AsyncMock,
+    ) -> None:
+        mock_resolve_file_input.side_effect = httpx.HTTPError("network error")
+
+        result = await slack_send_channel_message_with_file(
+            SendChannelMessageWithFileParams(
+                channel_id="C012AB3CD",
+                file=FileFromUrl(url="https://example.com/report.pdf"),
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert result.error == "Failed to resolve file input URL."
+        mock_cls.assert_not_called()
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_upload_failure_returns_domain_error(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.files_upload_v2.side_effect = _slack_api_error("invalid_arguments")
+
+        result = await slack_send_channel_message_with_file(
+            SendChannelMessageWithFileParams(
+                channel_id="C012AB3CD",
+                file=FileFromBytes(
+                    data=b"eA==",
+                    filename="x.txt",
+                    mime_type="text/plain",
+                ),
+            ),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "invalid_arguments" in result.error
+        assert "NOT a permissions error" in result.error
+        assert "SlackApiError" not in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = slack_send_channel_message_with_file._tool_definition
+        assert defn.name == "slack_send_channel_message_with_file"
+        assert defn.provider == "slack"
+        assert "chat:write" in defn.scopes
+        assert "files:write" in defn.scopes
 
 
 # ---------------------------------------------------------------------------

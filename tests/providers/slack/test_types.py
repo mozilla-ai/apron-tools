@@ -33,6 +33,8 @@ from apron_tools.providers.slack.types import (
     ReadThreadResult,
     SendChannelMessageParams,
     SendChannelMessageResult,
+    SendChannelMessageWithFileParams,
+    SendChannelMessageWithFileResult,
     SendUserMessageParams,
     SendUserMessageResult,
     SlackChannel,
@@ -42,6 +44,7 @@ from apron_tools.providers.slack.types import (
     SlackReaction,
     SlackUser,
 )
+from apron_tools.types import FileFromBytes
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
 
@@ -71,6 +74,25 @@ class TestSendChannelMessageParams:
     def test_with_thread(self):
         params = SendChannelMessageParams(channel_id="C012AB3CD", message="reply", thread_ts="1503435956.000247")
         assert params.thread_ts == "1503435956.000247"
+
+
+class TestSendChannelMessageWithFileParams:
+    def test_required_fields(self):
+        params = SendChannelMessageWithFileParams(
+            channel_id="C012AB3CD",
+            file=FileFromBytes(data=b"aGVsbG8=", filename="hello.txt", mime_type="text/plain"),
+        )
+        assert params.channel_id == "C012AB3CD"
+        assert params.comment is None
+        assert params.file.filename == "hello.txt"
+
+    def test_with_comment(self):
+        params = SendChannelMessageWithFileParams(
+            channel_id="C012AB3CD",
+            file=FileFromBytes(data=b"aGVsbG8=", filename="hello.txt", mime_type="text/plain"),
+            comment="See attached.",
+        )
+        assert params.comment == "See attached."
 
 
 class TestListMyConversationsParams:
@@ -360,6 +382,29 @@ class TestSendChannelMessageResult:
     def test_str_on_error(self):
         result = SendChannelMessageResult(success=False, error="channel_not_found")
         assert str(result) == "Error: channel_not_found"
+
+
+class TestSendChannelMessageWithFileResult:
+    def test_str_output(self):
+        result = SendChannelMessageWithFileResult(
+            success=True,
+            channel="C012AB3CD",
+            file_id="F123",
+            file_permalink="https://example.slack.com/files/F123",
+        )
+        text = str(result)
+        assert "C012AB3CD" in text
+        assert "F123" in text
+        assert "https://example.slack.com/files/F123" in text
+
+    def test_str_output_without_optional_file_fields(self):
+        result = SendChannelMessageWithFileResult(success=True, channel="C012AB3CD")
+        text = str(result)
+        assert text == "File uploaded to channel C012AB3CD."
+
+    def test_str_on_error(self):
+        result = SendChannelMessageWithFileResult(success=False, error="invalid_arguments")
+        assert str(result) == "Error: invalid_arguments"
 
 
 # ---------------------------------------------------------------------------
