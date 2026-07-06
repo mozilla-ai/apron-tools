@@ -13,6 +13,7 @@ from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
 from apron_tools._utils import parse_csv_ids
+from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.slack.types import (
     AddReactionItem,
     AddReactionsParams,
@@ -47,6 +48,8 @@ from apron_tools.providers.slack.types import (
     SearchMessagesResult,
     SendChannelMessageParams,
     SendChannelMessageResult,
+    SendChannelMessageWithFileParams,
+    SendChannelMessageWithFileResult,
     SendUserMessageParams,
     SendUserMessageResult,
     SlackChannel,
@@ -496,6 +499,69 @@ async def slack_send_channel_message(
             success=False,
             error=_format_slack_error("send message", f"channel {params.channel_id}", code),
         )
+
+
+@tool(
+    scopes=SCOPES["slack_send_channel_message_with_file"],
+    api_docs="https://docs.slack.dev/reference/methods/files.getUploadURLExternal/",
+    provider="slack",
+)
+async def slack_send_channel_message_with_file(
+    params: SendChannelMessageWithFileParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> SendChannelMessageWithFileResult:
+    """Upload a file to a Slack channel, with an optional comment."""
+    if id_error := _validate_slack_channel_id(params.channel_id):
+        return SendChannelMessageWithFileResult(success=False, error=id_error)
+
+    try:
+        file_data, filename, _mime_type = await resolve_file_input(params.file)
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else "unknown"
+        return SendChannelMessageWithFileResult(
+            success=False,
+            error=f"Failed to resolve file input URL: HTTP {status_code}.",
+        )
+    except httpx.HTTPError:
+        return SendChannelMessageWithFileResult(
+            success=False,
+            error="Failed to resolve file input URL.",
+        )
+
+    client = _client(token, base_url)
+    try:
+        kwargs: dict[str, Any] = {
+            "channel": params.channel_id,
+            "content": file_data,
+            "filename": filename,
+        }
+        if params.comment:
+            kwargs["initial_comment"] = params.comment
+
+        resp = await client.files_upload_v2(**kwargs)
+    except SlackApiError as exc:
+        code = exc.response.get("error", str(exc))
+        return SendChannelMessageWithFileResult(
+            success=False,
+            error=_format_slack_error("upload file", f"channel {params.channel_id}", code),
+        )
+
+    uploaded = {}
+    if isinstance(resp.get("file"), dict):
+        uploaded = cast(dict[str, Any], resp.get("file"))
+    elif resp.get("files"):
+        files = resp.get("files")
+        if isinstance(files, list) and files and isinstance(files[0], dict):
+            uploaded = cast(dict[str, Any], files[0])
+
+    return SendChannelMessageWithFileResult(
+        success=True,
+        channel=params.channel_id,
+        file_id=uploaded.get("id", ""),
+        file_permalink=uploaded.get("permalink", ""),
+    )
 
 
 @tool(

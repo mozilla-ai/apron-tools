@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Base64Bytes, BaseModel, ConfigDict, Field, model_validator
 
-from apron_tools.types import ToolResult
+from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -31,6 +31,14 @@ class SendChannelMessageParams(BaseModel):
     channel_id: str
     message: str
     thread_ts: str | None = None
+
+
+class SendChannelMessageWithFileParams(BaseModel):
+    """Parameters for uploading a file to a Slack channel."""
+
+    channel_id: str
+    file: FileInput
+    comment: str | None = None
 
 
 class SendUserMessageParams(BaseModel):
@@ -371,6 +379,27 @@ class SendChannelMessageResult(ToolResult):
         if not self.success:
             return f"Error: {self.error}"
         return f"Message sent to channel {self.channel} at {self.ts}."
+
+
+class SendChannelMessageWithFileResult(ToolResult):
+    """Result of uploading a file to a Slack channel."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    channel: str = ""
+    file_id: str = ""
+    file_permalink: str = ""
+
+    def __str__(self) -> str:
+        """Return an LLM-readable confirmation of the uploaded file."""
+        if not self.success:
+            return f"Error: {self.error}"
+        details = [f"File uploaded to channel {self.channel}."]
+        if self.file_id:
+            details.append(f"File ID: {self.file_id}")
+        if self.file_permalink:
+            details.append(f"Permalink: {self.file_permalink}")
+        return "\n".join(details)
 
 
 class SendUserMessageResult(ToolResult):

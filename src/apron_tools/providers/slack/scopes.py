@@ -43,6 +43,13 @@ class SlackScope(Scope):
         "read",
         False,
     )
+    FILES_WRITE = (
+        "files:write",
+        "Upload Files",
+        "Upload and share files in channels and conversations",
+        "write",
+        False,
+    )
     GROUPS_HISTORY = (
         "groups:history",
         "Private Channel History",
@@ -213,6 +220,7 @@ SCOPES: dict[str, list[SlackScope]] = {
     "slack_get_file_info": [SlackScope.FILES_READ],
     "slack_download_file": [SlackScope.FILES_READ],
     "slack_save_file_for_upload": [SlackScope.FILES_READ],
+    "slack_send_channel_message_with_file": [SlackScope.CHAT_WRITE, SlackScope.FILES_WRITE],
     "slack_get_reactions": [SlackScope.REACTIONS_READ],
     "slack_add_reactions": [SlackScope.REACTIONS_WRITE],
     "slack_search_messages": [SlackScope.SEARCH_READ],
