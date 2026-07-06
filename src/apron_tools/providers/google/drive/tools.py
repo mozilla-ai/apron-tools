@@ -306,21 +306,41 @@ async def google_drive_search(
     return SearchResult.model_validate(data)
 
 
+def _build_permission_body(params: ShareFilesParams) -> dict[str, str]:
+    """Map share parameters onto a Drive ``permissions.create`` request body.
+
+    ``allow_anyone_with_link`` takes precedence over ``share_type`` and
+    produces a ``type=anyone`` grant. NOTE: this exposes the file to anyone
+    who has the link.
+    """
+    if params.allow_anyone_with_link:
+        return {"type": "anyone", "role": params.role}
+    if params.share_type == "group":
+        return {"type": "group", "role": params.role, "emailAddress": params.group_email}
+    if params.share_type == "domain":
+        return {"type": "domain", "role": params.role, "domain": params.domain}
+    return {"type": "user", "role": params.role, "emailAddress": params.email}
+
+
+def _share_target_label(params: ShareFilesParams) -> str:
+    """Return a human-readable description of who a share grants access to."""
+    if params.allow_anyone_with_link:
+        return "anyone with the link"
+    if params.share_type == "group":
+        return params.group_email
+    if params.share_type == "domain":
+        return f"domain {params.domain}"
+    return params.email
+
+
 async def _share_one_file(
     file_id: str,
-    email: str,
-    role: str,
+    body: dict[str, str],
     token: str,
     base_url: str,
     client: httpx.AsyncClient,
 ) -> ShareFileItem:
     """Create a single Drive permission and shape the per-file outcome."""
-    body = {
-        "type": "user",
-        "role": role,
-        "emailAddress": email,
-    }
-
     try:
         resp = await client.post(
             f"{base_url}/{file_id}/permissions",
@@ -362,23 +382,29 @@ async def google_drive_share_files(
     token: str,
     base_url: str = _DRIVE_BASE_URL,
 ) -> ShareFilesResult:
-    """Share one or more files with another user in Google Drive.
+    """Share one or more files with a user, group, or domain in Google Drive.
 
-    ``email`` and ``role`` are applied to every file in the call. Per-file
-    outcomes are returned in ``items`` so partial failures surface without
-    aborting the whole bulk call.
+    ``role`` and the resolved share target are applied to every file in the
+    call. The target is chosen by ``share_type`` (``user``/``group``/
+    ``domain``) with its matching field, or by ``allow_anyone_with_link``.
+
+    NOTE: ``allow_anyone_with_link=True`` grants ``type=anyone`` and exposes
+    each file to anyone who has the link; ``share_type=domain`` grants
+    visibility to an entire organization. Both are broad-exposure grants.
+
+    Per-file outcomes are returned in ``items`` so partial failures surface
+    without aborting the whole bulk call.
     """
     file_ids = parse_csv_ids(params.file_ids)
     if not file_ids:
         return ShareFilesResult(success=False, error="No file IDs provided.")
 
+    body = _build_permission_body(params)
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        items = [
-            await _share_one_file(file_id, params.email, params.role, token, base_url, client) for file_id in file_ids
-        ]
+        items = [await _share_one_file(file_id, body, token, base_url, client) for file_id in file_ids]
     return ShareFilesResult(
         success=True,
-        email=params.email,
+        target=_share_target_label(params),
         role=params.role,
         items=items,
     )

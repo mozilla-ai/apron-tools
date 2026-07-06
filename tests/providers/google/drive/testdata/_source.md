@@ -14,4 +14,7 @@
 - **move_file_meta.json:** Drive files.get response for current parents.
 - **move_file.json:** Drive files.update response after moving.
 - **search.json:** Based on Drive files.list response with name search query.
-- **share_file.json:** Based on Drive permissions.create response.
+- **share_file.json:** Based on Drive permissions.create response (type=user).
+- **share_file_group.json:** Drive permissions.create response for a group grant (type=group).
+- **share_file_domain.json:** Drive permissions.create response for a domain grant (type=domain).
+- **share_file_anyone.json:** Drive permissions.create response for anyone-with-link (type=anyone).

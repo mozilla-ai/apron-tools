@@ -314,7 +314,7 @@ class TestShareFiles:
 
         assert isinstance(result, ShareFilesResult)
         assert result.success is True
-        assert result.email == "bob@example.com"
+        assert result.target == "bob@example.com"
         assert result.role == "writer"
         assert len(result.items) == 1
         item = result.items[0]
@@ -323,6 +323,79 @@ class TestShareFiles:
         assert item.permission_id == "perm-001"
         assert item.email_address == "bob@example.com"
         assert item.display_name == "Bob Jones"
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body == {"type": "user", "role": "writer", "emailAddress": "bob@example.com"}
+
+    async def test_group_share(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("share_file_group.json"))
+
+        result = await google_drive_share_files(
+            ShareFilesParams(
+                file_ids=_FILE_ID,
+                share_type="group",
+                group_email="team@example.com",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.target == "team@example.com"
+        assert result.items[0].type == "group"
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body == {"type": "group", "role": "reader", "emailAddress": "team@example.com"}
+
+    async def test_domain_share(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("share_file_domain.json"))
+
+        result = await google_drive_share_files(
+            ShareFilesParams(
+                file_ids=_FILE_ID,
+                share_type="domain",
+                domain="example.com",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.target == "domain example.com"
+        assert result.items[0].type == "domain"
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body == {"type": "domain", "role": "reader", "domain": "example.com"}
+
+    async def test_anyone_with_link_when_allowed(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("share_file_anyone.json"))
+
+        result = await google_drive_share_files(
+            ShareFilesParams(file_ids=_FILE_ID, allow_anyone_with_link=True),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.target == "anyone with the link"
+        assert result.items[0].type == "anyone"
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body == {"type": "anyone", "role": "reader"}
+
+    async def test_anyone_with_link_overrides_share_type(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(json=_load_json("share_file_anyone.json"))
+
+        await google_drive_share_files(
+            ShareFilesParams(
+                file_ids=_FILE_ID,
+                share_type="user",
+                email="bob@example.com",
+                allow_anyone_with_link=True,
+            ),
+            token=_TOKEN,
+        )
+
+        body = json.loads(httpx_mock.get_request().content)
+        assert body == {"type": "anyone", "role": "reader"}
 
     async def test_multiple_files(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(json=_load_json("share_file.json"))
