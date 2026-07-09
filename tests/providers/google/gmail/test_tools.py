@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from apron_tools.providers.google.gmail.tools import (
     gmail_create_draft,
     gmail_create_label,
     gmail_edit_draft,
+    gmail_get_attachment,
     gmail_get_thread_replies,
     gmail_list_emails,
     gmail_list_labels,
@@ -28,6 +30,8 @@ from apron_tools.providers.google.gmail.types import (
     CreateLabelResult,
     EditDraftParams,
     EditDraftResult,
+    GetAttachmentParams,
+    GetAttachmentResult,
     GetThreadRepliesParams,
     GetThreadRepliesResult,
     ListEmailsParams,
@@ -43,6 +47,7 @@ from apron_tools.providers.google.gmail.types import (
     SendEmailParams,
     SendEmailResult,
 )
+from apron_tools.types import FileFromBytes
 
 TESTDATA_DIR = Path(__file__).parent / "testdata"
 _TOKEN = "test_oauth_token_abc123"
@@ -650,3 +655,114 @@ class TestCreateLabel:
         assert defn.provider == "google"
         assert defn.service == "gmail"
         assert "https://www.googleapis.com/auth/gmail.labels" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# get_attachment
+# ---------------------------------------------------------------------------
+
+
+class TestGetAttachment:
+    _RAW = b"%PDF-1.4 fake attachment bytes\x00\x01\x02"
+
+    def _encoded(self) -> str:
+        return base64.urlsafe_b64encode(self._RAW).decode("ascii")
+
+    async def test_success_with_hints(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-001",
+            json={"attachmentId": "att-001", "size": len(self._RAW), "data": self._encoded()},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(
+                message_id="msg-001",
+                attachment_id="att-001",
+                filename="report.pdf",
+                mime_type="application/pdf",
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, GetAttachmentResult)
+        assert result.success is True
+        assert result.data == self._RAW
+        assert result.size == len(self._RAW)
+        assert result.filename == "report.pdf"
+        assert result.mime_type == "application/pdf"
+
+    async def test_success_without_hints_uses_defaults(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-002",
+            json={"attachmentId": "att-002", "size": len(self._RAW), "data": self._encoded()},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id="msg-001", attachment_id="att-002"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.filename == "attachment"
+        assert result.mime_type == "application/octet-stream"
+
+    async def test_result_round_trips_into_file_from_bytes(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-001",
+            json={"attachmentId": "att-001", "size": len(self._RAW), "data": self._encoded()},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(
+                message_id="msg-001",
+                attachment_id="att-001",
+                filename="report.pdf",
+                mime_type="application/pdf",
+            ),
+            token=_TOKEN,
+        )
+
+        # A cross-tool caller receives the JSON-serialized result (where
+        # ``data`` is a base64 string) and rebuilds a FileFromBytes from it.
+        dumped = result.model_dump(mode="json")
+        file_input = FileFromBytes(
+            data=dumped["data"],
+            filename=dumped["filename"],
+            mime_type=dumped["mime_type"],
+        )
+        assert file_input.data == self._RAW
+        assert len(file_input.data) == result.size
+
+    async def test_empty_data(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-003",
+            json={"attachmentId": "att-003", "size": 0, "data": ""},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id="msg-001", attachment_id="att-003"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.data == b""
+        assert "no data" in result.error.lower()
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id="msg-001", attachment_id="bad-id"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+        assert result.data == b""
+
+    async def test_has_tool_definition(self) -> None:
+        defn = gmail_get_attachment._tool_definition
+        assert defn.name == "gmail_get_attachment"
+        assert defn.provider == "google"
+        assert defn.service == "gmail"
+        assert "https://www.googleapis.com/auth/gmail.readonly" in defn.scopes

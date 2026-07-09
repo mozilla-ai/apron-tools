@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Base64Bytes, BaseModel, ConfigDict, Field, model_validator
 
 from apron_tools.types import ToolResult
 
@@ -24,6 +24,22 @@ class ReadEmailParams(BaseModel):
     """Parameters for reading a single Gmail message."""
 
     message_id: str
+
+
+class GetAttachmentParams(BaseModel):
+    """Parameters for downloading a Gmail message attachment.
+
+    ``attachment_id`` is the ``body.attachmentId`` found on a message's
+    MIME parts (available from a full message read). Gmail's attachment
+    endpoint returns only the raw bytes and size — never the filename or
+    MIME type — so pass ``filename`` and ``mime_type`` when they are known
+    from the part headers to enrich the result for a downstream upload.
+    """
+
+    message_id: str
+    attachment_id: str
+    filename: str | None = None
+    mime_type: str | None = None
 
 
 class SendEmailParams(BaseModel):
@@ -213,6 +229,29 @@ class ReadEmailResult(ToolResult):
         lines.append("")
         lines.append(self.body)
         return "\n".join(lines)
+
+
+class GetAttachmentResult(ToolResult):
+    """Result of downloading a Gmail message attachment.
+
+    Carries the raw attachment bytes (base64-encoded for JSON transport),
+    filename, MIME type, and size — the fields needed to construct a
+    ``FileFromBytes`` for another tool's ``FileInput``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    data: Base64Bytes = b""
+    filename: str = ""
+    mime_type: str = ""
+    size: int = 0
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the downloaded attachment."""
+        if not self.success:
+            return f"Error: {self.error}"
+        size_kb = self.size / 1024
+        return f"Attachment downloaded.\nFilename: {self.filename}\nType: {self.mime_type}\nSize: {size_kb:.1f} KB"
 
 
 class SendEmailResult(ToolResult):
