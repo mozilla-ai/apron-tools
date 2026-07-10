@@ -281,10 +281,17 @@ async def gmail_get_attachment(
             error=f"Gmail API error {resp.status_code}: {resp.text}",
         )
 
-    encoded = resp.json().get("data", "")
+    try:
+        encoded = resp.json().get("data", "")
+    except ValueError:
+        return GetAttachmentResult(success=False, error="Gmail response was not valid JSON.")
+
     if not encoded:
         return GetAttachmentResult(success=False, error="Attachment contained no data.")
 
+    # Gmail returns base64url data that often omits trailing padding, which
+    # base64.urlsafe_b64decode rejects; restore it before decoding.
+    encoded += "=" * (-len(encoded) % 4)
     try:
         raw = base64.urlsafe_b64decode(encoded)
     except (binascii.Error, ValueError):

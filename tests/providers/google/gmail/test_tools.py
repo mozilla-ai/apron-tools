@@ -733,6 +733,43 @@ class TestGetAttachment:
         assert file_input.data == self._RAW
         assert len(file_input.data) == result.size
 
+    async def test_success_with_unpadded_data(self, httpx_mock: HTTPXMock) -> None:
+        # Gmail commonly returns base64url data without trailing '=' padding.
+        raw = b"unpadded attachment!"
+        padded = base64.urlsafe_b64encode(raw).decode("ascii")
+        assert padded.endswith("="), "test payload must exercise padding removal"
+        unpadded = padded.rstrip("=")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-004",
+            json={"attachmentId": "att-004", "size": len(raw), "data": unpadded},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id="msg-001", attachment_id="att-004"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.data == raw
+        assert result.size == len(raw)
+
+    async def test_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-005",
+            status_code=200,
+            text="<html>not json</html>",
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id="msg-001", attachment_id="att-005"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "json" in result.error.lower()
+        assert result.data == b""
+
     async def test_empty_data(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-003",
