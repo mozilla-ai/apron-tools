@@ -57,6 +57,7 @@ class GmailScope(Scope):
 SCOPES: dict[str, list[GmailScope]] = {
     "gmail_list_emails": [GmailScope.READONLY],
     "gmail_read_email": [GmailScope.READONLY],
+    "gmail_get_attachment": [GmailScope.READONLY],
     "gmail_send_email": [GmailScope.SEND],
     "gmail_create_draft": [GmailScope.COMPOSE],
     "gmail_edit_draft": [GmailScope.COMPOSE],

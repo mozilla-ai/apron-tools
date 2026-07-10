@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import contextlib
 from email.mime.text import MIMEText
 
@@ -18,6 +19,8 @@ from apron_tools.providers.google.gmail.types import (
     EditDraftParams,
     EditDraftResult,
     EmailSummary,
+    GetAttachmentParams,
+    GetAttachmentResult,
     GetThreadRepliesParams,
     GetThreadRepliesResult,
     GmailLabel,
@@ -241,6 +244,65 @@ async def gmail_read_email(
         date=_extract_header(hdrs, "Date"),
         body=_extract_body(payload),
         label_ids=data.get("labelIds", []),
+    )
+
+
+@tool(
+    scopes=SCOPES["gmail_get_attachment"],
+    api_docs="https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages.attachments/get",
+    provider="google",
+    service="gmail",
+)
+async def gmail_get_attachment(
+    params: GetAttachmentParams,
+    *,
+    token: str,
+    base_url: str = _GMAIL_BASE_URL,
+) -> GetAttachmentResult:
+    """Download a Gmail message attachment as raw bytes for cross-tool upload.
+
+    Gmail returns the attachment base64url-encoded with a size field but
+    no filename or MIME type; the bytes are decoded here so callers get
+    raw content, and filename/MIME type fall back to the caller-supplied
+    hints (or generic defaults) since the endpoint does not provide them.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                f"{base_url}/messages/{params.message_id}/attachments/{params.attachment_id}",
+                headers=_headers(token),
+            )
+    except httpx.HTTPError as exc:
+        return GetAttachmentResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return GetAttachmentResult(
+            success=False,
+            error=f"Gmail API error {resp.status_code}: {resp.text}",
+        )
+
+    try:
+        encoded = resp.json().get("data", "")
+    except ValueError:
+        return GetAttachmentResult(success=False, error="Gmail response was not valid JSON.")
+
+    if not encoded:
+        return GetAttachmentResult(success=False, error="Attachment contained no data.")
+
+    # Gmail returns base64url data that often omits trailing padding, which
+    # base64.urlsafe_b64decode rejects; restore it before decoding.
+    encoded += "=" * (-len(encoded) % 4)
+    try:
+        raw = base64.urlsafe_b64decode(encoded)
+    except (binascii.Error, ValueError):
+        return GetAttachmentResult(success=False, error="Could not decode attachment data.")
+
+    return GetAttachmentResult(
+        success=True,
+        data=base64.b64encode(raw),
+        filename=params.filename or "attachment",
+        mime_type=params.mime_type or "application/octet-stream",
+        size=len(raw),
     )
 
 
