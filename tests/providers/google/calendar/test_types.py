@@ -5,9 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from apron_tools.providers.google.calendar.types import (
+    CalendarAvailability,
     CalendarEvent,
     CalendarListEntry,
+    CheckAvailabilityParams,
+    CheckAvailabilityResult,
     CreateEventParams,
     CreateEventResult,
     EventDateTime,
@@ -122,6 +128,50 @@ class TestUpdateEventParams:
         assert params.summary == "Updated Title"
         assert params.location == "New Room"
         assert params.description is None
+
+
+class TestCheckAvailabilityParams:
+    def test_valid(self) -> None:
+        params = CheckAvailabilityParams(
+            attendees=["alice@example.com", "bob@example.com"],
+            time_min="2024-03-15T00:00:00Z",
+            time_max="2024-03-16T00:00:00Z",
+        )
+        assert params.attendees == ["alice@example.com", "bob@example.com"]
+        assert params.time_min == "2024-03-15T00:00:00Z"
+        assert params.time_max == "2024-03-16T00:00:00Z"
+
+    def test_accepts_offset_form(self) -> None:
+        params = CheckAvailabilityParams(
+            attendees=["alice@example.com"],
+            time_min="2024-03-15T00:00:00+00:00",
+            time_max="2024-03-16T00:00:00+00:00",
+        )
+        assert params.time_min == "2024-03-15T00:00:00+00:00"
+
+    def test_rejects_malformed_time_min(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid ISO 8601 datetime"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="not-a-date",
+                time_max="2024-03-16T00:00:00Z",
+            )
+
+    def test_rejects_malformed_time_max(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid ISO 8601 datetime"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="nonsense",
+            )
+
+    def test_rejects_empty_attendees(self) -> None:
+        with pytest.raises(ValidationError):
+            CheckAvailabilityParams(
+                attendees=[],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -354,3 +404,61 @@ class TestUpdateEventResult:
     def test_str_no_event(self) -> None:
         result = UpdateEventResult(success=True, event=None)
         assert str(result) == "Event updated but no details returned."
+
+
+# ---------------------------------------------------------------------------
+# CheckAvailabilityResult
+# ---------------------------------------------------------------------------
+
+
+def _availability_from(filename: str) -> CheckAvailabilityResult:
+    data = _load_json(filename)
+    calendars = [
+        CalendarAvailability.model_validate({"calendar_id": cal_id, **cal_data})
+        for cal_id, cal_data in data["calendars"].items()
+    ]
+    return CheckAvailabilityResult(success=True, calendars=calendars)
+
+
+class TestCheckAvailabilityResult:
+    def test_parse_from_api(self) -> None:
+        result = _availability_from("check_availability.json")
+
+        assert result.success is True
+        assert len(result.calendars) == 2
+        assert result.calendars[0].calendar_id == "alice@example.com"
+        assert result.calendars[0].busy[0].start == "2024-03-15T09:00:00Z"
+        assert result.calendars[0].busy[0].end == "2024-03-15T10:00:00Z"
+        assert result.calendars[1].busy == []
+
+    def test_parse_per_calendar_error(self) -> None:
+        result = _availability_from("check_availability_error.json")
+        hidden = {cal.calendar_id: cal for cal in result.calendars}["hidden@example.com"]
+
+        assert hidden.busy == []
+        assert hidden.errors[0].domain == "global"
+        assert hidden.errors[0].reason == "notFound"
+
+    def test_str_output_busy_and_free(self) -> None:
+        result = _availability_from("check_availability.json")
+        text = str(result)
+
+        assert "2 calendar(s)" in text
+        assert "alice@example.com: busy" in text
+        assert "2024-03-15T09:00:00Z to 2024-03-15T10:00:00Z" in text
+        assert "bob@example.com: free" in text
+
+    def test_str_output_error(self) -> None:
+        result = _availability_from("check_availability_error.json")
+        text = str(result)
+
+        assert "hidden@example.com: unavailable" in text
+        assert "notFound" in text
+
+    def test_str_on_error(self) -> None:
+        result = CheckAvailabilityResult(success=False, error="Forbidden")
+        assert str(result) == "Error: Forbidden"
+
+    def test_str_empty(self) -> None:
+        result = CheckAvailabilityResult(success=True, calendars=[])
+        assert str(result) == "No availability information returned."
