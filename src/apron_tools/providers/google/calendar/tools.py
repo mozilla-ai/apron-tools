@@ -216,7 +216,14 @@ async def google_calendar_check_availability(
     token: str,
     base_url: str = _CALENDAR_BASE_URL,
 ) -> CheckAvailabilityResult:
-    """Query free/busy time blocks for a set of calendars over a time window."""
+    """Query free/busy time blocks for a set of calendars over a time window.
+
+    Results follow the requested attendee order, which the API does not
+    guarantee in its response; any calendars the API returns that were not
+    requested (e.g. group-expanded members) are appended rather than dropped.
+    Per-calendar errors are surfaced on each entry instead of failing the whole
+    call, and a malformed response yields ``success=False`` rather than raising.
+    """
     body = {
         "timeMin": params.time_min,
         "timeMax": params.time_max,
@@ -247,12 +254,34 @@ async def google_calendar_check_availability(
             error="Calendar response was not valid JSON.",
         )
 
-    # The API keys each calendar's free/busy block by its ID; fold the key into
-    # the model so per-calendar errors travel with their calendar in a flat list.
-    calendars = [
-        CalendarAvailability.model_validate({"calendar_id": cal_id, **cal_data})
-        for cal_id, cal_data in data.get("calendars", {}).items()
-    ]
+    if not isinstance(data, dict):
+        return CheckAvailabilityResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
+
+    # The API keys each calendar's free/busy block by its ID. Order the result
+    # to follow the requested attendees for predictable output, appending any
+    # calendars Google returns that were not requested (e.g. group-expanded
+    # members) rather than dropping them. The guard turns a well-formed but
+    # wrong-shaped body (non-dict calendars or non-mapping blocks) into a
+    # structured failure instead of an uncaught error.
+    try:
+        raw = data.get("calendars", {})
+        requested_ids = list(params.attendees)
+        requested_set = set(requested_ids)
+        extra_ids = [cal_id for cal_id in raw if cal_id not in requested_set]
+        calendars = [
+            CalendarAvailability.model_validate({"calendar_id": cal_id, **raw[cal_id]})
+            for cal_id in requested_ids + extra_ids
+            if cal_id in raw
+        ]
+    except (ValueError, TypeError):
+        return CheckAvailabilityResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
+
     return CheckAvailabilityResult(success=True, calendars=calendars)
 
 
