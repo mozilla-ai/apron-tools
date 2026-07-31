@@ -71,6 +71,35 @@ class TestListCalendars:
         assert result.success is False
         assert "403" in result.error
 
+    async def test_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        # A 2xx body that is not JSON (e.g. a proxy/CDN interstitial) must yield
+        # a structured failure rather than an uncaught decode error.
+        httpx_mock.add_response(status_code=200, text="<html>not json</html>")
+
+        result = await google_calendar_list_calendars(ListCalendarsParams(), token=_TOKEN)
+
+        assert result.success is False
+        assert "JSON" in result.error
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            [],
+            {"items": None},
+            {"items": "not-a-list"},
+            {"items": [123]},
+        ],
+    )
+    async def test_unexpected_shape_returns_failure(self, httpx_mock: HTTPXMock, body: object) -> None:
+        # A 2xx body that is valid JSON but not the expected object shape must
+        # yield a structured failure, not an uncaught AttributeError/TypeError.
+        httpx_mock.add_response(status_code=200, json=body)
+
+        result = await google_calendar_list_calendars(ListCalendarsParams(), token=_TOKEN)
+
+        assert result.success is False
+        assert "shape" in result.error
+
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_list_calendars._tool_definition
         assert defn.name == "google_calendar_list_calendars"
@@ -140,6 +169,35 @@ class TestListEvents:
         assert result.success is False
         assert "404" in result.error
 
+    async def test_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        # A 2xx body that is not JSON must yield a structured failure rather than
+        # an uncaught decode error.
+        httpx_mock.add_response(status_code=200, text="<html>not json</html>")
+
+        result = await google_calendar_list_events(ListEventsParams(calendar_id=_CALENDAR_ID), token=_TOKEN)
+
+        assert result.success is False
+        assert "JSON" in result.error
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            [],
+            {"items": None},
+            {"items": "not-a-list"},
+            {"items": [123]},
+        ],
+    )
+    async def test_unexpected_shape_returns_failure(self, httpx_mock: HTTPXMock, body: object) -> None:
+        # A 2xx body that is valid JSON but not the expected object shape must
+        # yield a structured failure, not an uncaught AttributeError/TypeError.
+        httpx_mock.add_response(status_code=200, json=body)
+
+        result = await google_calendar_list_events(ListEventsParams(calendar_id=_CALENDAR_ID), token=_TOKEN)
+
+        assert result.success is False
+        assert "shape" in result.error
+
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_list_events._tool_definition
         assert defn.name == "google_calendar_list_events"
@@ -182,6 +240,33 @@ class TestGetEvent:
 
         assert result.success is False
         assert "404" in result.error
+
+    async def test_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        # A 2xx body that is not JSON must yield a structured failure rather than
+        # an uncaught decode error.
+        httpx_mock.add_response(status_code=200, text="<html>not json</html>")
+
+        result = await google_calendar_get_event(
+            GetEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "JSON" in result.error
+
+    @pytest.mark.parametrize("body", [[], "not-an-object", 123])
+    async def test_unexpected_shape_returns_failure(self, httpx_mock: HTTPXMock, body: object) -> None:
+        # A 2xx body that is valid JSON but not an event object must yield a
+        # structured failure, not an uncaught ValidationError.
+        httpx_mock.add_response(status_code=200, json=body)
+
+        result = await google_calendar_get_event(
+            GetEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "shape" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_get_event._tool_definition
@@ -699,6 +784,43 @@ class TestCreateEvent:
         assert result.success is False
         assert "400" in result.error
 
+    async def test_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        # A 2xx body that is not JSON must yield a structured failure rather than
+        # an uncaught decode error.
+        httpx_mock.add_response(status_code=200, text="<html>not json</html>")
+
+        result = await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Event",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "JSON" in result.error
+
+    @pytest.mark.parametrize("body", [[], "not-an-object", 123])
+    async def test_unexpected_shape_returns_failure(self, httpx_mock: HTTPXMock, body: object) -> None:
+        # A 2xx body that is valid JSON but not an event object must yield a
+        # structured failure, not an uncaught ValidationError.
+        httpx_mock.add_response(status_code=200, json=body)
+
+        result = await google_calendar_create_event(
+            CreateEventParams(
+                calendar_id=_CALENDAR_ID,
+                summary="Event",
+                start=EventDateTime(dateTime="2024-03-20T14:00:00-04:00"),
+                end=EventDateTime(dateTime="2024-03-20T15:00:00-04:00"),
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "shape" in result.error
+
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_create_event._tool_definition
         assert defn.name == "google_calendar_create_event"
@@ -929,6 +1051,82 @@ class TestUpdateEvent:
 
         assert result.success is False
         assert "403" in result.error
+
+    async def test_get_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        # The GET fetch returning a non-JSON 2xx body must yield a structured
+        # failure rather than an uncaught decode error.
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            status_code=200,
+            text="<html>not json</html>",
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID, summary="Update"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "JSON" in result.error
+
+    async def test_get_unexpected_shape_returns_failure(self, httpx_mock: HTTPXMock) -> None:
+        # The GET fetch returning valid JSON that is not an event object must
+        # yield a structured failure, not an uncaught TypeError when merging.
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            status_code=200,
+            json=[],
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID, summary="Update"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "shape" in result.error
+
+    async def test_put_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        # The PUT response being a non-JSON 2xx body must yield a structured
+        # failure rather than an uncaught decode error.
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            status_code=200,
+            text="<html>not json</html>",
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID, summary="Update"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "JSON" in result.error
+
+    async def test_put_unexpected_shape_returns_failure(self, httpx_mock: HTTPXMock) -> None:
+        # The PUT response being valid JSON that is not an event object must
+        # yield a structured failure, not an uncaught ValidationError.
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            json=_load_json("get_event.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}",
+            status_code=200,
+            json=[],
+        )
+
+        result = await google_calendar_update_event(
+            UpdateEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID, summary="Update"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "shape" in result.error
 
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_update_event._tool_definition

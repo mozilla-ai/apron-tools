@@ -116,8 +116,27 @@ async def google_calendar_list_calendars(
             error=f"Calendar API error {resp.status_code}: {resp.text}",
         )
 
-    data = resp.json()
-    calendars = [CalendarListEntry.model_validate(c) for c in data.get("items", [])]
+    try:
+        data = resp.json()
+    except ValueError:
+        return ListCalendarsResult(
+            success=False,
+            error="Calendar response was not valid JSON.",
+        )
+
+    if not isinstance(data, dict):
+        return ListCalendarsResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
+
+    try:
+        calendars = [CalendarListEntry.model_validate(c) for c in data.get("items", [])]
+    except (ValueError, TypeError):
+        return ListCalendarsResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
     return ListCalendarsResult(success=True, calendars=calendars)
 
 
@@ -163,8 +182,27 @@ async def google_calendar_list_events(
             error=f"Calendar API error {resp.status_code}: {resp.text}",
         )
 
-    data = resp.json()
-    events = [CalendarEvent.model_validate(e) for e in data.get("items", [])]
+    try:
+        data = resp.json()
+    except ValueError:
+        return ListEventsResult(
+            success=False,
+            error="Calendar response was not valid JSON.",
+        )
+
+    if not isinstance(data, dict):
+        return ListEventsResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
+
+    try:
+        events = [CalendarEvent.model_validate(e) for e in data.get("items", [])]
+    except (ValueError, TypeError):
+        return ListEventsResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
     next_page_token = data.get("nextPageToken")
     return ListEventsResult(success=True, events=events, next_page_token=next_page_token)
 
@@ -200,7 +238,21 @@ async def google_calendar_get_event(
             error=f"Calendar API error {resp.status_code}: {resp.text}",
         )
 
-    event = CalendarEvent.model_validate(resp.json())
+    try:
+        data = resp.json()
+    except ValueError:
+        return GetEventResult(
+            success=False,
+            error="Calendar response was not valid JSON.",
+        )
+
+    try:
+        event = CalendarEvent.model_validate(data)
+    except (ValueError, TypeError):
+        return GetEventResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
     return GetEventResult(success=True, event=event)
 
 
@@ -352,7 +404,21 @@ async def google_calendar_create_event(
             error=f"Calendar API error {resp.status_code}: {resp.text}",
         )
 
-    event = CalendarEvent.model_validate(resp.json())
+    try:
+        data = resp.json()
+    except ValueError:
+        return CreateEventResult(
+            success=False,
+            error="Calendar response was not valid JSON.",
+        )
+
+    try:
+        event = CalendarEvent.model_validate(data)
+    except (ValueError, TypeError):
+        return CreateEventResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
     return CreateEventResult(success=True, event=event)
 
 
@@ -393,7 +459,18 @@ async def google_calendar_update_event(
                     error=(f"Calendar API error {get_resp.status_code}: {get_resp.text}"),
                 )
 
-            body = get_resp.json()
+            try:
+                body = get_resp.json()
+            except ValueError:
+                return UpdateEventResult(
+                    success=False,
+                    error="Calendar response was not valid JSON.",
+                )
+            if not isinstance(body, dict):
+                return UpdateEventResult(
+                    success=False,
+                    error="Calendar response had an unexpected shape.",
+                )
 
             # Apply only the fields the caller provided.
             if params.summary is not None:
@@ -443,5 +520,19 @@ async def google_calendar_update_event(
             error=f"Calendar API error {resp.status_code}: {resp.text}",
         )
 
-    event = CalendarEvent.model_validate(resp.json())
+    try:
+        data = resp.json()
+    except ValueError:
+        return UpdateEventResult(
+            success=False,
+            error="Calendar response was not valid JSON.",
+        )
+
+    try:
+        event = CalendarEvent.model_validate(data)
+    except (ValueError, TypeError):
+        return UpdateEventResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
     return UpdateEventResult(success=True, event=event)
