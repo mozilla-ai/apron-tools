@@ -11,17 +11,20 @@ from apron_tools.types import ToolResult
 
 
 def _validate_iso_datetime(value: str) -> str:
-    """Validate a required ISO 8601 datetime string at the parameter boundary.
+    """Validate a required RFC3339 date-time string at the parameter boundary.
 
-    Accepts a trailing ``Z`` UTC designator. Raises ``ValueError`` for empty or
-    malformed input so Pydantic surfaces a ``ValidationError`` alongside other
-    param-shape errors, rather than the tool sending the provider a window it
-    rejects.
+    Requires a UTC ``Z`` designator or an explicit timezone offset; date-only
+    and timezone-naive values are rejected so the query window resolves to an
+    unambiguous instant. Raises ``ValueError`` for malformed or offset-less
+    input so Pydantic surfaces a ``ValidationError`` alongside other param-shape
+    errors, rather than the tool sending the provider a window it rejects.
     """
     try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ValueError(f"Invalid ISO 8601 datetime: {value!r}") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"datetime must include a UTC 'Z' or timezone offset: {value!r}")
     return value
 
 

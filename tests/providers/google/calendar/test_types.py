@@ -165,6 +165,22 @@ class TestCheckAvailabilityParams:
                 time_max="nonsense",
             )
 
+    def test_rejects_date_only(self) -> None:
+        with pytest.raises(ValidationError, match="timezone offset"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15",
+                time_max="2024-03-16T00:00:00Z",
+            )
+
+    def test_rejects_timezone_naive(self) -> None:
+        with pytest.raises(ValidationError, match="timezone offset"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T09:00:00",
+                time_max="2024-03-16T00:00:00Z",
+            )
+
     def test_rejects_empty_attendees(self) -> None:
         with pytest.raises(ValidationError):
             CheckAvailabilityParams(
