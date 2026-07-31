@@ -5,9 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from apron_tools.providers.google.calendar.types import (
+    CalendarAvailability,
     CalendarEvent,
     CalendarListEntry,
+    CheckAvailabilityParams,
+    CheckAvailabilityResult,
     CreateEventParams,
     CreateEventResult,
     EventDateTime,
@@ -34,17 +40,17 @@ def _load_json(filename: str) -> dict:
 
 
 class TestListCalendarsParams:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         params = ListCalendarsParams()
         assert params.max_results == 100
 
-    def test_custom(self):
+    def test_custom(self) -> None:
         params = ListCalendarsParams(max_results=10)
         assert params.max_results == 10
 
 
 class TestListEventsParams:
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         params = ListEventsParams()
         assert params.calendar_id == "primary"
         assert params.max_results == 250
@@ -53,7 +59,7 @@ class TestListEventsParams:
         assert params.query is None
         assert params.page_token is None
 
-    def test_custom(self):
+    def test_custom(self) -> None:
         params = ListEventsParams(
             calendar_id="cal-001",
             max_results=10,
@@ -68,18 +74,18 @@ class TestListEventsParams:
 
 
 class TestGetEventParams:
-    def test_required(self):
+    def test_required(self) -> None:
         params = GetEventParams(event_id="event-001")
         assert params.calendar_id == "primary"
         assert params.event_id == "event-001"
 
-    def test_custom_calendar(self):
+    def test_custom_calendar(self) -> None:
         params = GetEventParams(calendar_id="cal-001", event_id="event-001")
         assert params.calendar_id == "cal-001"
 
 
 class TestCreateEventParams:
-    def test_required(self):
+    def test_required(self) -> None:
         params = CreateEventParams(
             summary="Team Meeting",
             start=EventDateTime(dateTime="2024-03-15T09:00:00-04:00"),
@@ -91,7 +97,7 @@ class TestCreateEventParams:
         assert params.location is None
         assert params.attendees is None
 
-    def test_full(self):
+    def test_full(self) -> None:
         params = CreateEventParams(
             calendar_id="cal-001",
             summary="Team Meeting",
@@ -106,14 +112,14 @@ class TestCreateEventParams:
 
 
 class TestUpdateEventParams:
-    def test_required(self):
+    def test_required(self) -> None:
         params = UpdateEventParams(event_id="event-001")
         assert params.calendar_id == "primary"
         assert params.event_id == "event-001"
         assert params.summary is None
         assert params.start is None
 
-    def test_partial(self):
+    def test_partial(self) -> None:
         params = UpdateEventParams(
             event_id="event-001",
             summary="Updated Title",
@@ -124,13 +130,73 @@ class TestUpdateEventParams:
         assert params.description is None
 
 
+class TestCheckAvailabilityParams:
+    def test_valid(self) -> None:
+        params = CheckAvailabilityParams(
+            attendees=["alice@example.com", "bob@example.com"],
+            time_min="2024-03-15T00:00:00Z",
+            time_max="2024-03-16T00:00:00Z",
+        )
+        assert params.attendees == ["alice@example.com", "bob@example.com"]
+        assert params.time_min == "2024-03-15T00:00:00Z"
+        assert params.time_max == "2024-03-16T00:00:00Z"
+
+    def test_accepts_offset_form(self) -> None:
+        params = CheckAvailabilityParams(
+            attendees=["alice@example.com"],
+            time_min="2024-03-15T00:00:00+00:00",
+            time_max="2024-03-16T00:00:00+00:00",
+        )
+        assert params.time_min == "2024-03-15T00:00:00+00:00"
+
+    def test_rejects_malformed_time_min(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid ISO 8601 datetime"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="not-a-date",
+                time_max="2024-03-16T00:00:00Z",
+            )
+
+    def test_rejects_malformed_time_max(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid ISO 8601 datetime"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="nonsense",
+            )
+
+    def test_rejects_date_only(self) -> None:
+        with pytest.raises(ValidationError, match="timezone offset"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15",
+                time_max="2024-03-16T00:00:00Z",
+            )
+
+    def test_rejects_timezone_naive(self) -> None:
+        with pytest.raises(ValidationError, match="timezone offset"):
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T09:00:00",
+                time_max="2024-03-16T00:00:00Z",
+            )
+
+    def test_rejects_empty_attendees(self) -> None:
+        with pytest.raises(ValidationError):
+            CheckAvailabilityParams(
+                attendees=[],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            )
+
+
 # ---------------------------------------------------------------------------
 # CalendarListEntry
 # ---------------------------------------------------------------------------
 
 
 class TestCalendarListEntry:
-    def test_parse_from_api(self):
+    def test_parse_from_api(self) -> None:
         data = _load_json("list_calendars.json")
         entry = CalendarListEntry.model_validate(data["items"][0])
 
@@ -141,7 +207,7 @@ class TestCalendarListEntry:
         assert entry.access_role == "owner"
         assert entry.primary is True
 
-    def test_parse_minimal(self):
+    def test_parse_minimal(self) -> None:
         data = _load_json("list_calendars.json")
         entry = CalendarListEntry.model_validate(data["items"][1])
 
@@ -157,7 +223,7 @@ class TestCalendarListEntry:
 
 
 class TestCalendarEvent:
-    def test_parse_full_event(self):
+    def test_parse_full_event(self) -> None:
         data = _load_json("get_event.json")
         event = CalendarEvent.model_validate(data)
 
@@ -173,7 +239,7 @@ class TestCalendarEvent:
         assert event.attendees is not None
         assert len(event.attendees) == 2
 
-    def test_parse_allday_event(self):
+    def test_parse_allday_event(self) -> None:
         data = _load_json("list_events.json")
         event = CalendarEvent.model_validate(data["items"][1])
 
@@ -190,7 +256,7 @@ class TestCalendarEvent:
 
 
 class TestListCalendarsResult:
-    def test_parse_calendars(self):
+    def test_parse_calendars(self) -> None:
         data = _load_json("list_calendars.json")
         calendars = [CalendarListEntry.model_validate(c) for c in data["items"]]
         result = ListCalendarsResult(success=True, calendars=calendars)
@@ -198,7 +264,7 @@ class TestListCalendarsResult:
         assert result.success is True
         assert len(result.calendars) == 2
 
-    def test_str_output(self):
+    def test_str_output(self) -> None:
         data = _load_json("list_calendars.json")
         calendars = [CalendarListEntry.model_validate(c) for c in data["items"]]
         result = ListCalendarsResult(success=True, calendars=calendars)
@@ -209,11 +275,11 @@ class TestListCalendarsResult:
         assert "(primary)" in text
         assert "Personal" in text
 
-    def test_str_on_error(self):
+    def test_str_on_error(self) -> None:
         result = ListCalendarsResult(success=False, error="Forbidden")
         assert str(result) == "Error: Forbidden"
 
-    def test_str_empty(self):
+    def test_str_empty(self) -> None:
         result = ListCalendarsResult(success=True, calendars=[])
         assert str(result) == "No calendars found."
 
@@ -224,7 +290,7 @@ class TestListCalendarsResult:
 
 
 class TestListEventsResult:
-    def test_parse_events(self):
+    def test_parse_events(self) -> None:
         data = _load_json("list_events.json")
         events = [CalendarEvent.model_validate(e) for e in data["items"]]
         result = ListEventsResult(success=True, events=events)
@@ -232,7 +298,7 @@ class TestListEventsResult:
         assert result.success is True
         assert len(result.events) == 2
 
-    def test_str_output(self):
+    def test_str_output(self) -> None:
         data = _load_json("list_events.json")
         events = [CalendarEvent.model_validate(e) for e in data["items"]]
         result = ListEventsResult(success=True, events=events)
@@ -242,11 +308,11 @@ class TestListEventsResult:
         assert "Team Standup" in text
         assert "Lunch with Client" in text
 
-    def test_str_on_error(self):
+    def test_str_on_error(self) -> None:
         result = ListEventsResult(success=False, error="Not Found")
         assert str(result) == "Error: Not Found"
 
-    def test_str_empty(self):
+    def test_str_empty(self) -> None:
         result = ListEventsResult(success=True, events=[])
         assert str(result) == "No events found."
 
@@ -257,7 +323,7 @@ class TestListEventsResult:
 
 
 class TestGetEventResult:
-    def test_parse_event(self):
+    def test_parse_event(self) -> None:
         data = _load_json("get_event.json")
         event = CalendarEvent.model_validate(data)
         result = GetEventResult(success=True, event=event)
@@ -266,7 +332,7 @@ class TestGetEventResult:
         assert result.event is not None
         assert result.event.id == "event-001"
 
-    def test_str_output(self):
+    def test_str_output(self) -> None:
         data = _load_json("get_event.json")
         event = CalendarEvent.model_validate(data)
         result = GetEventResult(success=True, event=event)
@@ -277,11 +343,11 @@ class TestGetEventResult:
         assert "Daily standup meeting" in text
         assert "Attendees: 2" in text
 
-    def test_str_on_error(self):
+    def test_str_on_error(self) -> None:
         result = GetEventResult(success=False, error="Not Found")
         assert str(result) == "Error: Not Found"
 
-    def test_str_no_event(self):
+    def test_str_no_event(self) -> None:
         result = GetEventResult(success=True, event=None)
         assert str(result) == "No event found."
 
@@ -292,7 +358,7 @@ class TestGetEventResult:
 
 
 class TestCreateEventResult:
-    def test_parse_event(self):
+    def test_parse_event(self) -> None:
         data = _load_json("create_event.json")
         event = CalendarEvent.model_validate(data)
         result = CreateEventResult(success=True, event=event)
@@ -302,7 +368,7 @@ class TestCreateEventResult:
         assert result.event.id == "event-003"
         assert result.event.summary == "Project Review"
 
-    def test_str_output(self):
+    def test_str_output(self) -> None:
         data = _load_json("create_event.json")
         event = CalendarEvent.model_validate(data)
         result = CreateEventResult(success=True, event=event)
@@ -312,11 +378,11 @@ class TestCreateEventResult:
         assert "created" in text
         assert "event-003" in text
 
-    def test_str_on_error(self):
+    def test_str_on_error(self) -> None:
         result = CreateEventResult(success=False, error="Quota exceeded")
         assert str(result) == "Error: Quota exceeded"
 
-    def test_str_no_event(self):
+    def test_str_no_event(self) -> None:
         result = CreateEventResult(success=True, event=None)
         assert str(result) == "Event created but no details returned."
 
@@ -327,7 +393,7 @@ class TestCreateEventResult:
 
 
 class TestUpdateEventResult:
-    def test_parse_event(self):
+    def test_parse_event(self) -> None:
         data = _load_json("update_event.json")
         event = CalendarEvent.model_validate(data)
         result = UpdateEventResult(success=True, event=event)
@@ -337,7 +403,7 @@ class TestUpdateEventResult:
         assert result.event.id == "event-001"
         assert result.event.summary == "Team Standup (Updated)"
 
-    def test_str_output(self):
+    def test_str_output(self) -> None:
         data = _load_json("update_event.json")
         event = CalendarEvent.model_validate(data)
         result = UpdateEventResult(success=True, event=event)
@@ -347,10 +413,68 @@ class TestUpdateEventResult:
         assert "updated" in text
         assert "event-001" in text
 
-    def test_str_on_error(self):
+    def test_str_on_error(self) -> None:
         result = UpdateEventResult(success=False, error="Not Found")
         assert str(result) == "Error: Not Found"
 
-    def test_str_no_event(self):
+    def test_str_no_event(self) -> None:
         result = UpdateEventResult(success=True, event=None)
         assert str(result) == "Event updated but no details returned."
+
+
+# ---------------------------------------------------------------------------
+# CheckAvailabilityResult
+# ---------------------------------------------------------------------------
+
+
+def _availability_from(filename: str) -> CheckAvailabilityResult:
+    data = _load_json(filename)
+    calendars = [
+        CalendarAvailability.model_validate({"calendar_id": cal_id, **cal_data})
+        for cal_id, cal_data in data["calendars"].items()
+    ]
+    return CheckAvailabilityResult(success=True, calendars=calendars)
+
+
+class TestCheckAvailabilityResult:
+    def test_parse_from_api(self) -> None:
+        result = _availability_from("check_availability.json")
+
+        assert result.success is True
+        assert len(result.calendars) == 2
+        assert result.calendars[0].calendar_id == "alice@example.com"
+        assert result.calendars[0].busy[0].start == "2024-03-15T09:00:00Z"
+        assert result.calendars[0].busy[0].end == "2024-03-15T10:00:00Z"
+        assert result.calendars[1].busy == []
+
+    def test_parse_per_calendar_error(self) -> None:
+        result = _availability_from("check_availability_error.json")
+        hidden = {cal.calendar_id: cal for cal in result.calendars}["hidden@example.com"]
+
+        assert hidden.busy == []
+        assert hidden.errors[0].domain == "global"
+        assert hidden.errors[0].reason == "notFound"
+
+    def test_str_output_busy_and_free(self) -> None:
+        result = _availability_from("check_availability.json")
+        text = str(result)
+
+        assert "2 calendar(s)" in text
+        assert "alice@example.com: busy" in text
+        assert "2024-03-15T09:00:00Z to 2024-03-15T10:00:00Z" in text
+        assert "bob@example.com: free" in text
+
+    def test_str_output_error(self) -> None:
+        result = _availability_from("check_availability_error.json")
+        text = str(result)
+
+        assert "hidden@example.com: unavailable" in text
+        assert "notFound" in text
+
+    def test_str_on_error(self) -> None:
+        result = CheckAvailabilityResult(success=False, error="Forbidden")
+        assert str(result) == "Error: Forbidden"
+
+    def test_str_empty(self) -> None:
+        result = CheckAvailabilityResult(success=True, calendars=[])
+        assert str(result) == "No availability information returned."

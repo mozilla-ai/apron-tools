@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from apron_tools.types import ToolResult
+
+
+def _validate_iso_datetime(value: str) -> str:
+    """Validate a required RFC3339 date-time string at the parameter boundary.
+
+    Requires a UTC ``Z`` designator or an explicit timezone offset; date-only
+    and timezone-naive values are rejected so the query window resolves to an
+    unambiguous instant. Raises ``ValueError`` for malformed or offset-less
+    input so Pydantic surfaces a ``ValidationError`` alongside other param-shape
+    errors, rather than the tool sending the provider a window it rejects.
+    """
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Invalid ISO 8601 datetime: {value!r}") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"datetime must include a UTC 'Z' or timezone offset: {value!r}")
+    return value
+
 
 # ---------------------------------------------------------------------------
 # Shared nested models
@@ -78,6 +98,40 @@ class CalendarEvent(BaseModel):
     attendees: list[EventAttendee] | None = None
 
 
+class BusyPeriod(BaseModel):
+    """A single busy block on a calendar, as start/end datetimes."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    start: str = ""
+    end: str = ""
+
+
+class CalendarError(BaseModel):
+    """An error the FreeBusy API reports for an individual calendar."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    domain: str = ""
+    reason: str = ""
+
+
+class CalendarAvailability(BaseModel):
+    """Free/busy information for a single queried calendar.
+
+    ``busy`` lists the calendar's busy blocks within the queried window.
+    ``errors`` is populated when the calendar could not be read (e.g. it is
+    not visible to the token), leaving ``busy`` empty for that calendar while
+    the rest of the query still succeeds.
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    calendar_id: str
+    busy: list[BusyPeriod] = []
+    errors: list[CalendarError] = []
+
+
 # ---------------------------------------------------------------------------
 # Input parameter models
 # ---------------------------------------------------------------------------
@@ -134,6 +188,21 @@ class UpdateEventParams(BaseModel):
     attendees: list[str] | None = None
     generate_meet_link: bool = False
     video_call_url: str | None = None
+
+
+class CheckAvailabilityParams(BaseModel):
+    """Parameters for querying free/busy time blocks for a set of calendars."""
+
+    attendees: list[str] = Field(min_length=1)
+    """Calendar IDs or email addresses to query."""
+
+    time_min: str
+    """Start of the query window, as an ISO 8601 datetime."""
+
+    time_max: str
+    """End of the query window, as an ISO 8601 datetime."""
+
+    _validate_window = field_validator("time_min", "time_max")(_validate_iso_datetime)
 
 
 # ---------------------------------------------------------------------------
@@ -282,3 +351,29 @@ class UpdateEventResult(ToolResult):
         ev = self.event
         link = f"\nLink: {ev.html_link}" if ev.html_link else ""
         return f"Event '{ev.summary}' updated (id={ev.id}).{link}"
+
+
+class CheckAvailabilityResult(ToolResult):
+    """Result of a free/busy availability query."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    calendars: list[CalendarAvailability] = []
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of each calendar's availability."""
+        if not self.success:
+            return f"Error: {self.error}"
+        if not self.calendars:
+            return "No availability information returned."
+        lines = [f"Availability for {len(self.calendars)} calendar(s):"]
+        for cal in self.calendars:
+            if cal.errors:
+                reasons = ", ".join(e.reason for e in cal.errors if e.reason) or "unknown error"
+                lines.append(f"  - {cal.calendar_id}: unavailable ({reasons})")
+            elif not cal.busy:
+                lines.append(f"  - {cal.calendar_id}: free")
+            else:
+                blocks = "; ".join(f"{b.start} to {b.end}" for b in cal.busy)
+                lines.append(f"  - {cal.calendar_id}: busy {blocks}")
+        return "\n".join(lines)

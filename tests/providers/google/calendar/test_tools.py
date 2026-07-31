@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.calendar.tools import (
+    google_calendar_check_availability,
     google_calendar_create_event,
     google_calendar_get_event,
     google_calendar_list_calendars,
@@ -15,6 +17,8 @@ from apron_tools.providers.google.calendar.tools import (
     google_calendar_update_event,
 )
 from apron_tools.providers.google.calendar.types import (
+    CheckAvailabilityParams,
+    CheckAvailabilityResult,
     CreateEventParams,
     CreateEventResult,
     EventDateTime,
@@ -182,6 +186,231 @@ class TestGetEvent:
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_get_event._tool_definition
         assert defn.name == "google_calendar_get_event"
+        assert defn.provider == "google"
+        assert defn.service == "google_calendar"
+        assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# check_availability
+# ---------------------------------------------------------------------------
+
+
+class TestCheckAvailability:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/freeBusy",
+            json=_load_json("check_availability.json"),
+        )
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com", "bob@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, CheckAvailabilityResult)
+        assert result.success is True
+        assert len(result.calendars) == 2
+
+        alice = result.calendars[0]
+        assert alice.calendar_id == "alice@example.com"
+        assert len(alice.busy) == 1
+        assert alice.busy[0].start == "2024-03-15T09:00:00Z"
+        assert alice.busy[0].end == "2024-03-15T10:00:00Z"
+        assert alice.errors == []
+
+        bob = result.calendars[1]
+        assert bob.calendar_id == "bob@example.com"
+        assert bob.busy == []
+
+    async def test_no_overlapping_events_returns_empty_busy(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/freeBusy",
+            json=_load_json("check_availability_all_free.json"),
+        )
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com", "bob@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert all(cal.busy == [] for cal in result.calendars)
+
+    async def test_per_calendar_error_surfaced_without_failing(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/freeBusy",
+            json=_load_json("check_availability_error.json"),
+        )
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com", "hidden@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        # A calendar the token can't read surfaces as a per-calendar error,
+        # while the overall call and the readable calendar still succeed.
+        assert result.success is True
+        by_id = {cal.calendar_id: cal for cal in result.calendars}
+        assert len(by_id["alice@example.com"].busy) == 1
+        hidden = by_id["hidden@example.com"]
+        assert hidden.busy == []
+        assert len(hidden.errors) == 1
+        assert hidden.errors[0].reason == "notFound"
+
+    async def test_sends_correct_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/freeBusy",
+            json=_load_json("check_availability.json"),
+        )
+
+        await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com", "bob@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        assert request.method == "POST"
+        body = json.loads(request.content)
+        assert body["timeMin"] == "2024-03-15T00:00:00Z"
+        assert body["timeMax"] == "2024-03-16T00:00:00Z"
+        assert body["items"] == [
+            {"id": "alice@example.com"},
+            {"id": "bob@example.com"},
+        ]
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=403, text="Forbidden")
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "403" in result.error
+
+    async def test_non_json_response(self, httpx_mock: HTTPXMock) -> None:
+        # A 2xx body that is not JSON (e.g. a proxy/CDN interstitial) must yield
+        # a structured failure rather than an uncaught decode error.
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/freeBusy",
+            status_code=200,
+            text="<html>not json</html>",
+        )
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "JSON" in result.error
+
+    async def test_orders_by_requested_attendees(self, httpx_mock: HTTPXMock) -> None:
+        # Google may key the calendars map in any order; the result must follow
+        # the requested attendee order, which the API does not guarantee.
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/freeBusy",
+            json={
+                "calendars": {
+                    "bob@example.com": {"busy": []},
+                    "alice@example.com": {"busy": [{"start": "2024-03-15T09:00:00Z", "end": "2024-03-15T10:00:00Z"}]},
+                }
+            },
+        )
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com", "bob@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert [c.calendar_id for c in result.calendars] == ["alice@example.com", "bob@example.com"]
+
+    async def test_includes_unrequested_calendars_after_requested(self, httpx_mock: HTTPXMock) -> None:
+        # Calendars Google returns that were not requested (e.g. group-expanded
+        # members) are appended rather than dropped.
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/freeBusy",
+            json={
+                "calendars": {
+                    "team@example.com": {"busy": []},
+                    "alice@example.com": {"busy": []},
+                }
+            },
+        )
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert [c.calendar_id for c in result.calendars] == ["alice@example.com", "team@example.com"]
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            [],
+            {"calendars": None},
+            {"calendars": ["alice@example.com"]},
+            {"calendars": {"alice@example.com": "busy"}},
+            {"calendars": {"alice@example.com": {"busy": "not-a-list"}}},
+        ],
+    )
+    async def test_unexpected_shape_returns_failure(self, httpx_mock: HTTPXMock, body: object) -> None:
+        # A 2xx body that is valid JSON but not the expected object shape must
+        # yield a structured failure, not an uncaught AttributeError/TypeError.
+        httpx_mock.add_response(url=f"{_CALENDAR_BASE}/freeBusy", status_code=200, json=body)
+
+        result = await google_calendar_check_availability(
+            CheckAvailabilityParams(
+                attendees=["alice@example.com"],
+                time_min="2024-03-15T00:00:00Z",
+                time_max="2024-03-16T00:00:00Z",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "shape" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = google_calendar_check_availability._tool_definition
+        assert defn.name == "google_calendar_check_availability"
         assert defn.provider == "google"
         assert defn.service == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar.readonly" in defn.scopes

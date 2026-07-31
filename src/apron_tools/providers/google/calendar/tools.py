@@ -8,8 +8,11 @@ from urllib.parse import quote
 import httpx
 
 from apron_tools.providers.google.calendar.types import (
+    CalendarAvailability,
     CalendarEvent,
     CalendarListEntry,
+    CheckAvailabilityParams,
+    CheckAvailabilityResult,
     CreateEventParams,
     CreateEventResult,
     GetEventParams,
@@ -199,6 +202,87 @@ async def google_calendar_get_event(
 
     event = CalendarEvent.model_validate(resp.json())
     return GetEventResult(success=True, event=event)
+
+
+@tool(
+    scopes=SCOPES["google_calendar_check_availability"],
+    api_docs="https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query",
+    provider="google",
+    service="google_calendar",
+)
+async def google_calendar_check_availability(
+    params: CheckAvailabilityParams,
+    *,
+    token: str,
+    base_url: str = _CALENDAR_BASE_URL,
+) -> CheckAvailabilityResult:
+    """Query free/busy time blocks for a set of calendars over a time window.
+
+    Results follow the requested attendee order, which the API does not
+    guarantee in its response; any calendars the API returns that were not
+    requested (e.g. group-expanded members) are appended rather than dropped.
+    Per-calendar errors are surfaced on each entry instead of failing the whole
+    call, and a malformed response yields ``success=False`` rather than raising.
+    """
+    body = {
+        "timeMin": params.time_min,
+        "timeMax": params.time_max,
+        "items": [{"id": attendee} for attendee in params.attendees],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{base_url}/freeBusy",
+                headers=_headers(token, content_type=True),
+                json=body,
+            )
+    except httpx.HTTPError as exc:
+        return CheckAvailabilityResult(success=False, error=str(exc))
+
+    if not resp.is_success:
+        return CheckAvailabilityResult(
+            success=False,
+            error=f"Calendar API error {resp.status_code}: {resp.text}",
+        )
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return CheckAvailabilityResult(
+            success=False,
+            error="Calendar response was not valid JSON.",
+        )
+
+    if not isinstance(data, dict):
+        return CheckAvailabilityResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
+
+    # The API keys each calendar's free/busy block by its ID. Order the result
+    # to follow the requested attendees for predictable output, appending any
+    # calendars Google returns that were not requested (e.g. group-expanded
+    # members) rather than dropping them. The guard turns a well-formed but
+    # wrong-shaped body (non-dict calendars or non-mapping blocks) into a
+    # structured failure instead of an uncaught error.
+    try:
+        raw = data.get("calendars", {})
+        requested_ids = list(params.attendees)
+        requested_set = set(requested_ids)
+        extra_ids = [cal_id for cal_id in raw if cal_id not in requested_set]
+        calendars = [
+            CalendarAvailability.model_validate({"calendar_id": cal_id, **raw[cal_id]})
+            for cal_id in requested_ids + extra_ids
+            if cal_id in raw
+        ]
+    except (ValueError, TypeError):
+        return CheckAvailabilityResult(
+            success=False,
+            error="Calendar response had an unexpected shape.",
+        )
+
+    return CheckAvailabilityResult(success=True, calendars=calendars)
 
 
 @tool(

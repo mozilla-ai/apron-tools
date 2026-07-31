@@ -1,0 +1,18 @@
+{
+  "kind": "calendar#freeBusy",
+  "timeMin": "2024-03-15T00:00:00.000Z",
+  "timeMax": "2024-03-16T00:00:00.000Z",
+  "calendars": {
+    "alice@example.com": {
+      "busy": [
+        {
+          "start": "2024-03-15T09:00:00Z",
+          "end": "2024-03-15T10:00:00Z"
+        }
+      ]
+    },
+    "bob@example.com": {
+      "busy": []
+    }
+  }
+}
