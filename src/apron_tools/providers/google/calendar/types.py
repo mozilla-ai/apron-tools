@@ -11,13 +11,12 @@ from apron_tools.types import ToolResult
 
 
 def _validate_iso_datetime(value: str) -> str:
-    """Validate a required RFC3339 date-time string at the parameter boundary.
+    """Validate an RFC3339 date-time string and return it unchanged.
 
-    Requires a UTC ``Z`` designator or an explicit timezone offset; date-only
-    and timezone-naive values are rejected so the query window resolves to an
-    unambiguous instant. Raises ``ValueError`` for malformed or offset-less
-    input so Pydantic surfaces a ``ValidationError`` alongside other param-shape
-    errors, rather than the tool sending the provider a window it rejects.
+    Requires a UTC ``Z`` designator or an explicit timezone offset;
+    date-only and timezone-naive values are rejected so the value denotes
+    an unambiguous instant.
+    Raises ``ValueError`` for malformed or offset-less input.
     """
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
