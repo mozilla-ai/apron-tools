@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -205,6 +205,17 @@ class CheckAvailabilityParams(BaseModel):
     _validate_window = field_validator("time_min", "time_max")(_validate_iso_datetime)
 
 
+class DeleteEventParams(BaseModel):
+    """Parameters for deleting an event."""
+
+    calendar_id: str = "primary"
+    event_id: str
+
+    send_updates: Literal["all", "externalOnly", "none"] = "all"
+    """Who receives cancellation notices: all attendees,
+    only attendees outside the organizer's domain, or no one."""
+
+
 # ---------------------------------------------------------------------------
 # Output result models
 # ---------------------------------------------------------------------------
@@ -377,3 +388,17 @@ class CheckAvailabilityResult(ToolResult):
                 blocks = "; ".join(f"{b.start} to {b.end}" for b in cal.busy)
                 lines.append(f"  - {cal.calendar_id}: busy {blocks}")
         return "\n".join(lines)
+
+
+class DeleteEventResult(ToolResult):
+    """Result of deleting an event."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    event_id: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable confirmation of the deletion."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Event deleted (id={self.event_id})."

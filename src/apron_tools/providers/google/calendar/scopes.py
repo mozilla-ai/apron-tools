@@ -31,6 +31,7 @@ SCOPES: dict[str, list[GoogleCalendarScope]] = {
     "google_calendar_check_availability": [GoogleCalendarScope.CALENDAR_READONLY],
     "google_calendar_create_event": [GoogleCalendarScope.CALENDAR],
     "google_calendar_update_event": [GoogleCalendarScope.CALENDAR],
+    "google_calendar_delete_event": [GoogleCalendarScope.CALENDAR],
 }
 
 CAPABILITY_GROUP = CapabilityGroup(
