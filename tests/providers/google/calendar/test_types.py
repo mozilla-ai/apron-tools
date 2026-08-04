@@ -16,6 +16,8 @@ from apron_tools.providers.google.calendar.types import (
     CheckAvailabilityResult,
     CreateEventParams,
     CreateEventResult,
+    DeleteEventParams,
+    DeleteEventResult,
     EventDateTime,
     GetEventParams,
     GetEventResult,
@@ -188,6 +190,27 @@ class TestCheckAvailabilityParams:
                 time_min="2024-03-15T00:00:00Z",
                 time_max="2024-03-16T00:00:00Z",
             )
+
+
+class TestDeleteEventParams:
+    def test_required(self) -> None:
+        params = DeleteEventParams(event_id="event-001")
+        assert params.event_id == "event-001"
+        assert params.calendar_id == "primary"
+        assert params.send_updates == "all"
+
+    def test_custom(self) -> None:
+        params = DeleteEventParams(
+            calendar_id="cal-002",
+            event_id="event-002",
+            send_updates="externalOnly",
+        )
+        assert params.calendar_id == "cal-002"
+        assert params.send_updates == "externalOnly"
+
+    def test_rejects_invalid_send_updates(self) -> None:
+        with pytest.raises(ValidationError):
+            DeleteEventParams(event_id="event-001", send_updates="everyone")
 
 
 # ---------------------------------------------------------------------------
@@ -478,3 +501,18 @@ class TestCheckAvailabilityResult:
     def test_str_empty(self) -> None:
         result = CheckAvailabilityResult(success=True, calendars=[])
         assert str(result) == "No availability information returned."
+
+
+# ---------------------------------------------------------------------------
+# DeleteEventResult
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteEventResult:
+    def test_str_output(self) -> None:
+        result = DeleteEventResult(success=True, event_id="event-001")
+        assert str(result) == "Event deleted (id=event-001)."
+
+    def test_str_on_error(self) -> None:
+        result = DeleteEventResult(success=False, error="Not Found")
+        assert str(result) == "Error: Not Found"

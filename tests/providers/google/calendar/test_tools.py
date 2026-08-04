@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.calendar.tools import (
     google_calendar_check_availability,
     google_calendar_create_event,
+    google_calendar_delete_event,
     google_calendar_get_event,
     google_calendar_list_calendars,
     google_calendar_list_events,
@@ -21,6 +23,8 @@ from apron_tools.providers.google.calendar.types import (
     CheckAvailabilityResult,
     CreateEventParams,
     CreateEventResult,
+    DeleteEventParams,
+    DeleteEventResult,
     EventDateTime,
     GetEventParams,
     GetEventResult,
@@ -1131,6 +1135,103 @@ class TestUpdateEvent:
     async def test_has_tool_definition(self) -> None:
         defn = google_calendar_update_event._tool_definition
         assert defn.name == "google_calendar_update_event"
+        assert defn.provider == "google"
+        assert defn.service == "google_calendar"
+        assert "https://www.googleapis.com/auth/calendar" in defn.scopes
+
+
+# ---------------------------------------------------------------------------
+# delete_event
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteEvent:
+    async def test_success(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_CALENDAR_BASE}/calendars/{_CALENDAR_ID}/events/{_EVENT_ID}?sendUpdates=all",
+            status_code=204,
+        )
+
+        result = await google_calendar_delete_event(
+            DeleteEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID),
+            token=_TOKEN,
+        )
+
+        assert isinstance(result, DeleteEventResult)
+        assert result.success is True
+        assert result.event_id == _EVENT_ID
+        request = httpx_mock.get_request()
+        assert request.method == "DELETE"
+
+    async def test_already_deleted_event_returns_success(self, httpx_mock: HTTPXMock) -> None:
+        # Google returns 410 Gone when the event was already deleted. The
+        # desired end state is achieved, so the tool reports success and a
+        # retry after a dropped response stays idempotent. A 404 (event never
+        # existed) still fails; see test_api_error.
+        httpx_mock.add_response(
+            status_code=410,
+            json={"error": {"code": 410, "message": "Resource has been deleted."}},
+        )
+
+        result = await google_calendar_delete_event(
+            DeleteEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.event_id == _EVENT_ID
+
+    async def test_send_updates_none(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=204)
+
+        result = await google_calendar_delete_event(
+            DeleteEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID, send_updates="none"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert "sendUpdates=none" in str(request.url)
+
+    async def test_url_encodes_ids(self, httpx_mock: HTTPXMock) -> None:
+        # Calendar and event IDs are user input and must not be able to alter
+        # the request path.
+        httpx_mock.add_response(status_code=204)
+
+        result = await google_calendar_delete_event(
+            DeleteEventParams(calendar_id="team a/b", event_id="evt/../x"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert "/calendars/team%20a%2Fb/events/evt%2F..%2Fx" in str(request.url)
+
+    async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=404, text="Not Found")
+
+        result = await google_calendar_delete_event(
+            DeleteEventParams(calendar_id=_CALENDAR_ID, event_id="bad-id"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "404" in result.error
+
+    async def test_network_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_exception(httpx.ConnectError("connection refused"))
+
+        result = await google_calendar_delete_event(
+            DeleteEventParams(calendar_id=_CALENDAR_ID, event_id=_EVENT_ID),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "connection refused" in result.error
+
+    async def test_has_tool_definition(self) -> None:
+        defn = google_calendar_delete_event._tool_definition
+        assert defn.name == "google_calendar_delete_event"
         assert defn.provider == "google"
         assert defn.service == "google_calendar"
         assert "https://www.googleapis.com/auth/calendar" in defn.scopes

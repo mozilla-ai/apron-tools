@@ -15,6 +15,8 @@ from apron_tools.providers.google.calendar.types import (
     CheckAvailabilityResult,
     CreateEventParams,
     CreateEventResult,
+    DeleteEventParams,
+    DeleteEventResult,
     GetEventParams,
     GetEventResult,
     ListCalendarsParams,
@@ -536,3 +538,48 @@ async def google_calendar_update_event(
             error="Calendar response had an unexpected shape.",
         )
     return UpdateEventResult(success=True, event=event)
+
+
+@tool(
+    scopes=SCOPES["google_calendar_delete_event"],
+    api_docs="https://developers.google.com/workspace/calendar/api/v3/reference/events/delete",
+    provider="google",
+    service="google_calendar",
+)
+async def google_calendar_delete_event(
+    params: DeleteEventParams,
+    *,
+    token: str,
+    base_url: str = _CALENDAR_BASE_URL,
+) -> DeleteEventResult:
+    """Delete an event from a calendar.
+
+    Cancellation notices are sent according to ``send_updates``.
+    Deleting an event that was already deleted succeeds, so retries are idempotent.
+    """
+    encoded_cal = quote(params.calendar_id, safe="")
+    encoded_event = quote(params.event_id, safe="")
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.delete(
+                f"{base_url}/calendars/{encoded_cal}/events/{encoded_event}",
+                headers=_headers(token),
+                params={"sendUpdates": params.send_updates},
+            )
+    except httpx.HTTPError as exc:
+        return DeleteEventResult(success=False, error=str(exc))
+
+    # A 410 means the event was already deleted: the desired end state is
+    # achieved, so report success rather than failing a retry. A 404 (event
+    # never existed) still falls through to the failure branch.
+    if resp.status_code == 410:
+        return DeleteEventResult(success=True, event_id=params.event_id)
+
+    if not resp.is_success:
+        return DeleteEventResult(
+            success=False,
+            error=f"Calendar API error {resp.status_code}: {resp.text}",
+        )
+
+    return DeleteEventResult(success=True, event_id=params.event_id)
