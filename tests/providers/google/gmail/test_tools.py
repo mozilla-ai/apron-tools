@@ -53,6 +53,10 @@ TESTDATA_DIR = Path(__file__).parent / "testdata"
 _TOKEN = "test_oauth_token_abc123"
 _GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
 
+# An ID whose characters would corrupt the request path if interpolated unencoded.
+_TRICKY_ID = "msg 001/x?y#z"
+_TRICKY_ID_ENC = "msg%20001%2Fx%3Fy%23z"
+
 
 def _load_json(filename: str) -> dict | list:
     return json.loads((TESTDATA_DIR / filename).read_text())
@@ -89,6 +93,37 @@ class TestListEmails:
         assert result.emails[0].subject == "Project Status Update"
         assert result.emails[0].from_address == "alice@example.com"
         assert result.emails[1].subject == "Re: Project Status Update"
+
+    async def test_encodes_message_id_in_detail_request_path(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages?maxResults=25",
+            json={"messages": [{"id": _TRICKY_ID}], "resultSizeEstimate": 1},
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date",
+            json=_load_json("get_message_meta_1.json"),
+        )
+
+        result = await gmail_list_emails(ListEmailsParams(), token=_TOKEN)
+
+        assert result.success is True
+        assert len(result.emails) == 1
+
+    async def test_skips_message_stub_without_id(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages?maxResults=25",
+            json={"messages": [{"id": None}, {}, {"id": "msg-001"}], "resultSizeEstimate": 3},
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date",
+            json=_load_json("get_message_meta_1.json"),
+        )
+
+        result = await gmail_list_emails(ListEmailsParams(), token=_TOKEN)
+
+        assert result.success is True
+        assert len(result.emails) == 1
+        assert result.emails[0].id == "msg-001"
 
     async def test_empty_results(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
@@ -146,6 +181,19 @@ class TestReadEmail:
         assert result.cc == "carol@example.com"
         assert result.body == "Hello world"
         assert result.label_ids == ["INBOX", "UNREAD"]
+
+    async def test_encodes_message_id_in_request_path(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}?format=full",
+            json=_load_json("get_message_full.json"),
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id=_TRICKY_ID),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
 
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
@@ -282,6 +330,23 @@ class TestEditDraft:
         assert result.id == "draft-001"
         assert result.message_id == "msg-005"
 
+    async def test_encodes_draft_id_in_request_paths(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}?format=full",
+            json=_load_json("get_draft.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}",
+            json=_load_json("edit_draft.json"),
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id=_TRICKY_ID, subject="Updated Subject"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+
     async def test_fetch_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
@@ -327,6 +392,23 @@ class TestReplyToEmail:
         assert result.id == "msg-006"
         assert result.thread_id == "thread-001"
 
+    async def test_encodes_message_id_in_request_path(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=_load_json("get_message_for_reply.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/send",
+            json=_load_json("send_reply.json"),
+        )
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id=_TRICKY_ID, body="Thanks for the update!"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+
     async def test_fetch_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
@@ -370,6 +452,19 @@ class TestGetThreadReplies:
         assert len(result.messages) == 2
         assert result.messages[0].from_address == "alice@example.com"
         assert result.messages[1].from_address == "bob@example.com"
+
+    async def test_encodes_thread_id_in_request_path(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/threads/{_TRICKY_ID_ENC}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date",
+            json=_load_json("get_thread.json"),
+        )
+
+        result = await gmail_get_thread_replies(
+            GetThreadRepliesParams(thread_id=_TRICKY_ID),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
 
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
@@ -468,6 +563,20 @@ class TestAddLabelsToEmails:
         assert [item.message_id for item in result.items] == ["msg-001", "msg-002"]
         assert all(item.success for item in result.items)
 
+    async def test_encodes_message_id_in_request_path(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}/modify",
+            json=_load_json("modify_add_label.json"),
+        )
+
+        result = await gmail_add_labels_to_emails(
+            AddLabelsToEmailsParams(message_ids=_TRICKY_ID, label_ids="label-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
+
     async def test_partial_failure(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/messages/msg-001/modify",
@@ -537,6 +646,20 @@ class TestRemoveLabelsFromEmails:
         assert len(result.items) == 1
         assert result.items[0].message_id == "msg-001"
         assert "label-001" not in result.items[0].label_ids
+
+    async def test_encodes_message_id_in_request_path(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}/modify",
+            json=_load_json("modify_remove_label.json"),
+        )
+
+        result = await gmail_remove_labels_from_emails(
+            RemoveLabelsFromEmailsParams(message_ids=_TRICKY_ID, label_ids="label-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.items[0].success is True
 
     async def test_multiple_messages(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
@@ -690,6 +813,20 @@ class TestGetAttachment:
         assert result.size == len(self._RAW)
         assert result.filename == "report.pdf"
         assert result.mime_type == "application/pdf"
+
+    async def test_encodes_message_and_attachment_ids_in_request_path(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}/attachments/att%3F1%232",
+            json={"attachmentId": "att?1#2", "size": len(self._RAW), "data": self._encoded()},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id=_TRICKY_ID, attachment_id="att?1#2"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.data == self._RAW
 
     async def test_success_without_hints_uses_defaults(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(

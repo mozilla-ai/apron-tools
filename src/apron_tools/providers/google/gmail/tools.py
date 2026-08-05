@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 
 import httpx
 
-from apron_tools._utils import parse_csv_ids
+from apron_tools._utils import parse_csv_ids, quote_path_segment
 from apron_tools.providers.google.gmail.types import (
     AddLabelsToEmailsParams,
     CreateDraftParams,
@@ -170,9 +170,11 @@ async def gmail_list_emails(
             # Fetch metadata for each message to build summaries.
             emails: list[EmailSummary] = []
             for msg_stub in messages:
-                msg_id = msg_stub.get("id", "")
+                msg_id = msg_stub.get("id") or ""
+                if not msg_id:
+                    continue
                 detail_resp = await client.get(
-                    f"{base_url}/messages/{msg_id}",
+                    f"{base_url}/messages/{quote_path_segment(msg_id)}",
                     headers=_headers(token),
                     params={
                         "format": "metadata",
@@ -216,7 +218,7 @@ async def gmail_read_email(
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(
-                f"{base_url}/messages/{params.message_id}",
+                f"{base_url}/messages/{quote_path_segment(params.message_id)}",
                 headers=_headers(token),
                 params={"format": "full"},
             )
@@ -266,10 +268,11 @@ async def gmail_get_attachment(
     raw content, and filename/MIME type fall back to the caller-supplied
     hints (or generic defaults) since the endpoint does not provide them.
     """
+    path = f"messages/{quote_path_segment(params.message_id)}/attachments/{quote_path_segment(params.attachment_id)}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(
-                f"{base_url}/messages/{params.message_id}/attachments/{params.attachment_id}",
+                f"{base_url}/{path}",
                 headers=_headers(token),
             )
     except httpx.HTTPError as exc:
@@ -404,11 +407,12 @@ async def gmail_edit_draft(
     base_url: str = _GMAIL_BASE_URL,
 ) -> EditDraftResult:
     """Edit an existing Gmail draft."""
+    draft_url = f"{base_url}/drafts/{quote_path_segment(params.draft_id)}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             # Fetch existing draft to merge fields.
             get_resp = await client.get(
-                f"{base_url}/drafts/{params.draft_id}",
+                draft_url,
                 headers=_headers(token),
                 params={"format": "full"},
             )
@@ -438,7 +442,7 @@ async def gmail_edit_draft(
             )
 
             put_resp = await client.put(
-                f"{base_url}/drafts/{params.draft_id}",
+                draft_url,
                 headers=_headers(token, content_type=True),
                 json={"message": {"raw": raw}},
             )
@@ -471,7 +475,7 @@ async def gmail_reply_to_email(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             # Fetch the original message to obtain threading headers.
             orig_resp = await client.get(
-                f"{base_url}/messages/{params.message_id}",
+                f"{base_url}/messages/{quote_path_segment(params.message_id)}",
                 headers=_headers(token),
                 params={
                     "format": "metadata",
@@ -550,7 +554,7 @@ async def gmail_get_thread_replies(
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(
-                f"{base_url}/threads/{params.thread_id}",
+                f"{base_url}/threads/{quote_path_segment(params.thread_id)}",
                 headers=_headers(token),
                 params={
                     "format": "metadata",
@@ -639,7 +643,7 @@ async def _modify_message_labels(
     """Send a single Gmail messages.modify request and shape the per-item outcome."""
     try:
         resp = await client.post(
-            f"{base_url}/messages/{message_id}/modify",
+            f"{base_url}/messages/{quote_path_segment(message_id)}/modify",
             headers=_headers(token, content_type=True),
             json={"addLabelIds": add_label_ids, "removeLabelIds": remove_label_ids},
         )
