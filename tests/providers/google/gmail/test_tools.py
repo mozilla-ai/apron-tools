@@ -195,6 +195,54 @@ class TestReadEmail:
 
         assert result.success is True
 
+    async def test_success_with_unpadded_single_part_body(self, httpx_mock: HTTPXMock) -> None:
+        # Gmail commonly returns MessagePartBody.data without trailing '=' padding.
+        body = "Hi Bob, following up on the thread."
+        padded = base64.urlsafe_b64encode(body.encode()).decode("ascii")
+        assert padded.endswith("="), "test payload must exercise padding removal"
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["mimeType"] = "text/plain"
+        message["payload"]["body"] = {"size": len(body), "data": padded.rstrip("=")}
+        message["payload"].pop("parts")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == body
+
+    async def test_success_with_unpadded_multipart_body(self, httpx_mock: HTTPXMock) -> None:
+        body = "Hi Bob, following up on the thread."
+        padded = base64.urlsafe_b64encode(body.encode()).decode("ascii")
+        assert padded.endswith("="), "test payload must exercise padding removal"
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["parts"][0]["body"] = {
+            "size": len(body),
+            "data": padded.rstrip("="),
+        }
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == body
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 

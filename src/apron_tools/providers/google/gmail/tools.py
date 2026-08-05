@@ -58,6 +58,17 @@ def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
     return h
 
 
+def _decode_base64url(data: str) -> bytes:
+    """Decode Gmail base64url data, restoring the padding Gmail omits.
+
+    The Gmail API returns ``MessagePartBody.data`` and attachment data as
+    base64url that commonly drops the trailing ``=``, which
+    ``base64.urlsafe_b64decode`` rejects. Restoring it is a no-op on input
+    that is already padded.
+    """
+    return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+
+
 def _extract_header(headers: list[dict[str, str]], name: str) -> str:
     """Extract a single header value from a Gmail payload headers list."""
     for h in headers:
@@ -76,7 +87,7 @@ def _extract_body(payload: dict) -> str:
     body_data = payload.get("body", {}).get("data", "")
     if body_data:
         try:
-            return base64.urlsafe_b64decode(body_data).decode("utf-8")
+            return _decode_base64url(body_data).decode("utf-8")
         except Exception:
             return "(Could not decode email body)"
 
@@ -90,10 +101,10 @@ def _extract_body(payload: dict) -> str:
 
         if mime_type == "text/plain" and part_data:
             with contextlib.suppress(Exception):
-                plain_text = base64.urlsafe_b64decode(part_data).decode("utf-8")
+                plain_text = _decode_base64url(part_data).decode("utf-8")
         elif mime_type == "text/html" and part_data:
             with contextlib.suppress(Exception):
-                html_text = base64.urlsafe_b64decode(part_data).decode("utf-8")
+                html_text = _decode_base64url(part_data).decode("utf-8")
         elif part.get("parts"):
             nested = _extract_body(part)
             if nested and nested != "(No email body found)":
@@ -292,11 +303,8 @@ async def gmail_get_attachment(
     if not encoded:
         return GetAttachmentResult(success=False, error="Attachment contained no data.")
 
-    # Gmail returns base64url data that often omits trailing padding, which
-    # base64.urlsafe_b64decode rejects; restore it before decoding.
-    encoded += "=" * (-len(encoded) % 4)
     try:
-        raw = base64.urlsafe_b64decode(encoded)
+        raw = _decode_base64url(encoded)
     except (binascii.Error, ValueError):
         return GetAttachmentResult(success=False, error="Could not decode attachment data.")
 
