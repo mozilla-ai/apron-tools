@@ -109,6 +109,22 @@ class TestListEmails:
         assert result.success is True
         assert len(result.emails) == 1
 
+    async def test_skips_message_stub_without_id(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages?maxResults=25",
+            json={"messages": [{"id": None}, {}, {"id": "msg-001"}], "resultSizeEstimate": 3},
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date",
+            json=_load_json("get_message_meta_1.json"),
+        )
+
+        result = await gmail_list_emails(ListEmailsParams(), token=_TOKEN)
+
+        assert result.success is True
+        assert len(result.emails) == 1
+        assert result.emails[0].id == "msg-001"
+
     async def test_empty_results(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             json={"resultSizeEstimate": 0},

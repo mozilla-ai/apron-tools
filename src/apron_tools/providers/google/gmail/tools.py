@@ -170,7 +170,9 @@ async def gmail_list_emails(
             # Fetch metadata for each message to build summaries.
             emails: list[EmailSummary] = []
             for msg_stub in messages:
-                msg_id = msg_stub.get("id", "")
+                msg_id = msg_stub.get("id") or ""
+                if not msg_id:
+                    continue
                 detail_resp = await client.get(
                     f"{base_url}/messages/{quote_path_segment(msg_id)}",
                     headers=_headers(token),
