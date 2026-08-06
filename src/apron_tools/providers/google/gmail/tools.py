@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import binascii
 import contextlib
 from email.mime.text import MIMEText
 
@@ -64,7 +63,19 @@ def _decode_base64url(data: str) -> bytes:
     The Gmail API returns ``MessagePartBody.data`` and attachment data as
     base64url that commonly drops the trailing ``=``, which
     ``base64.urlsafe_b64decode`` rejects. Restoring it is a no-op on input
-    that is already padded.
+    that is already padded. Decoding is lenient and does not validate the
+    payload: characters outside the base64url alphabet are discarded rather
+    than rejected.
+
+    Args:
+        data: The base64url-encoded string to decode, with or without padding.
+
+    Returns:
+        The decoded bytes.
+
+    Raises:
+        ValueError: If ``data`` cannot be decoded, such as an invalid length
+            or non-ASCII input.
     """
     return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
 
@@ -88,7 +99,7 @@ def _extract_body(payload: dict) -> str:
     if body_data:
         try:
             return _decode_base64url(body_data).decode("utf-8")
-        except Exception:
+        except ValueError:
             return "(Could not decode email body)"
 
     parts = payload.get("parts", [])
@@ -100,10 +111,10 @@ def _extract_body(payload: dict) -> str:
         part_data = part.get("body", {}).get("data", "")
 
         if mime_type == "text/plain" and part_data:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(ValueError):
                 plain_text = _decode_base64url(part_data).decode("utf-8")
         elif mime_type == "text/html" and part_data:
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(ValueError):
                 html_text = _decode_base64url(part_data).decode("utf-8")
         elif part.get("parts"):
             nested = _extract_body(part)
@@ -305,7 +316,7 @@ async def gmail_get_attachment(
 
     try:
         raw = _decode_base64url(encoded)
-    except (binascii.Error, ValueError):
+    except ValueError:
         return GetAttachmentResult(success=False, error="Could not decode attachment data.")
 
     return GetAttachmentResult(
