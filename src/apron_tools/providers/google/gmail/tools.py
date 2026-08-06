@@ -63,9 +63,9 @@ def _decode_base64url(data: str) -> bytes:
     The Gmail API returns ``MessagePartBody.data`` and attachment data as
     base64url that commonly drops the trailing ``=``, which
     ``base64.urlsafe_b64decode`` rejects. Restoring it is a no-op on input
-    that is already padded. Decoding is lenient and does not validate the
-    payload: characters outside the base64url alphabet are discarded rather
-    than rejected.
+    that is already padded. Decoding is strict: characters outside the
+    base64url alphabet are rejected rather than silently discarded, so
+    corrupt data surfaces as an error instead of truncated bytes.
 
     Args:
         data: The base64url-encoded string to decode, with or without padding.
@@ -74,10 +74,10 @@ def _decode_base64url(data: str) -> bytes:
         The decoded bytes.
 
     Raises:
-        ValueError: If ``data`` cannot be decoded, such as an invalid length
-            or non-ASCII input.
+        ValueError: If ``data`` cannot be decoded, such as an invalid length,
+            a character outside the base64url alphabet, or non-ASCII input.
     """
-    return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+    return base64.b64decode(data + "=" * (-len(data) % 4), altchars=b"-_", validate=True)
 
 
 def _extract_header(headers: list[dict[str, str]], name: str) -> str:

@@ -291,6 +291,30 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == "(Could not decode email body)"
 
+    async def test_single_part_body_with_invalid_base64_alphabet_returns_placeholder(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        # A valid length but a character outside the base64url alphabet. Strict
+        # validation rejects it rather than discarding the character and
+        # returning truncated bytes.
+        message = _load_json("get_message_full.json")
+        message["payload"]["mimeType"] = "text/plain"
+        message["payload"]["body"] = {"size": 4, "data": "ab*d"}
+        message["payload"].pop("parts")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == "(Could not decode email body)"
+
     async def test_single_part_body_with_non_utf8_bytes_returns_placeholder(self, httpx_mock: HTTPXMock) -> None:
         # Valid base64url that decodes to bytes that are not valid UTF-8 raises
         # UnicodeDecodeError, also a ValueError subclass, on the single-part path.
