@@ -243,6 +243,32 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    async def test_success_with_unpadded_html_body(self, httpx_mock: HTTPXMock) -> None:
+        # Unlike the other unpadded regression tests above, this payload requires
+        # two padding characters ('==') rather than just one.
+        body = "<p>Hi Bob, following up.</p>"
+        padded = base64.urlsafe_b64encode(body.encode()).decode("ascii")
+        assert padded.endswith("=="), "test payload must require two padding characters"
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["parts"][0] = {
+            "mimeType": "text/html",
+            "body": {"size": len(body), "data": padded.rstrip("=")},
+        }
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == body
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
@@ -932,6 +958,28 @@ class TestGetAttachment:
 
         result = await gmail_get_attachment(
             GetAttachmentParams(message_id="msg-001", attachment_id="att-004"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.data == raw
+        assert result.size == len(raw)
+
+    async def test_success_with_unpadded_data_requiring_double_padding(self, httpx_mock: HTTPXMock) -> None:
+        # Unlike test_success_with_unpadded_data above, which only strips one
+        # padding character, this payload requires two ('==').
+        raw = b"unpadded pdf report bytes"
+        padded = base64.urlsafe_b64encode(raw).decode("ascii")
+        assert padded.endswith("=="), "test payload must require two padding characters"
+        unpadded = padded.rstrip("=")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-006",
+            json={"attachmentId": "att-006", "size": len(raw), "data": unpadded},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id="msg-001", attachment_id="att-006"),
             token=_TOKEN,
         )
 
