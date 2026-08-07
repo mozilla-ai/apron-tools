@@ -294,12 +294,14 @@ class TestReadEmail:
     async def test_single_part_body_with_invalid_base64_alphabet_returns_placeholder(
         self, httpx_mock: HTTPXMock
     ) -> None:
-        # A valid length but a character outside the base64url alphabet. Strict
-        # validation rejects it rather than discarding the character and
-        # returning truncated bytes.
+        # A complete valid Base64 block ("YWJj" -> "abc") followed by a stray
+        # character outside the base64url alphabet. The lenient decoder would
+        # discard the stray character and still decode "abc"; strict validation
+        # rejects it. This isolates the alphabet check rather than tripping the
+        # padding check the way a shorter invalid payload would.
         message = _load_json("get_message_full.json")
         message["payload"]["mimeType"] = "text/plain"
-        message["payload"]["body"] = {"size": 4, "data": "ab*d"}
+        message["payload"]["body"] = {"size": 3, "data": "YWJj*"}
         message["payload"].pop("parts")
 
         httpx_mock.add_response(
