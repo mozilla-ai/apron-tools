@@ -195,6 +195,172 @@ class TestReadEmail:
 
         assert result.success is True
 
+    async def test_success_with_unpadded_single_part_body(self, httpx_mock: HTTPXMock) -> None:
+        # Gmail commonly returns MessagePartBody.data without trailing '=' padding.
+        body = "Hi Bob, following up on the thread."
+        padded = base64.urlsafe_b64encode(body.encode()).decode("ascii")
+        assert padded.endswith("="), "test payload must exercise padding removal"
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["mimeType"] = "text/plain"
+        message["payload"]["body"] = {"size": len(body), "data": padded.rstrip("=")}
+        message["payload"].pop("parts")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == body
+
+    async def test_success_with_unpadded_multipart_body(self, httpx_mock: HTTPXMock) -> None:
+        body = "Hi Bob, following up on the thread."
+        padded = base64.urlsafe_b64encode(body.encode()).decode("ascii")
+        assert padded.endswith("="), "test payload must exercise padding removal"
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["parts"][0]["body"] = {
+            "size": len(body),
+            "data": padded.rstrip("="),
+        }
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == body
+
+    async def test_success_with_unpadded_html_body(self, httpx_mock: HTTPXMock) -> None:
+        # Unlike the other unpadded regression tests above, this payload requires
+        # two padding characters ('==') rather than just one.
+        body = "<p>Hi Bob, following up.</p>"
+        padded = base64.urlsafe_b64encode(body.encode()).decode("ascii")
+        assert padded.endswith("=="), "test payload must require two padding characters"
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["parts"][0] = {
+            "mimeType": "text/html",
+            "body": {"size": len(body), "data": padded.rstrip("=")},
+        }
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == body
+
+    async def test_single_part_body_with_undecodable_base64_returns_placeholder(self, httpx_mock: HTTPXMock) -> None:
+        # An invalid base64url length (a single data character) raises
+        # binascii.Error, a ValueError subclass, which the single-part path
+        # catches and reports as a decode failure.
+        message = _load_json("get_message_full.json")
+        message["payload"]["mimeType"] = "text/plain"
+        message["payload"]["body"] = {"size": 1, "data": "A"}
+        message["payload"].pop("parts")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == "(Could not decode email body)"
+
+    async def test_single_part_body_with_invalid_base64_alphabet_returns_placeholder(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        # A complete valid Base64 block ("YWJj" -> "abc") followed by a stray
+        # character outside the base64url alphabet. The lenient decoder would
+        # discard the stray character and still decode "abc"; strict validation
+        # rejects it. This isolates the alphabet check rather than tripping the
+        # padding check the way a shorter invalid payload would.
+        message = _load_json("get_message_full.json")
+        message["payload"]["mimeType"] = "text/plain"
+        message["payload"]["body"] = {"size": 3, "data": "YWJj*"}
+        message["payload"].pop("parts")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == "(Could not decode email body)"
+
+    async def test_single_part_body_with_non_utf8_bytes_returns_placeholder(self, httpx_mock: HTTPXMock) -> None:
+        # Valid base64url that decodes to bytes that are not valid UTF-8 raises
+        # UnicodeDecodeError, also a ValueError subclass, on the single-part path.
+        non_utf8 = base64.urlsafe_b64encode(b"\xff\xfe").decode("ascii")
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["mimeType"] = "text/plain"
+        message["payload"]["body"] = {"size": 2, "data": non_utf8}
+        message["payload"].pop("parts")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == "(Could not decode email body)"
+
+    async def test_multipart_body_with_non_utf8_bytes_falls_through(self, httpx_mock: HTTPXMock) -> None:
+        # On the multipart path an undecodable part is suppressed, leaving no
+        # usable body, so extraction falls through to the sentinel.
+        non_utf8 = base64.urlsafe_b64encode(b"\xff\xfe").decode("ascii")
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["parts"][0]["body"] = {"size": 2, "data": non_utf8}
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == "(No email body found)"
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
@@ -884,6 +1050,28 @@ class TestGetAttachment:
 
         result = await gmail_get_attachment(
             GetAttachmentParams(message_id="msg-001", attachment_id="att-004"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.data == raw
+        assert result.size == len(raw)
+
+    async def test_success_with_unpadded_data_requiring_double_padding(self, httpx_mock: HTTPXMock) -> None:
+        # Unlike test_success_with_unpadded_data above, which only strips one
+        # padding character, this payload requires two ('==').
+        raw = b"unpadded pdf report bytes"
+        padded = base64.urlsafe_b64encode(raw).decode("ascii")
+        assert padded.endswith("=="), "test payload must require two padding characters"
+        unpadded = padded.rstrip("=")
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001/attachments/att-006",
+            json={"attachmentId": "att-006", "size": len(raw), "data": unpadded},
+        )
+
+        result = await gmail_get_attachment(
+            GetAttachmentParams(message_id="msg-001", attachment_id="att-006"),
             token=_TOKEN,
         )
 
