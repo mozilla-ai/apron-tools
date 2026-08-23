@@ -45,6 +45,11 @@ from .scopes import SCOPES
 _GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
 _TIMEOUT = 60.0
 
+# User-facing placeholders. Rendered only at the gmail_read_email display
+# boundary; never fed back into a write path (see _extract_body).
+_BODY_DECODE_FAILED = "(Could not decode email body)"
+_BODY_NOT_FOUND = "(No email body found)"
+
 
 def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
     """Build authorization headers for a Gmail API request."""
@@ -88,44 +93,51 @@ def _extract_header(headers: list[dict[str, str]], name: str) -> str:
     return ""
 
 
-def _extract_body(payload: dict) -> str:
+def _extract_body(payload: dict) -> str | None:
     """Extract the plain-text body from a Gmail message payload.
 
     Handles both single-part and multipart MIME payloads, preferring
     text/plain over text/html. Nested multipart structures are traversed
     recursively.
+
+    Returns:
+        The decoded body text, or ``None`` if the payload carries no body
+        data at all (no ``body.data`` and no part with decodable content).
+
+    Raises:
+        ValueError: If the message's own body data is present but cannot
+            be decoded as base64url/UTF-8. Callers must not treat this the
+            same as an absent body — see gmail_edit_draft, which refuses
+            to write a placeholder over a body it could not recover.
     """
     body_data = payload.get("body", {}).get("data", "")
     if body_data:
-        try:
-            return _decode_base64url(body_data).decode("utf-8")
-        except ValueError:
-            return "(Could not decode email body)"
+        return _decode_base64url(body_data).decode("utf-8")
 
     parts = payload.get("parts", [])
     plain_text: str | None = None
     html_text: str | None = None
+    nested_text: str | None = None
 
     for part in parts:
         mime_type = part.get("mimeType", "")
         part_data = part.get("body", {}).get("data", "")
 
-        if mime_type == "text/plain" and part_data:
+        if mime_type == "text/plain" and part_data and plain_text is None:
             with contextlib.suppress(ValueError):
                 plain_text = _decode_base64url(part_data).decode("utf-8")
-        elif mime_type == "text/html" and part_data:
+        elif mime_type == "text/html" and part_data and html_text is None:
             with contextlib.suppress(ValueError):
                 html_text = _decode_base64url(part_data).decode("utf-8")
-        elif part.get("parts"):
-            nested = _extract_body(part)
-            if nested and nested != "(No email body found)":
-                return nested
+        elif part.get("parts") and nested_text is None:
+            with contextlib.suppress(ValueError):
+                nested_text = _extract_body(part)
 
-    if plain_text:
+    if plain_text is not None:
         return plain_text
-    if html_text:
+    if html_text is not None:
         return html_text
-    return "(No email body found)"
+    return nested_text
 
 
 def _build_raw_message(
@@ -257,6 +269,14 @@ async def gmail_read_email(
     payload = data.get("payload", {})
     hdrs = payload.get("headers", [])
 
+    try:
+        body = _extract_body(payload)
+    except ValueError:
+        body = _BODY_DECODE_FAILED
+    else:
+        if body is None:
+            body = _BODY_NOT_FOUND
+
     return ReadEmailResult(
         success=True,
         id=data.get("id", ""),
@@ -266,7 +286,7 @@ async def gmail_read_email(
         to_address=_extract_header(hdrs, "To"),
         cc=_extract_header(hdrs, "Cc"),
         date=_extract_header(hdrs, "Date"),
-        body=_extract_body(payload),
+        body=body,
         label_ids=data.get("labelIds", []),
     )
 
@@ -448,7 +468,23 @@ async def gmail_edit_draft(
 
             final_to = params.to if params.to is not None else _extract_header(hdrs, "To")
             final_subject = params.subject if params.subject is not None else _extract_header(hdrs, "Subject")
-            final_body = params.body if params.body is not None else _extract_body(payload)
+
+            if params.body is not None:
+                final_body = params.body
+            else:
+                try:
+                    existing_body = _extract_body(payload)
+                except ValueError:
+                    return EditDraftResult(
+                        success=False,
+                        error=(
+                            "Could not decode the existing draft body; refusing to "
+                            "overwrite it with a placeholder. Pass `body` explicitly "
+                            "to replace it."
+                        ),
+                    )
+                final_body = existing_body if existing_body is not None else ""
+
             final_cc = params.cc if params.cc is not None else _extract_header(hdrs, "Cc") or None
             final_bcc = params.bcc if params.bcc is not None else _extract_header(hdrs, "Bcc") or None
 
