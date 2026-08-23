@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import email
 import json
 from pathlib import Path
 
@@ -361,6 +362,50 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == "(No email body found)"
 
+    async def test_multipart_sibling_text_survives_undecodable_nested_sibling(self, httpx_mock: HTTPXMock) -> None:
+        # Regression for the recursion-guard bug: a text/plain sibling appears
+        # before a nested multipart sibling whose own body.data is undecodable.
+        # The undecodable nested part must not be mistaken for a successful
+        # extraction and must not discard the already-collected plain text.
+        sibling_text = "Sibling one text"
+        sibling_data = base64.urlsafe_b64encode(sibling_text.encode()).decode("ascii")
+        nested_text = "Nested sibling text"
+        nested_data = base64.urlsafe_b64encode(nested_text.encode()).decode("ascii")
+
+        message = _load_json("get_message_full.json")
+        message["payload"]["mimeType"] = "multipart/mixed"
+        message["payload"]["parts"] = [
+            {
+                "mimeType": "text/plain",
+                "body": {"size": len(sibling_text), "data": sibling_data},
+            },
+            {
+                "mimeType": "multipart/related",
+                # A malformed but non-empty body.data on the multipart part
+                # itself: present, but not decodable.
+                "body": {"data": "!!!invalid!!!"},
+                "parts": [
+                    {
+                        "mimeType": "text/plain",
+                        "body": {"size": len(nested_text), "data": nested_data},
+                    }
+                ],
+            },
+        ]
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=full",
+            json=message,
+        )
+
+        result = await gmail_read_email(
+            ReadEmailParams(message_id="msg-001"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        assert result.body == sibling_text
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
@@ -523,6 +568,89 @@ class TestEditDraft:
 
         assert result.success is False
         assert "404" in result.error
+
+    async def test_subject_only_edit_does_not_clobber_undecodable_body(self, httpx_mock: HTTPXMock) -> None:
+        # Editing only the subject (params.body is None, the documented
+        # normal case) of a draft whose stored body cannot be decoded must
+        # not write a placeholder string over the real body, and must not
+        # report success.
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"]["body"] = {"size": 13, "data": "!!!invalid!!!"}
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=full",
+            json=draft,
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", subject="Updated Subject Only"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error
+
+        # No PUT was issued: the tool must bail out before writing anything,
+        # not merely report failure after already clobbering the draft.
+        requests = httpx_mock.get_requests()
+        assert len(requests) == 1
+        assert requests[0].method == "GET"
+
+    async def test_multipart_sibling_survives_undecodable_nested_sibling_on_edit(self, httpx_mock: HTTPXMock) -> None:
+        # Same recursion-guard bug as the read_email regression, but exercised
+        # through gmail_edit_draft: the recovered body must be the real
+        # sibling text, not discarded, and must round-trip into the raw MIME
+        # message that gets PUT back to Gmail.
+        sibling_text = "Sibling one text"
+        sibling_data = base64.urlsafe_b64encode(sibling_text.encode()).decode("ascii")
+
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = {
+            "mimeType": "multipart/mixed",
+            "headers": draft["message"]["payload"]["headers"],
+            "body": {"size": 0},
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "body": {"size": len(sibling_text), "data": sibling_data},
+                },
+                {
+                    "mimeType": "multipart/related",
+                    "body": {"data": "!!!invalid!!!"},
+                    "parts": [
+                        {
+                            "mimeType": "text/plain",
+                            "body": {"size": 4, "data": "abcd"},
+                        }
+                    ],
+                },
+            ],
+        }
+
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=full",
+            json=draft,
+        )
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001",
+            json=_load_json("edit_draft.json"),
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", subject="Updated Subject"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+
+        requests = httpx_mock.get_requests()
+        put_request = next(r for r in requests if r.method == "PUT")
+        sent = json.loads(put_request.content)
+        raw = sent["message"]["raw"]
+        mime_bytes = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+        sent_message = email.message_from_bytes(mime_bytes)
+
+        assert sent_message.get_payload() == sibling_text
 
     async def test_has_tool_definition(self) -> None:
         defn = gmail_edit_draft._tool_definition
