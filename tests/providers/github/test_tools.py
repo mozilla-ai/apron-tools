@@ -29,6 +29,7 @@ from apron_tools.providers.github.tools import (
     github_list_milestones,
     github_list_pull_requests,
     github_list_repositories,
+    github_reply_to_review_comment,
     github_update_file,
 )
 from apron_tools.providers.github.types import (
@@ -70,6 +71,8 @@ from apron_tools.providers.github.types import (
     ListPullRequestsResult,
     ListRepositoriesParams,
     ListRepositoriesResult,
+    ReplyToReviewCommentParams,
+    ReplyToReviewCommentResult,
     UpdateFileParams,
     UpdateFileResult,
 )
@@ -1534,6 +1537,76 @@ class TestCreatePullRequest:
     async def test_has_tool_definition(self) -> None:
         defn = github_create_pull_request._tool_definition
         assert defn.name == "github_create_pull_request"
+        assert defn.provider == "github"
+
+
+# ---------------------------------------------------------------------------
+# github_reply_to_review_comment
+# ---------------------------------------------------------------------------
+
+
+class TestReplyToReviewComment:
+    async def test_success(self) -> None:
+        data = _load_json("reply_to_review_comment.json")
+        mock_reply = MagicMock()
+        mock_reply.html_url = data["html_url"]
+
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_pr = MagicMock()
+            mock_repo.get_pull.return_value = mock_pr
+            mock_pr.create_review_comment_reply.return_value = mock_reply
+
+            result = await github_reply_to_review_comment(
+                ReplyToReviewCommentParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    pr_number=1,
+                    comment_id=426899381,
+                    body="Great stuff!",
+                ),
+                token=_TOKEN,
+            )
+
+        assert isinstance(result, ReplyToReviewCommentResult)
+        assert result.success is True
+        assert result.html_url == "https://github.com/octocat/Hello-World/pull/1#discussion-diff-1"
+        mock_g.get_repo.assert_called_once_with("octocat/Hello-World")
+        mock_repo.get_pull.assert_called_once_with(1)
+        mock_pr.create_review_comment_reply.assert_called_once_with(426899381, "Great stuff!")
+
+    async def test_error_surfaces_github_message(self) -> None:
+        with patch("apron_tools.providers.github.tools._build_client") as mock_build:
+            mock_g = MagicMock()
+            mock_build.return_value = mock_g
+            mock_repo = MagicMock()
+            mock_g.get_repo.return_value = mock_repo
+            mock_pr = MagicMock()
+            mock_repo.get_pull.return_value = mock_pr
+            mock_pr.create_review_comment_reply.side_effect = GithubException(404, {"message": "Not Found"}, None)
+
+            result = await github_reply_to_review_comment(
+                ReplyToReviewCommentParams(
+                    owner="octocat",
+                    repo="Hello-World",
+                    pr_number=1,
+                    comment_id=999,
+                    body="Great stuff!",
+                ),
+                token=_TOKEN,
+            )
+
+        assert result.success is False
+        assert "404" in result.error
+        assert "Not Found" in result.error
+        mock_g.close.assert_called_once()
+
+    async def test_has_tool_definition(self) -> None:
+        defn = github_reply_to_review_comment._tool_definition
+        assert defn.name == "github_reply_to_review_comment"
         assert defn.provider == "github"
 
 

@@ -52,6 +52,8 @@ from apron_tools.providers.github.types import (
     ListRepositoriesResult,
     PullRequestDetail,
     ReleaseSummary,
+    ReplyToReviewCommentParams,
+    ReplyToReviewCommentResult,
     RepositorySummary,
     RepoTreeEntry,
     UpdateFileParams,
@@ -275,6 +277,16 @@ class TestCreatePullRequestParams:
         assert params.base == "main"
         assert params.draft is False
         assert params.body == ""
+
+
+class TestReplyToReviewCommentParams:
+    def test_requires_comment_id_and_body(self) -> None:
+        try:
+            ReplyToReviewCommentParams(owner="octocat", repo="Hello-World", pr_number=1)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError("missing comment_id and body should fail validation")
 
 
 class TestCreateReleaseParams:
@@ -915,6 +927,24 @@ class TestCreatePullRequestResult:
     def test_str_on_error(self):
         result = CreatePullRequestResult(success=False, error="Validation Failed")
         assert str(result) == "Error: Validation Failed"
+
+
+# ---------------------------------------------------------------------------
+# ReplyToReviewCommentResult
+# ---------------------------------------------------------------------------
+
+
+class TestReplyToReviewCommentResult:
+    def test_str_output(self) -> None:
+        data = _load_json("reply_to_review_comment.json")
+        result = ReplyToReviewCommentResult(success=True, html_url=data["html_url"])
+        text = str(result)
+        assert "Reply posted" in text
+        assert "https://github.com/octocat/Hello-World/pull/1#discussion-diff-1" in text
+
+    def test_str_on_error(self) -> None:
+        result = ReplyToReviewCommentResult(success=False, error="GitHub API error 404: {'message': 'Not Found'}")
+        assert str(result) == "Error: GitHub API error 404: {'message': 'Not Found'}"
 
 
 # ---------------------------------------------------------------------------
