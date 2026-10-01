@@ -64,6 +64,8 @@ from .types import (
     PullRequestSummary,
     ReleaseAsset,
     ReleaseSummary,
+    ReplyToReviewCommentParams,
+    ReplyToReviewCommentResult,
     RepositorySummary,
     RepoTreeEntry,
     UpdateFileParams,
@@ -922,6 +924,37 @@ async def github_create_pull_request(
             return CreatePullRequestResult(success=True, pull_request=_pr_detail(pr))
         except GithubException as exc:
             return CreatePullRequestResult(
+                success=False,
+                error=f"GitHub API error {exc.status}: {exc.data}",
+            )
+        finally:
+            g.close()
+
+    return await asyncio.to_thread(_call)
+
+
+@tool(
+    scopes=SCOPES["github_reply_to_review_comment"],
+    api_docs="https://docs.github.com/en/rest/pulls/comments#create-a-reply-for-a-review-comment",
+    provider="github",
+)
+async def github_reply_to_review_comment(
+    params: ReplyToReviewCommentParams,
+    *,
+    token: str,
+    base_url: str = _BASE_URL,
+) -> ReplyToReviewCommentResult:
+    """Reply inside the pull request review thread that a review comment starts."""
+
+    def _call() -> ReplyToReviewCommentResult:
+        g = _build_client(token, base_url)
+        try:
+            repo = g.get_repo(f"{params.owner}/{params.repo}")
+            pr = repo.get_pull(params.pr_number)
+            reply = pr.create_review_comment_reply(params.comment_id, params.body)
+            return ReplyToReviewCommentResult(success=True, html_url=reply.html_url)
+        except GithubException as exc:
+            return ReplyToReviewCommentResult(
                 success=False,
                 error=f"GitHub API error {exc.status}: {exc.data}",
             )

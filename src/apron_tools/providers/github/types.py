@@ -112,6 +112,21 @@ class GetPullRequestParams(BaseModel):
     pr_number: int
 
 
+class ReplyToReviewCommentParams(BaseModel):
+    """Parameters for replying inside a pull request review thread.
+
+    ``comment_id`` must be the top-level comment of the thread.
+    GitHub does not accept a reply to a reply.
+    ``body`` supports Markdown.
+    """
+
+    owner: str
+    repo: str
+    pr_number: int
+    comment_id: int
+    body: str
+
+
 class ListMilestonesParams(BaseModel):
     """Parameters for listing milestones in a repository."""
 
@@ -979,6 +994,20 @@ class CreatePullRequestResult(ToolResult):
                 f"- URL: {pr.html_url}",
             ]
         )
+
+
+class ReplyToReviewCommentResult(ToolResult):
+    """Result of replying inside a pull request review thread."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    html_url: str | None = None
+
+    def __str__(self) -> str:
+        """Return an LLM-readable summary of the posted reply."""
+        if not self.success:
+            return f"Error: {self.error}"
+        return f"Reply posted. URL: {self.html_url}"
 
 
 class CreateReleaseResult(ToolResult):

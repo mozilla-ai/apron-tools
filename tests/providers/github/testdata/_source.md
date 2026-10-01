@@ -10,6 +10,7 @@
   - Create an issue comment: https://docs.github.com/en/rest/issues/comments#create-an-issue-comment
   - List pull requests: https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
   - Get a pull request: https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request
+  - Create a reply for a review comment: https://docs.github.com/en/rest/pulls/comments#create-a-reply-for-a-review-comment
   - List milestones: https://docs.github.com/en/rest/issues/milestones#list-milestones
   - Get repository content: https://docs.github.com/en/rest/repos/contents#get-repository-content
   - List branches: https://docs.github.com/en/rest/branches/branches#list-branches
