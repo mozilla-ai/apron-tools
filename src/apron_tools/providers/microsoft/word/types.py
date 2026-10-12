@@ -110,6 +110,7 @@ class ReadDocumentResult(ToolResult):
     name: str = ""
     paragraphs: list[str] = []
     tables: list[list[list[str]]] = []
+    truncated: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -130,6 +131,8 @@ class ReadDocumentResult(ToolResult):
             lines.append(f"  Table {i + 1}:")
             for row in table:
                 lines.append(f"    | {' | '.join(row)} |")
+        if self.truncated:
+            lines.append("  Note: The text was truncated because the document is over the length limit.")
         return "\n".join(lines)
 
 

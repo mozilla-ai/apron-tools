@@ -13,7 +13,7 @@ import zlib
 from docx import Document
 from docx.document import Document as DocxDocument
 
-from apron_tools._ooxml import OfficePackageError, check_package
+from apron_tools._ooxml import OfficePackageError, TextBudget, check_package
 
 
 def _open_document(docx_bytes: bytes) -> DocxDocument:
@@ -57,7 +57,7 @@ def build_docx(content: str = "") -> bytes:
 
 
 def extract_text(docx_bytes: bytes) -> dict:
-    """Extract plain text from paragraphs and tables in a Word document.
+    """Extract plain text from paragraphs and tables in a Word document, up to the text limit.
 
     Args:
         docx_bytes: Raw .docx file bytes.
@@ -66,20 +66,26 @@ def extract_text(docx_bytes: bytes) -> dict:
         A dict containing:
         - paragraphs: list of paragraph text strings.
         - tables: list of tables, each a list of rows, each a list of cell strings.
+        - truncated: whether text was cut at the text limit.
 
     Raises:
         OfficePackageError: If the package is not valid or is over the size limits.
     """
     doc = _open_document(docx_bytes)
+    budget = TextBudget()
 
     paragraphs: list[str] = []
     for para in doc.paragraphs:
-        text = para.text.strip()
+        text = budget.take(para.text.strip())
         if text:
             paragraphs.append(text)
+        if budget.exhausted:
+            break
 
     tables: list[list[list[str]]] = []
     for table in doc.tables:
+        if budget.exhausted:
+            break
         table_data: list[list[str]] = []
         for row in table.rows:
             seen_cells: set[int] = set()
@@ -89,14 +95,18 @@ def extract_text(docx_bytes: bytes) -> dict:
                 if cell_id in seen_cells:
                     continue
                 seen_cells.add(cell_id)
-                cell_text = cell.text.strip()
-                row_data.append(cell_text)
+                row_data.append(budget.take(cell.text.strip()))
+                if budget.exhausted:
+                    break
             table_data.append(row_data)
+            if budget.exhausted:
+                break
         tables.append(table_data)
 
     return {
         "paragraphs": paragraphs,
         "tables": tables,
+        "truncated": budget.exhausted,
     }
 
 

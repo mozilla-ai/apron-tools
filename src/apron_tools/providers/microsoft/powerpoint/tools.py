@@ -91,12 +91,13 @@ async def microsoft_powerpoint_read_presentation(
         slides_data = presentation.extract_slides(pptx_bytes, params.include_notes)
     except OfficePackageError as exc:
         return ReadPresentationResult(success=False, error=str(exc))
-    slides = [SlideInfo(**s) for s in slides_data]
+    slides = [SlideInfo(**s) for s in slides_data["slides"]]
 
     return ReadPresentationResult(
         success=True,
         name=meta.get("name", ""),
         slides=slides,
+        truncated=slides_data["truncated"],
     )
 
 

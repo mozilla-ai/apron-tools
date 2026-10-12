@@ -11,6 +11,7 @@ import zipfile
 import pytest
 from pptx import Presentation
 
+from apron_tools import _ooxml
 from apron_tools._ooxml import OfficePackageError
 from apron_tools.providers.microsoft.powerpoint.presentation import (
     add_slide,
@@ -62,23 +63,38 @@ class TestBuildPptx:
 
 
 class TestExtractSlides:
+    def test_not_truncated_within_limit(self) -> None:
+        assert extract_slides(build_pptx("Hello"))["truncated"] is False
+
+    def test_truncates_text_over_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_ooxml, "_MAX_TEXT_CHARS", 10)
+        data = build_pptx("Slide 1")
+        data, _ = add_slide(data, "title_and_content", "Slide 2", "Body text")
+        data, _ = add_slide(data, "title_and_content", "Slide 3", "More")
+
+        result = extract_slides(data)
+
+        assert [s["title"] for s in result["slides"]] == ["Slide 1", "Sli"]
+        assert result["slides"][1]["texts"] == []
+        assert result["truncated"] is True
+
     def test_basic_extraction(self) -> None:
         data = build_pptx("Hello World")
-        slides = extract_slides(data)
+        slides = extract_slides(data)["slides"]
         assert len(slides) == 1
         assert slides[0]["number"] == 1
         assert slides[0]["title"] == "Hello World"
 
     def test_blank_slide_extraction(self) -> None:
         data = build_pptx()
-        slides = extract_slides(data)
+        slides = extract_slides(data)["slides"]
         assert len(slides) == 1
         assert slides[0]["title"] == ""
         assert slides[0]["texts"] == []
 
     def test_notes_excluded_by_default(self) -> None:
         data = build_pptx("Title")
-        slides = extract_slides(data, include_notes=False)
+        slides = extract_slides(data, include_notes=False)["slides"]
         assert slides[0]["notes"] == ""
 
     def test_notes_included_when_requested(self) -> None:
@@ -91,13 +107,13 @@ class TestExtractSlides:
         buf = io.BytesIO()
         prs.save(buf)
 
-        slides = extract_slides(buf.getvalue(), include_notes=True)
+        slides = extract_slides(buf.getvalue(), include_notes=True)["slides"]
         assert slides[0]["notes"] == "Remember this point"
 
     def test_multi_slide_extraction(self) -> None:
         data = build_pptx("Slide 1")
         data, _ = add_slide(data, "title_and_content", "Slide 2", "Body text")
-        slides = extract_slides(data)
+        slides = extract_slides(data)["slides"]
         assert len(slides) == 2
         assert slides[0]["title"] == "Slide 1"
         assert slides[1]["title"] == "Slide 2"
@@ -120,7 +136,7 @@ class TestAddSlide:
         data = build_pptx()
         updated, count = add_slide(data, "title_and_content", "New Title", "New Content")
         assert count == 2
-        slides = extract_slides(updated)
+        slides = extract_slides(updated)["slides"]
         assert slides[1]["title"] == "New Title"
         assert "New Content" in slides[1]["texts"]
 
@@ -150,7 +166,7 @@ class TestUpdateText:
         updated, shape_name, error = update_text(data, 1, "New Title", 0)
         assert error is None
         assert shape_name != ""
-        slides = extract_slides(updated)
+        slides = extract_slides(updated)["slides"]
         assert slides[0]["title"] == "New Title"
 
     def test_slide_out_of_range(self) -> None:
@@ -187,7 +203,7 @@ class TestUpdateText:
         updated, shape_name, error = update_text(buf.getvalue(), 1, "New text", 0)
         assert error is None
         assert shape_name != ""
-        slides = extract_slides(updated)
+        slides = extract_slides(updated)["slides"]
         assert "New text" in slides[0]["texts"]
 
 

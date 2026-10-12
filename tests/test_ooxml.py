@@ -8,7 +8,7 @@ import zipfile
 import pytest
 
 from apron_tools import _ooxml
-from apron_tools._ooxml import OfficePackageError, check_package
+from apron_tools._ooxml import OfficePackageError, TextBudget, check_package
 from apron_tools.providers.microsoft.powerpoint.presentation import build_pptx
 from apron_tools.providers.microsoft.word.document import build_docx
 
@@ -84,3 +84,22 @@ class TestCheckPackage:
 
         with zipfile.ZipFile(io.BytesIO(buf.getvalue())) as zf, pytest.raises(zipfile.BadZipFile):
             zf.read("part.xml")
+
+
+class TestTextBudget:
+    def test_returns_text_within_budget(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_ooxml, "_MAX_TEXT_CHARS", 10)
+        budget = TextBudget()
+
+        assert budget.take("Hello") == "Hello"
+        assert budget.take("World") == "World"
+        assert budget.exhausted is False
+
+    def test_cuts_text_over_budget(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_ooxml, "_MAX_TEXT_CHARS", 10)
+        budget = TextBudget()
+
+        assert budget.take("Hello") == "Hello"
+        assert budget.take("World!") == "World"
+        assert budget.exhausted is True
+        assert budget.take("More") == ""

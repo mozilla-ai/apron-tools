@@ -11,6 +11,7 @@ import zipfile
 import pytest
 from docx import Document
 
+from apron_tools import _ooxml
 from apron_tools._ooxml import OfficePackageError
 from apron_tools.providers.microsoft.powerpoint.presentation import build_pptx
 from apron_tools.providers.microsoft.word.document import (
@@ -65,6 +66,42 @@ class TestBuildDocx:
 
 
 class TestExtractText:
+    def test_not_truncated_within_limit(self) -> None:
+        result = extract_text(build_docx("Hello World"))
+        assert result["truncated"] is False
+
+    def test_truncates_text_over_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_ooxml, "_MAX_TEXT_CHARS", 10)
+        doc = Document()
+        doc.add_paragraph("Hello World")
+        doc.add_paragraph("Second")
+        table = doc.add_table(rows=1, cols=1)
+        table.cell(0, 0).text = "Cell"
+        buf = io.BytesIO()
+        doc.save(buf)
+
+        result = extract_text(buf.getvalue())
+
+        assert result["paragraphs"] == ["Hello Worl"]
+        assert result["tables"] == []
+        assert result["truncated"] is True
+
+    def test_truncates_inside_table(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_ooxml, "_MAX_TEXT_CHARS", 7)
+        doc = Document()
+        doc.add_paragraph("Intro")
+        table = doc.add_table(rows=2, cols=1)
+        table.cell(0, 0).text = "Alpha"
+        table.cell(1, 0).text = "Beta"
+        buf = io.BytesIO()
+        doc.save(buf)
+
+        result = extract_text(buf.getvalue())
+
+        assert result["paragraphs"] == ["Intro"]
+        assert result["tables"] == [[["Al"]]]
+        assert result["truncated"] is True
+
     def test_basic_extraction(self) -> None:
         data = build_docx("Hello World")
         result = extract_text(data)

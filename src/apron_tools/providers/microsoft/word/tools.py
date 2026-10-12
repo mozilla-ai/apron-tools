@@ -94,6 +94,7 @@ async def microsoft_word_read_document(
         name=meta.get("name", ""),
         paragraphs=text_data["paragraphs"],
         tables=text_data["tables"],
+        truncated=text_data["truncated"],
     )
 
 

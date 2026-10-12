@@ -14,7 +14,7 @@ from pptx import Presentation as NewPresentation
 from pptx.presentation import Presentation
 from pptx.util import Inches
 
-from apron_tools._ooxml import OfficePackageError, check_package
+from apron_tools._ooxml import OfficePackageError, TextBudget, check_package
 
 # Default layout index mapping for the standard python-pptx template.
 _LAYOUT_PRESETS: dict[str, int] = {
@@ -104,24 +104,30 @@ def build_pptx(title: str = "") -> bytes:
 def extract_slides(
     pptx_bytes: bytes,
     include_notes: bool = False,
-) -> list[dict]:
-    """Extract structured text data from every slide in a presentation.
+) -> dict:
+    """Extract structured text data from the slides in a presentation, up to the text limit.
 
     Args:
         pptx_bytes: Raw .pptx file bytes.
         include_notes: Whether to include speaker notes.
 
     Returns:
-        A list of dicts, one per slide, each containing:
-        number, title, texts (list of str), and notes (str).
+        A dict containing:
+        - slides: list of dicts, one per slide, each containing
+          number, title, texts (list of str), and notes (str).
+        - truncated: whether text was cut at the text limit.
+          Slides after the cut are omitted.
 
     Raises:
         OfficePackageError: If the package is not valid or is over the size limits.
     """
     prs = _open_presentation(pptx_bytes)
+    budget = TextBudget()
     slides: list[dict] = []
 
     for i, slide in enumerate(prs.slides):
+        if budget.exhausted:
+            break
         slide_data: dict = {
             "number": i + 1,
             "title": "",
@@ -129,24 +135,28 @@ def extract_slides(
             "notes": "",
         }
 
+        title = ""
         title_shape = slide.shapes.title
         if title_shape and title_shape.has_text_frame:
-            slide_data["title"] = title_shape.text_frame.text.strip()
+            title = title_shape.text_frame.text.strip()
+            slide_data["title"] = budget.take(title)
 
         for shape in slide.shapes:
+            if budget.exhausted:
+                break
             if shape.has_text_frame:
                 text = shape.text_frame.text.strip()
-                if text and text != slide_data["title"]:
-                    slide_data["texts"].append(text)
+                if text and text != title and (kept := budget.take(text)):
+                    slide_data["texts"].append(kept)
 
-        if include_notes and slide.has_notes_slide:
+        if include_notes and slide.has_notes_slide and not budget.exhausted:
             notes_text = slide.notes_slide.notes_text_frame.text.strip()
             if notes_text:
-                slide_data["notes"] = notes_text
+                slide_data["notes"] = budget.take(notes_text)
 
         slides.append(slide_data)
 
-    return slides
+    return {"slides": slides, "truncated": budget.exhausted}
 
 
 def add_slide(

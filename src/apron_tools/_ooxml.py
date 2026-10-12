@@ -1,8 +1,9 @@
-"""Checks for untrusted Office Open XML (OOXML) packages before they are parsed.
+"""Limits for reading untrusted Office Open XML (OOXML) packages.
 
 An OOXML file (``.docx``, ``.pptx``, ``.xlsx``) is a zip archive.
 A small archive can unpack to a very large size.
 Packages are checked for part count, declared unpacked size, compression method, and encryption before they are parsed.
+Text extracted from a package is also capped, so a very long document gives a truncated read.
 """
 
 from __future__ import annotations
@@ -13,12 +14,37 @@ import zipfile
 _CENTRAL_DIRECTORY_SIGNATURE = b"PK\x01\x02"
 _ENCRYPTED_FLAG = 0x1
 _MAX_PARTS = 10_000
+_MAX_TEXT_CHARS = 100_000
 _MAX_UNPACKED_BYTES = 200 * 1024 * 1024
 _SUPPORTED_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 
 
 class OfficePackageError(ValueError):
     """An Office document cannot be opened within the package limits."""
+
+
+class TextBudget:
+    """Track how much extracted text one read may still return."""
+
+    def __init__(self) -> None:
+        """Start a budget at the text limit."""
+        self.remaining = _MAX_TEXT_CHARS
+        self.exhausted = False
+
+    def take(self, text: str) -> str:
+        """Return the part of the text that fits in the budget, and mark the budget exhausted if any text is cut.
+
+        Args:
+            text: Extracted text to add to the read.
+
+        Returns:
+            The text, cut at the remaining budget.
+        """
+        if len(text) > self.remaining:
+            text = text[: self.remaining]
+            self.exhausted = True
+        self.remaining -= len(text)
+        return text
 
 
 def check_package(data: bytes) -> None:
