@@ -6,16 +6,20 @@ import json
 import re
 from pathlib import Path
 
-from pytest_httpx import HTTPXMock
+import pytest
+from pytest_httpx import HTTPXMock, IteratorStream
 
 from apron_tools.providers.microsoft.onedrive import (
+    FileTooLargeError,
     download_file,
     get_file_metadata,
     search_files,
     upload_file,
 )
+from apron_tools.providers.microsoft.onedrive import _shared as onedrive_shared
 
 TESTDATA_DIR = Path(__file__).parent / "powerpoint" / "testdata"
+_LIMIT = 1024 * 1024
 _TOKEN = "test_oauth_token"
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
@@ -114,6 +118,53 @@ class TestDownloadFile:
             raise AssertionError("Expected HTTPStatusError")
         except httpx.HTTPStatusError as exc:
             assert exc.response.status_code == 404
+
+    async def test_requests_uncompressed_content(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GRAPH_BASE}/me/drive/items/pptx-001/content",
+            match_headers={"Accept-Encoding": "identity"},
+            content=b"fake-pptx-bytes",
+        )
+
+        result = await download_file(_TOKEN, "pptx-001", base_url=_GRAPH_BASE)
+
+        assert result == b"fake-pptx-bytes"
+
+    async def test_accepts_file_at_limit(self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(onedrive_shared, "_MAX_DOWNLOAD_BYTES", _LIMIT)
+        httpx_mock.add_response(
+            url=f"{_GRAPH_BASE}/me/drive/items/pptx-001/content",
+            content=b"x" * _LIMIT,
+        )
+
+        result = await download_file(_TOKEN, "pptx-001", base_url=_GRAPH_BASE)
+
+        assert len(result) == _LIMIT
+
+    async def test_rejects_declared_size_over_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(onedrive_shared, "_MAX_DOWNLOAD_BYTES", _LIMIT)
+        httpx_mock.add_response(
+            url=f"{_GRAPH_BASE}/me/drive/items/pptx-001/content",
+            content=b"x" * (_LIMIT + 1),
+        )
+
+        with pytest.raises(FileTooLargeError, match="1 MB download limit"):
+            await download_file(_TOKEN, "pptx-001", base_url=_GRAPH_BASE)
+
+    async def test_rejects_streamed_size_over_limit_without_content_length(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(onedrive_shared, "_MAX_DOWNLOAD_BYTES", _LIMIT)
+        chunk = b"x" * (_LIMIT // 2 + 1)
+        httpx_mock.add_response(
+            url=f"{_GRAPH_BASE}/me/drive/items/pptx-001/content",
+            stream=IteratorStream([chunk, chunk]),
+        )
+
+        with pytest.raises(FileTooLargeError):
+            await download_file(_TOKEN, "pptx-001", base_url=_GRAPH_BASE)
 
 
 # ---------------------------------------------------------------------------

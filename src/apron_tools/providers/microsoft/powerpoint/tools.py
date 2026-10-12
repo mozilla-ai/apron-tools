@@ -83,7 +83,7 @@ async def microsoft_powerpoint_read_presentation(
     try:
         meta = await onedrive.get_file_metadata(token, params.presentation_id, base_url=base_url)
         pptx_bytes = await onedrive.download_file(token, params.presentation_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return ReadPresentationResult(success=False, error=str(exc))
 
     slides_data = presentation.extract_slides(pptx_bytes, params.include_notes)
@@ -148,7 +148,7 @@ async def microsoft_powerpoint_add_slide(
     try:
         meta = await onedrive.get_file_metadata(token, params.presentation_id, base_url=base_url)
         pptx_bytes = await onedrive.download_file(token, params.presentation_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return AddSlideResult(success=False, error=str(exc))
 
     updated_bytes, slide_count = presentation.add_slide(pptx_bytes, params.layout, params.title, params.content)
@@ -188,7 +188,7 @@ async def microsoft_powerpoint_update_slide_text(
     try:
         meta = await onedrive.get_file_metadata(token, params.presentation_id, base_url=base_url)
         pptx_bytes = await onedrive.download_file(token, params.presentation_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return UpdateSlideTextResult(success=False, error=str(exc))
 
     updated_bytes, shape_name, error = presentation.update_text(

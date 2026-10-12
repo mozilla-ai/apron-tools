@@ -80,7 +80,7 @@ async def microsoft_word_read_document(
     try:
         meta = await onedrive.get_file_metadata(token, params.document_id, base_url=base_url)
         docx_bytes = await onedrive.download_file(token, params.document_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return ReadDocumentResult(success=False, error=str(exc))
 
     text_data = document.extract_text(docx_bytes)
@@ -145,7 +145,7 @@ async def microsoft_word_update_document(
     try:
         meta = await onedrive.get_file_metadata(token, params.document_id, base_url=base_url)
         docx_bytes = await onedrive.download_file(token, params.document_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return UpdateDocumentResult(success=False, error=str(exc))
 
     updated_bytes = document.append_content(docx_bytes, params.content)
