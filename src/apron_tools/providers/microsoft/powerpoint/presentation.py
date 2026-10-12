@@ -7,10 +7,14 @@ Independently testable by creating real .pptx content in memory.
 from __future__ import annotations
 
 import io
+import zipfile
+import zlib
 
 from pptx import Presentation as NewPresentation
 from pptx.presentation import Presentation
 from pptx.util import Inches
+
+from apron_tools._ooxml import OfficePackageError, check_package
 
 # Default layout index mapping for the standard python-pptx template.
 _LAYOUT_PRESETS: dict[str, int] = {
@@ -21,6 +25,25 @@ _LAYOUT_PRESETS: dict[str, int] = {
     "two_content": 3,
     "title_only": 5,
 }
+
+
+def _open_presentation(pptx_bytes: bytes) -> Presentation:
+    """Open a PowerPoint presentation from untrusted bytes.
+
+    Args:
+        pptx_bytes: Raw .pptx file bytes.
+
+    Returns:
+        The open presentation.
+
+    Raises:
+        OfficePackageError: If the package is not a valid PowerPoint presentation or is over the size limits.
+    """
+    check_package(pptx_bytes)
+    try:
+        return NewPresentation(io.BytesIO(pptx_bytes))
+    except (KeyError, ValueError, zipfile.BadZipFile, zlib.error) as exc:
+        raise OfficePackageError("The file is not a valid PowerPoint presentation.") from exc
 
 
 def resolve_layout_index(prs: Presentation, layout: str) -> int:
@@ -91,8 +114,11 @@ def extract_slides(
     Returns:
         A list of dicts, one per slide, each containing:
         number, title, texts (list of str), and notes (str).
+
+    Raises:
+        OfficePackageError: If the package is not valid or is over the size limits.
     """
-    prs = NewPresentation(io.BytesIO(pptx_bytes))
+    prs = _open_presentation(pptx_bytes)
     slides: list[dict] = []
 
     for i, slide in enumerate(prs.slides):
@@ -139,8 +165,11 @@ def add_slide(
 
     Returns:
         A tuple of (updated .pptx bytes, total slide count after insertion).
+
+    Raises:
+        OfficePackageError: If the package is not valid or is over the size limits.
     """
-    prs = NewPresentation(io.BytesIO(pptx_bytes))
+    prs = _open_presentation(pptx_bytes)
 
     layout_idx = resolve_layout_index(prs, layout)
     slide_layout = prs.slide_layouts[layout_idx]
@@ -181,8 +210,11 @@ def update_text(
 
     Returns:
         A tuple of (updated bytes, shape name, error string or None).
+
+    Raises:
+        OfficePackageError: If the package is not valid or is over the size limits.
     """
-    prs = NewPresentation(io.BytesIO(pptx_bytes))
+    prs = _open_presentation(pptx_bytes)
 
     if slide_number < 1 or slide_number > len(prs.slides):
         return (

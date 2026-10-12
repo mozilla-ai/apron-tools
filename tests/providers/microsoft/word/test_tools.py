@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from pytest_httpx import HTTPXMock
 
+from apron_tools import _ooxml
 from apron_tools.providers.microsoft.onedrive import _shared as onedrive_shared
 from apron_tools.providers.microsoft.word.document import build_docx
 from apron_tools.providers.microsoft.word.tools import (
@@ -51,6 +52,19 @@ def _add_oversized_download(httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPat
     httpx_mock.add_response(
         url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}/content",
         content=b"x" * (_DOWNLOAD_LIMIT + 1),
+    )
+
+
+def _add_document_over_unpacked_limit(httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lower the unpacked size limit below a real document and serve that document."""
+    monkeypatch.setattr(_ooxml, "_MAX_UNPACKED_BYTES", 1024)
+    httpx_mock.add_response(
+        url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}",
+        json=_load_json("file_metadata.json"),
+    )
+    httpx_mock.add_response(
+        url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}/content",
+        content=build_docx("Hello"),
     )
 
 
@@ -162,6 +176,21 @@ class TestReadDocument:
 
         assert result.success is False
         assert "download limit" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
+
+    async def test_rejects_document_over_unpacked_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_document_over_unpacked_limit(httpx_mock, monkeypatch)
+
+        result = await microsoft_word_read_document(
+            ReadDocumentParams(document_id=_ITEM_ID),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "when unpacked" in (result.error or "")
         assert all(r.method == "GET" for r in httpx_mock.get_requests())
 
     async def test_has_tool_definition(self) -> None:
@@ -354,6 +383,21 @@ class TestUpdateDocument:
 
         assert result.success is False
         assert "download limit" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
+
+    async def test_rejects_document_over_unpacked_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_document_over_unpacked_limit(httpx_mock, monkeypatch)
+
+        result = await microsoft_word_update_document(
+            UpdateDocumentParams(document_id=_ITEM_ID, content="Appended text"),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "when unpacked" in (result.error or "")
         assert all(r.method == "GET" for r in httpx_mock.get_requests())
 
     async def test_has_tool_definition(self) -> None:

@@ -6,9 +6,12 @@ No mocks — creates real .pptx bytes and verifies their content.
 from __future__ import annotations
 
 import io
+import zipfile
 
+import pytest
 from pptx import Presentation
 
+from apron_tools._ooxml import OfficePackageError
 from apron_tools.providers.microsoft.powerpoint.presentation import (
     add_slide,
     build_pptx,
@@ -16,6 +19,17 @@ from apron_tools.providers.microsoft.powerpoint.presentation import (
     resolve_layout_index,
     update_text,
 )
+from apron_tools.providers.microsoft.word.document import build_docx
+
+
+def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_STORED) -> bytes:
+    """Build a one-part package whose central directory declares the given compression method."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(name, data)
+        zf.infolist()[0].compress_type = declared_compression
+    return buf.getvalue()
+
 
 # ---------------------------------------------------------------------------
 # build_pptx
@@ -217,3 +231,33 @@ class TestResolveLayoutIndex:
         prs = Presentation()
         idx = resolve_layout_index(prs, "nonexistent_layout")
         assert idx == 0
+
+
+# ---------------------------------------------------------------------------
+# invalid packages
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(build_docx("Title"), id="wrong-format"),
+        pytest.param(_package("part.xml", b"<x/>"), id="missing-parts"),
+        pytest.param(
+            _package("[Content_Types].xml", b"\xff" * 16, declared_compression=zipfile.ZIP_DEFLATED),
+            id="corrupt-part",
+        ),
+    ],
+)
+class TestInvalidPackage:
+    def test_extract_slides_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
+            extract_slides(data)
+
+    def test_add_slide_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
+            add_slide(data, "blank", "", "")
+
+    def test_update_text_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
+            update_text(data, 1, "Text", 0)

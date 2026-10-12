@@ -6,14 +6,28 @@ No mocks — creates real .docx bytes and verifies their content.
 from __future__ import annotations
 
 import io
+import zipfile
 
+import pytest
 from docx import Document
 
+from apron_tools._ooxml import OfficePackageError
+from apron_tools.providers.microsoft.powerpoint.presentation import build_pptx
 from apron_tools.providers.microsoft.word.document import (
     append_content,
     build_docx,
     extract_text,
 )
+
+
+def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_STORED) -> bytes:
+    """Build a one-part package whose central directory declares the given compression method."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(name, data)
+        zf.infolist()[0].compress_type = declared_compression
+    return buf.getvalue()
+
 
 # ---------------------------------------------------------------------------
 # build_docx
@@ -138,3 +152,29 @@ class TestAppendContent:
         original = build_docx("Start")
         updated = append_content(original, "End")
         assert original != updated
+
+
+# ---------------------------------------------------------------------------
+# invalid packages
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(build_pptx("Title"), id="wrong-format"),
+        pytest.param(_package("part.xml", b"<x/>"), id="missing-parts"),
+        pytest.param(
+            _package("[Content_Types].xml", b"\xff" * 16, declared_compression=zipfile.ZIP_DEFLATED),
+            id="corrupt-part",
+        ),
+    ],
+)
+class TestInvalidPackage:
+    def test_extract_text_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid Word document"):
+            extract_text(data)
+
+    def test_append_content_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid Word document"):
+            append_content(data, "Text")

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools._ooxml import OfficePackageError
 from apron_tools.providers.microsoft import onedrive
 from apron_tools.providers.microsoft.word import document
 from apron_tools.providers.microsoft.word.types import (
@@ -83,7 +84,10 @@ async def microsoft_word_read_document(
     except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return ReadDocumentResult(success=False, error=str(exc))
 
-    text_data = document.extract_text(docx_bytes)
+    try:
+        text_data = document.extract_text(docx_bytes)
+    except OfficePackageError as exc:
+        return ReadDocumentResult(success=False, error=str(exc))
 
     return ReadDocumentResult(
         success=True,
@@ -148,7 +152,10 @@ async def microsoft_word_update_document(
     except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return UpdateDocumentResult(success=False, error=str(exc))
 
-    updated_bytes = document.append_content(docx_bytes, params.content)
+    try:
+        updated_bytes = document.append_content(docx_bytes, params.content)
+    except OfficePackageError as exc:
+        return UpdateDocumentResult(success=False, error=str(exc))
 
     try:
         await onedrive.update_file_content(
