@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import BaseModel, ValidationError
+
 from apron_tools.providers.slack.types import (
     AddReactionItem,
     AddReactionsParams,
@@ -31,6 +34,7 @@ from apron_tools.providers.slack.types import (
     ReadChannelMessagesResult,
     ReadThreadParams,
     ReadThreadResult,
+    SaveFileForUploadParams,
     SendChannelMessageParams,
     SendChannelMessageResult,
     SendChannelMessageWithFileParams,
@@ -175,6 +179,19 @@ class TestDownloadFileParams:
         params = DownloadFileParams(url="https://files.slack.com/example")
         assert params.url == "https://files.slack.com/example"
         assert params.max_size_mb == 10
+
+
+@pytest.mark.parametrize("params_type", [DownloadFileParams, SaveFileForUploadParams])
+class TestFileSizeLimit:
+    def test_accepts_maximum(self, params_type: type[BaseModel]) -> None:
+        params = params_type(url="https://files.slack.com/example", max_size_mb=50)
+
+        assert params.max_size_mb == 50
+
+    @pytest.mark.parametrize("max_size_mb", [0, 51])
+    def test_rejects_size_outside_range(self, params_type: type[BaseModel], max_size_mb: int) -> None:
+        with pytest.raises(ValidationError):
+            params_type(url="https://files.slack.com/example", max_size_mb=max_size_mb)
 
 
 class TestGetReactionsParams:
