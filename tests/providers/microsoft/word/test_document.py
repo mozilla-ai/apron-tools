@@ -21,6 +21,8 @@ from apron_tools.providers.microsoft.word.document import (
     extract_text,
 )
 
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
 
 def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_STORED) -> bytes:
     """Build a one-part package whose central directory declares the given compression method."""
@@ -37,6 +39,26 @@ def _replace_part(package: bytes, name: str, data: bytes) -> bytes:
     with zipfile.ZipFile(io.BytesIO(package)) as src, zipfile.ZipFile(buf, "w") as dst:
         for info in src.infolist():
             dst.writestr(info, data if info.filename == name else src.read(info))
+    return buf.getvalue()
+
+
+def _edit_part(package: bytes, name: str, old: bytes, new: bytes) -> bytes:
+    """Return a copy of a package with one piece of text in one part replaced."""
+    with zipfile.ZipFile(io.BytesIO(package)) as zf:
+        data = zf.read(name)
+    assert old in data
+    return _replace_part(package, name, data.replace(old, new))
+
+
+def _set_entry_fields(package: bytes, **fields: int) -> bytes:
+    """Return a copy of a package with the given zip header fields set on every entry."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(package)) as src, zipfile.ZipFile(buf, "w") as dst:
+        for info in src.infolist():
+            dst.writestr(info, src.read(info))
+        for info in dst.infolist():
+            for field, value in fields.items():
+                setattr(info, field, value)
     return buf.getvalue()
 
 
@@ -219,6 +241,20 @@ class TestAppendContent:
         pytest.param(
             _replace_part(build_docx("Text"), "[Content_Types].xml", b"<not-closed"), id="malformed-content-types"
         ),
+        pytest.param(_replace_part(build_docx("Text"), "word/document.xml", b"<foo/>"), id="wrong-root-main-part"),
+        pytest.param(
+            _replace_part(build_docx("Text"), "word/document.xml", f'<w:document xmlns:w="{_W_NS}"/>'.encode()),
+            id="empty-main-part",
+        ),
+        pytest.param(
+            _replace_part(build_docx("Text"), "[Content_Types].xml", b"<foo/>"), id="wrong-root-content-types"
+        ),
+        pytest.param(
+            _edit_part(build_docx("Text"), "word/_rels/document.xml.rels", b' Target="styles.xml"', b""),
+            id="relationship-without-target",
+        ),
+        pytest.param(_set_entry_fields(build_docx("Text"), extract_version=99), id="unsupported-zip-version"),
+        pytest.param(_set_entry_fields(build_docx("Text"), flag_bits=0x40), id="unsupported-zip-feature"),
     ],
 )
 class TestInvalidPackage:
@@ -237,3 +273,13 @@ def test_malformed_xml_part_keeps_parse_error_as_cause(part: str) -> None:
     with pytest.raises(OfficePackageError) as exc_info:
         extract_text(data)
     assert isinstance(exc_info.value.__cause__, etree.XMLSyntaxError)
+
+
+def test_package_check_error_keeps_its_message() -> None:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("word/document.xml", b"<x/>")
+        zf.infolist()[0].flag_bits |= _ooxml._ENCRYPTED_FLAG
+
+    with pytest.raises(OfficePackageError, match="encrypted"):
+        extract_text(buf.getvalue())

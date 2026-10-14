@@ -4,11 +4,13 @@ An OOXML file (``.docx``, ``.pptx``, ``.xlsx``) is a zip archive.
 A small archive can unpack to a very large size.
 Packages are checked for part count, declared unpacked size, compression method, and encryption before they are parsed.
 Text extracted from a package is also capped, so a very long document gives a truncated read.
+Text to be written into a package can be checked for characters that XML cannot hold.
 """
 
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 
 _CENTRAL_DIRECTORY_SIGNATURE = b"PK\x01\x02"
@@ -16,6 +18,7 @@ _ENCRYPTED_FLAG = 0x1
 _MAX_PARTS = 10_000
 _MAX_TEXT_CHARS = 100_000
 _MAX_UNPACKED_BYTES = 200 * 1024 * 1024
+_NON_XML_CHAR = re.compile("[^\t\n\r\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 _SUPPORTED_COMPRESSION = frozenset({zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED})
 
 
@@ -80,3 +83,20 @@ def check_package(data: bytes) -> None:
     if sum(part.file_size for part in parts) > _MAX_UNPACKED_BYTES:
         limit_mb = _MAX_UNPACKED_BYTES // (1024 * 1024)
         raise OfficePackageError(f"The document is larger than the {limit_mb} MB limit when unpacked.")
+
+
+def validate_xml_text(text: str) -> str:
+    """Check that text holds only characters that an XML document can store.
+
+    Args:
+        text: Text to store in a document.
+
+    Returns:
+        The text, unchanged.
+
+    Raises:
+        ValueError: If the text holds a character that XML cannot store.
+    """
+    if match := _NON_XML_CHAR.search(text):
+        raise ValueError(f"The text contains U+{ord(match.group()):04X}, which a document cannot hold.")
+    return text

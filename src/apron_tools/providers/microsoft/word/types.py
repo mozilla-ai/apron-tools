@@ -4,9 +4,30 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from apron_tools._ooxml import validate_xml_text
 from apron_tools.types import FileInput, ToolResult
+
+
+def _validate_paragraph_text(text: str) -> str:
+    """Check that each line of the text holds only characters that a document can store.
+
+    Each line becomes a paragraph, so the characters that separate lines are not stored.
+
+    Args:
+        text: Text whose lines become paragraphs.
+
+    Returns:
+        The text, unchanged.
+
+    Raises:
+        ValueError: If a line holds a character that a document cannot store.
+    """
+    for line in text.splitlines():
+        validate_xml_text(line)
+    return text
+
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -32,12 +53,16 @@ class CreateDocumentParams(BaseModel):
     content: str = ""
     folder_path: str = "root"
 
+    _validate_content = field_validator("content")(_validate_paragraph_text)
+
 
 class UpdateDocumentParams(BaseModel):
     """Parameters for appending content to an existing document."""
 
     document_id: str
     content: str
+
+    _validate_content = field_validator("content")(_validate_paragraph_text)
 
 
 class UploadToOnedriveParams(BaseModel):

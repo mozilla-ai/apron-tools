@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from apron_tools.providers.microsoft.word.types import (
     CreateDocumentParams,
     CreateDocumentResult,
@@ -60,12 +63,24 @@ class TestCreateDocumentParams:
         assert params.content == "Hello"
         assert params.folder_path == "Documents"
 
+    def test_rejects_content_a_document_cannot_hold(self) -> None:
+        with pytest.raises(ValidationError, match="U\\+0000"):
+            CreateDocumentParams(name="Test.docx", content="a\x00b")
+
+    @pytest.mark.parametrize("content", ["Line1\vLine2", "Line1\fLine2", "Line1\x1cLine2"])
+    def test_accepts_line_separators(self, content: str) -> None:
+        assert CreateDocumentParams(name="Test.docx", content=content).content == content
+
 
 class TestUpdateDocumentParams:
     def test_required(self) -> None:
         params = UpdateDocumentParams(document_id="docx-001", content="New text")
         assert params.document_id == "docx-001"
         assert params.content == "New text"
+
+    def test_rejects_content_a_document_cannot_hold(self) -> None:
+        with pytest.raises(ValidationError, match="U\\+0000"):
+            UpdateDocumentParams(document_id="docx-001", content="a\x00b")
 
 
 class TestUploadToOnedriveParams:

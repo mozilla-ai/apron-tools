@@ -9,9 +9,12 @@ from __future__ import annotations
 import io
 import zipfile
 import zlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from lxml import etree  # ty: ignore[unresolved-import]
 from pptx import Presentation as NewPresentation
+from pptx.exc import InvalidXmlError
 from pptx.presentation import Presentation
 from pptx.util import Inches
 
@@ -28,6 +31,44 @@ _LAYOUT_PRESETS: dict[str, int] = {
 }
 
 
+_INVALID_PRESENTATION_ERRORS = (
+    AttributeError,
+    IndexError,
+    InvalidXmlError,
+    KeyError,
+    NotImplementedError,
+    TypeError,
+    ValueError,
+    etree.XMLSyntaxError,
+    zipfile.BadZipFile,
+    zlib.error,
+)
+
+
+@contextmanager
+def _as_invalid_presentation_error() -> Iterator[None]:
+    """Report a presentation that the parser cannot read, or whose XML has an unexpected structure, as invalid.
+
+    The parser reports unexpected structure through the errors that its object model raises,
+    such as a missing attribute or child, so these errors are treated as an invalid presentation.
+
+    NOTE: A defect, a wrong argument type, or caller text that XML cannot hold is also reported this way.
+    The original error is kept as the cause.
+    This trade-off is worth re-reviewing if the parser starts to validate the structure when it opens a file.
+
+    Raises:
+        OfficePackageError: If the presentation is not a valid PowerPoint presentation.
+    """
+    try:
+        yield
+    # NOTE: OfficePackageError is a ValueError, so it must pass through before the broader catch.
+    except OfficePackageError:
+        raise
+    except _INVALID_PRESENTATION_ERRORS as exc:
+        raise OfficePackageError("The file is not a valid PowerPoint presentation.") from exc
+
+
+@_as_invalid_presentation_error()
 def _open_presentation(pptx_bytes: bytes) -> Presentation:
     """Open a PowerPoint presentation from untrusted bytes.
 
@@ -41,10 +82,7 @@ def _open_presentation(pptx_bytes: bytes) -> Presentation:
         OfficePackageError: If the package is not a valid PowerPoint presentation or is over the size limits.
     """
     check_package(pptx_bytes)
-    try:
-        return NewPresentation(io.BytesIO(pptx_bytes))
-    except (KeyError, ValueError, etree.XMLSyntaxError, zipfile.BadZipFile, zlib.error) as exc:
-        raise OfficePackageError("The file is not a valid PowerPoint presentation.") from exc
+    return NewPresentation(io.BytesIO(pptx_bytes))
 
 
 def resolve_layout_index(prs: Presentation, layout: str) -> int:
@@ -102,6 +140,7 @@ def build_pptx(title: str = "") -> bytes:
     return buf.getvalue()
 
 
+@_as_invalid_presentation_error()
 def extract_slides(
     pptx_bytes: bytes,
     include_notes: bool = False,
@@ -160,6 +199,7 @@ def extract_slides(
     return {"slides": slides, "truncated": budget.exhausted}
 
 
+@_as_invalid_presentation_error()
 def add_slide(
     pptx_bytes: bytes,
     layout: str,
@@ -203,6 +243,7 @@ def add_slide(
     return buf.getvalue(), len(prs.slides)
 
 
+@_as_invalid_presentation_error()
 def update_text(
     pptx_bytes: bytes,
     slide_number: int,
