@@ -40,7 +40,7 @@ def _as_invalid_document_error() -> Iterator[None]:
     The parser reports unexpected structure through the errors that its object model raises,
     such as a missing attribute or child, so these errors are treated as an invalid document.
 
-    NOTE: An error from another cause, such as a defect or caller text that XML cannot hold, is also reported this way.
+    NOTE: A defect, a wrong argument type, or caller text that XML cannot hold is also reported this way.
     The original error is kept as the cause.
     This trade-off is worth re-reviewing if the parser starts to validate the structure when it opens a file.
 
