@@ -9,6 +9,7 @@ import io
 import zipfile
 
 import pytest
+from lxml import etree
 from pptx import Presentation
 
 from apron_tools import _ooxml
@@ -29,6 +30,15 @@ def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr(name, data)
         zf.infolist()[0].compress_type = declared_compression
+    return buf.getvalue()
+
+
+def _replace_part(package: bytes, name: str, data: bytes) -> bytes:
+    """Return a copy of a package with one part's content replaced."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(package)) as src, zipfile.ZipFile(buf, "w") as dst:
+        for info in src.infolist():
+            dst.writestr(info, data if info.filename == name else src.read(info))
     return buf.getvalue()
 
 
@@ -263,6 +273,12 @@ class TestResolveLayoutIndex:
             _package("[Content_Types].xml", b"\xff" * 16, declared_compression=zipfile.ZIP_DEFLATED),
             id="corrupt-part",
         ),
+        pytest.param(
+            _replace_part(build_pptx("Title"), "ppt/presentation.xml", b"<not-closed"), id="malformed-main-part"
+        ),
+        pytest.param(
+            _replace_part(build_pptx("Title"), "[Content_Types].xml", b"<not-closed"), id="malformed-content-types"
+        ),
     ],
 )
 class TestInvalidPackage:
@@ -277,3 +293,11 @@ class TestInvalidPackage:
     def test_update_text_rejects_package(self, data: bytes) -> None:
         with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
             update_text(data, 1, "Text", 0)
+
+
+@pytest.mark.parametrize("part", ["ppt/presentation.xml", "[Content_Types].xml"])
+def test_malformed_xml_part_keeps_parse_error_as_cause(part: str) -> None:
+    data = _replace_part(build_pptx("Title"), part, b"<not-closed")
+    with pytest.raises(OfficePackageError) as exc_info:
+        extract_slides(data)
+    assert isinstance(exc_info.value.__cause__, etree.XMLSyntaxError)
