@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections.abc import Callable
 
 import pytest
 from lxml import etree
@@ -22,6 +23,8 @@ from apron_tools.providers.microsoft.powerpoint.presentation import (
     update_text,
 )
 from apron_tools.providers.microsoft.word.document import build_docx
+
+_P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 
 
 def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_STORED) -> bytes:
@@ -40,6 +43,14 @@ def _replace_part(package: bytes, name: str, data: bytes) -> bytes:
         for info in src.infolist():
             dst.writestr(info, data if info.filename == name else src.read(info))
     return buf.getvalue()
+
+
+def _edit_part(package: bytes, name: str, old: bytes, new: bytes) -> bytes:
+    """Return a copy of a package with one piece of text in one part replaced."""
+    with zipfile.ZipFile(io.BytesIO(package)) as zf:
+        data = zf.read(name)
+    assert old in data
+    return _replace_part(package, name, data.replace(old, new))
 
 
 # ---------------------------------------------------------------------------
@@ -279,6 +290,10 @@ class TestResolveLayoutIndex:
         pytest.param(
             _replace_part(build_pptx("Title"), "[Content_Types].xml", b"<not-closed"), id="malformed-content-types"
         ),
+        pytest.param(_replace_part(build_pptx("Title"), "ppt/presentation.xml", b"<foo/>"), id="wrong-root-main-part"),
+        pytest.param(
+            _replace_part(build_pptx("Title"), "[Content_Types].xml", b"<foo/>"), id="wrong-root-content-types"
+        ),
     ],
 )
 class TestInvalidPackage:
@@ -301,3 +316,67 @@ def test_malformed_xml_part_keeps_parse_error_as_cause(part: str) -> None:
     with pytest.raises(OfficePackageError) as exc_info:
         extract_slides(data)
     assert isinstance(exc_info.value.__cause__, etree.XMLSyntaxError)
+
+
+def _read(data: bytes) -> object:
+    return extract_slides(data)
+
+
+def _add(data: bytes) -> object:
+    return add_slide(data, "title_and_content", "Title", "Body")
+
+
+def _update(data: bytes) -> object:
+    return update_text(data, 1, "Text", 0)
+
+
+_WRONG_ROOT_SLIDE = _replace_part(build_pptx("Title"), "ppt/slides/slide1.xml", b"<foo/>")
+_EMPTY_SLIDE = _replace_part(build_pptx("Title"), "ppt/slides/slide1.xml", f'<p:sld xmlns:p="{_P_NS}"/>'.encode())
+_UNKNOWN_PLACEHOLDER_TYPE = _edit_part(
+    build_pptx("Title"), "ppt/slides/slide1.xml", b'<p:ph type="ctrTitle"/>', b'<p:ph type="x"/>'
+)
+
+
+@pytest.mark.parametrize(
+    ("data", "operation"),
+    [
+        pytest.param(_WRONG_ROOT_SLIDE, _read, id="wrong-root-slide-read"),
+        pytest.param(_WRONG_ROOT_SLIDE, _update, id="wrong-root-slide-update"),
+        pytest.param(_EMPTY_SLIDE, _read, id="empty-slide-read"),
+        pytest.param(_EMPTY_SLIDE, _update, id="empty-slide-update"),
+        pytest.param(_UNKNOWN_PLACEHOLDER_TYPE, _read, id="unknown-placeholder-type-read"),
+        pytest.param(_UNKNOWN_PLACEHOLDER_TYPE, _update, id="unknown-placeholder-type-update"),
+        pytest.param(
+            _edit_part(build_pptx("Title"), "ppt/presentation.xml", b'r:id="rId7"', b'r:id="rId99"'),
+            _read,
+            id="missing-slide-relationship-read",
+        ),
+        pytest.param(
+            _replace_part(
+                build_pptx("Title"), "ppt/slideLayouts/slideLayout1.xml", f'<p:sldLayout xmlns:p="{_P_NS}"/>'.encode()
+            ),
+            _add,
+            id="empty-layout-add",
+        ),
+        pytest.param(
+            _replace_part(
+                build_pptx("Title"), "ppt/slideMasters/slideMaster1.xml", f'<p:sldMaster xmlns:p="{_P_NS}"/>'.encode()
+            ),
+            _add,
+            id="empty-master-add",
+        ),
+    ],
+)
+def test_unexpected_xml_structure_is_an_invalid_presentation(data: bytes, operation: Callable[[bytes], object]) -> None:
+    with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
+        operation(data)
+
+
+def test_package_check_error_keeps_its_message() -> None:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("ppt/presentation.xml", b"<x/>")
+        zf.infolist()[0].flag_bits |= _ooxml._ENCRYPTED_FLAG
+
+    with pytest.raises(OfficePackageError, match="encrypted"):
+        extract_slides(buf.getvalue())
