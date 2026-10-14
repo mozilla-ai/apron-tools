@@ -7,7 +7,19 @@ from dataclasses import dataclass
 import httpx
 
 
-class FileTooLargeError(Exception):
+class DownloadError(Exception):
+    """A bounded download refused the response it received."""
+
+
+class CompressedResponseError(DownloadError):
+    """A server sent a compressed body, which a bounded download does not accept."""
+
+    def __init__(self) -> None:
+        """Build the error."""
+        super().__init__("The server sent a compressed file, which the download does not accept.")
+
+
+class FileTooLargeError(DownloadError):
     """A file is larger than the download size limit."""
 
     def __init__(self, limit_bytes: int) -> None:
@@ -16,7 +28,7 @@ class FileTooLargeError(Exception):
         Args:
             limit_bytes: The download size limit in bytes.
         """
-        super().__init__(f"The file is larger than the {limit_bytes // (1024 * 1024)} MB download limit.")
+        super().__init__(f"The file is larger than the {limit_bytes / (1024 * 1024):g} MB download limit.")
 
 
 @dataclass(frozen=True)
@@ -50,8 +62,9 @@ async def download(
         The body, its content type, and its text encoding.
 
     Raises:
-        httpx.HTTPError: If the request fails, the response status is not a success, or the body is compressed.
+        httpx.HTTPError: If the request fails or the response status is not a success.
         httpx.TooManyRedirects: If the redirects exceed the client's redirect limit.
+        CompressedResponseError: If the body is compressed.
         FileTooLargeError: If the body is larger than the limit.
     """
     # Without compression, Content-Length is the real size and each chunk stays small.
@@ -71,7 +84,7 @@ async def _read_body(resp: httpx.Response, max_bytes: int) -> Download:
     """Read a streamed final response, up to a size limit."""
     resp.raise_for_status()
     if resp.headers.get("content-encoding", "identity").strip().lower() not in {"", "identity"}:
-        raise httpx.DecodingError("The server sent a compressed file, which the download does not accept.")
+        raise CompressedResponseError()
     declared = resp.headers.get("content-length", "")
     if declared.isdigit() and int(declared) > max_bytes:
         raise FileTooLargeError(max_bytes)

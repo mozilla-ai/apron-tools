@@ -1114,6 +1114,18 @@ class TestSlackDownloadFile:
         assert result.success is False
         assert "1 MB download limit" in (result.error or "")
 
+    async def test_rejects_compressed_file(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(content=b"\x1f\x8b", headers={"content-encoding": "gzip"})
+
+        result = await slack_download_file(
+            DownloadFileParams(url="https://files.slack.com/report.txt"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "compressed" in (result.error or "")
+
     async def test_ignores_content_length_that_is_not_a_number(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             stream=IteratorStream([b"hello"]),
@@ -1405,6 +1417,17 @@ class TestSlackSaveFileForUpload:
 
         assert result.success is False
         assert "1 MB download limit" in (result.error or "")
+
+    async def test_rejects_compressed_file(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(method="GET", content=b"\x1f\x8b", headers={"content-encoding": "gzip"})
+
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="https://files.slack.com/files-pri/T1/report.txt"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "compressed" in (result.error or "")
 
     async def test_http_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(method="GET", status_code=403)

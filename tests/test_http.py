@@ -9,7 +9,7 @@ import httpx
 import pytest
 from pytest_httpx import HTTPXMock, IteratorStream
 
-from apron_tools._http import FileTooLargeError, download
+from apron_tools._http import CompressedResponseError, DownloadError, FileTooLargeError, download
 
 _URL = "https://files.example.com/report.bin"
 _CDN_URL = "https://cdn.example.net/report.bin"
@@ -50,7 +50,7 @@ class TestDownload:
     async def test_rejects_compressed_body(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(url=_URL, content=gzip.compress(b"hello"), headers={"content-encoding": "gzip"})
 
-        with pytest.raises(httpx.DecodingError, match="compressed"):
+        with pytest.raises(CompressedResponseError, match="compressed"):
             await _download()
 
     async def test_accepts_body_at_limit(self, httpx_mock: HTTPXMock) -> None:
@@ -83,6 +83,15 @@ class TestDownload:
             await _download()
 
         assert exc_info.value.response.status_code == 403
+
+
+class TestDownloadErrors:
+    def test_refusals_share_a_base(self) -> None:
+        assert issubclass(CompressedResponseError, DownloadError)
+        assert issubclass(FileTooLargeError, DownloadError)
+
+    def test_file_too_large_reports_a_limit_below_one_megabyte(self) -> None:
+        assert str(FileTooLargeError(512 * 1024)) == "The file is larger than the 0.5 MB download limit."
 
 
 class TestRedirects:

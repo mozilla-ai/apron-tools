@@ -12,7 +12,7 @@ import httpx
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_client import AsyncWebClient
 
-from apron_tools._http import Download, FileTooLargeError, download
+from apron_tools._http import Download, DownloadError, download
 from apron_tools._utils import parse_csv_ids
 from apron_tools.fileio import resolve_file_input
 from apron_tools.providers.slack.types import (
@@ -325,6 +325,7 @@ async def _download_slack_file(url: str, token: str, max_size_mb: int, *, timeou
 
     Raises:
         httpx.HTTPError: If the request fails or the response status is not a success.
+        CompressedResponseError: If the server sends the file compressed.
         FileTooLargeError: If the file is larger than the limit.
     """
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -943,7 +944,7 @@ async def slack_download_file(
         return DownloadFileResult(success=False, error="Request timed out.")
     except httpx.HTTPStatusError as exc:
         return DownloadFileResult(success=False, error=f"HTTP {exc.response.status_code}")
-    except (FileTooLargeError, httpx.HTTPError) as exc:
+    except (DownloadError, httpx.HTTPError) as exc:
         return DownloadFileResult(success=False, error=str(exc))
 
     mime_type = _mime_type(downloaded.content_type)
@@ -979,7 +980,7 @@ async def slack_save_file_for_upload(
         return SaveFileForUploadResult(success=False, error="Request timed out.")
     except httpx.HTTPStatusError as exc:
         return SaveFileForUploadResult(success=False, error=f"HTTP {exc.response.status_code}")
-    except (FileTooLargeError, httpx.HTTPError) as exc:
+    except (DownloadError, httpx.HTTPError) as exc:
         return SaveFileForUploadResult(success=False, error=str(exc))
 
     filename = unquote(urlparse(params.url).path.rsplit("/", 1)[-1]) or "download"

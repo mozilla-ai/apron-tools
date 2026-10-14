@@ -147,6 +147,7 @@ async def download_file(
 
     Raises:
         httpx.HTTPError: If the download request fails.
+        CompressedResponseError: If the server sends the file compressed.
         FileTooLargeError: If the file is larger than the download limit.
     """
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
