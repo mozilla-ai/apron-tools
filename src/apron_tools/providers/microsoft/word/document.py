@@ -41,7 +41,7 @@ def _invalid_document_errors() -> Iterator[None]:
 
     NOTE: An error from another cause, such as a defect or caller text that XML cannot hold, is also reported this way.
     The original error is kept as the cause.
-    Worth re-reviewing if the parser starts to validate the document structure when it opens a file.
+    This trade-off is worth re-reviewing if the parser starts to validate the structure when it opens a file.
 
     Raises:
         OfficePackageError: If the document is not a valid Word document.
