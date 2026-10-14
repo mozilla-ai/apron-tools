@@ -21,6 +21,8 @@ from apron_tools.providers.microsoft.word.document import (
     extract_text,
 )
 
+_W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
 
 def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_STORED) -> bytes:
     """Build a one-part package whose central directory declares the given compression method."""
@@ -219,6 +221,14 @@ class TestAppendContent:
         pytest.param(
             _replace_part(build_docx("Text"), "[Content_Types].xml", b"<not-closed"), id="malformed-content-types"
         ),
+        pytest.param(_replace_part(build_docx("Text"), "word/document.xml", b"<foo/>"), id="wrong-root-main-part"),
+        pytest.param(
+            _replace_part(build_docx("Text"), "word/document.xml", f'<w:document xmlns:w="{_W_NS}"/>'.encode()),
+            id="empty-main-part",
+        ),
+        pytest.param(
+            _replace_part(build_docx("Text"), "[Content_Types].xml", b"<foo/>"), id="wrong-root-content-types"
+        ),
     ],
 )
 class TestInvalidPackage:
@@ -237,3 +247,13 @@ def test_malformed_xml_part_keeps_parse_error_as_cause(part: str) -> None:
     with pytest.raises(OfficePackageError) as exc_info:
         extract_text(data)
     assert isinstance(exc_info.value.__cause__, etree.XMLSyntaxError)
+
+
+def test_package_check_error_keeps_its_message() -> None:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("word/document.xml", b"<x/>")
+        zf.infolist()[0].flag_bits |= _ooxml._ENCRYPTED_FLAG
+
+    with pytest.raises(OfficePackageError, match="encrypted"):
+        extract_text(buf.getvalue())

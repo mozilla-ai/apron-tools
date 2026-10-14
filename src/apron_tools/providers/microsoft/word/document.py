@@ -9,14 +9,52 @@ from __future__ import annotations
 import io
 import zipfile
 import zlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from docx import Document
 from docx.document import Document as DocxDocument
+from docx.exceptions import InvalidXmlError
 from lxml import etree  # ty: ignore[unresolved-import]
 
 from apron_tools._ooxml import OfficePackageError, TextBudget, check_package
 
+_INVALID_DOCUMENT_ERRORS = (
+    AttributeError,
+    IndexError,
+    InvalidXmlError,
+    KeyError,
+    ValueError,
+    etree.XMLSyntaxError,
+    zipfile.BadZipFile,
+    zlib.error,
+)
 
+
+@contextmanager
+def _invalid_document_errors() -> Iterator[None]:
+    """Report a document that the parser cannot read, or whose XML has an unexpected structure, as invalid.
+
+    The parser reports unexpected structure through the errors that its object model raises,
+    such as a missing attribute or child, so these errors are treated as an invalid document.
+
+    NOTE: A defect in the wrapped code that raises one of these errors is also reported as an invalid document.
+    The original error is kept as the cause.
+    Worth re-reviewing if the parser starts to validate the document structure when it opens a file.
+
+    Raises:
+        OfficePackageError: If the document is not a valid Word document.
+    """
+    try:
+        yield
+    # NOTE: OfficePackageError is a ValueError, so it must pass through before the broader catch.
+    except OfficePackageError:
+        raise
+    except _INVALID_DOCUMENT_ERRORS as exc:
+        raise OfficePackageError("The file is not a valid Word document.") from exc
+
+
+@_invalid_document_errors()
 def _open_document(docx_bytes: bytes) -> DocxDocument:
     """Open a Word document from untrusted bytes.
 
@@ -30,10 +68,7 @@ def _open_document(docx_bytes: bytes) -> DocxDocument:
         OfficePackageError: If the package is not a valid Word document or is over the size limits.
     """
     check_package(docx_bytes)
-    try:
-        return Document(io.BytesIO(docx_bytes))
-    except (KeyError, ValueError, etree.XMLSyntaxError, zipfile.BadZipFile, zlib.error) as exc:
-        raise OfficePackageError("The file is not a valid Word document.") from exc
+    return Document(io.BytesIO(docx_bytes))
 
 
 def build_docx(content: str = "") -> bytes:
@@ -57,6 +92,7 @@ def build_docx(content: str = "") -> bytes:
     return buf.getvalue()
 
 
+@_invalid_document_errors()
 def extract_text(docx_bytes: bytes) -> dict:
     """Extract plain text from paragraphs and tables in a Word document, up to the text limit.
 
@@ -111,6 +147,7 @@ def extract_text(docx_bytes: bytes) -> dict:
     }
 
 
+@_invalid_document_errors()
 def append_content(docx_bytes: bytes, content: str) -> bytes:
     """Append paragraphs to an existing Word document.
 
