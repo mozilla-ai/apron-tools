@@ -86,7 +86,7 @@ async def _read_body(resp: httpx.Response, max_bytes: int) -> Download:
     if resp.headers.get("content-encoding", "identity").strip().lower() not in {"", "identity"}:
         raise CompressedResponseError()
     declared = resp.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > max_bytes:
+    if declared.isascii() and declared.isdigit() and int(declared) > max_bytes:
         raise FileTooLargeError(max_bytes)
     data = bytearray()
     async for chunk in resp.aiter_bytes():

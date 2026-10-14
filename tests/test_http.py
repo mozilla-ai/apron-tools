@@ -76,6 +76,11 @@ class TestDownload:
 
         assert await _download() == b"hello"
 
+    async def test_ignores_content_length_with_non_ascii_digits(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=_URL, stream=IteratorStream([b"hello"]), headers=[(b"content-length", b"\xb2")])
+
+        assert await _download() == b"hello"
+
     async def test_raises_for_error_status(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(url=_URL, status_code=403)
 
