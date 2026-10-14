@@ -197,6 +197,7 @@ dependencies = [
 all = [
     { name = "atlassian-python-api" },
     { name = "google-api-python-client" },
+    { name = "lxml" },
     { name = "msgraph-sdk" },
     { name = "notion-client" },
     { name = "pygithub" },
@@ -222,6 +223,7 @@ notion = [
     { name = "notion-client" },
 ]
 powerpoint = [
+    { name = "lxml" },
     { name = "python-pptx" },
 ]
 salesforce = [
@@ -234,6 +236,7 @@ web-access = [
     { name = "tabstack" },
 ]
 word = [
+    { name = "lxml" },
     { name = "python-docx" },
 ]
 
@@ -281,6 +284,8 @@ requires-dist = [
     { name = "atlassian-python-api", marker = "extra == 'atlassian'", specifier = ">=3.0" },
     { name = "google-api-python-client", marker = "extra == 'google'", specifier = ">=2.0" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "lxml", marker = "extra == 'powerpoint'", specifier = ">=3.1.0" },
+    { name = "lxml", marker = "extra == 'word'", specifier = ">=3.1.0" },
     { name = "msgraph-sdk", marker = "extra == 'microsoft'", specifier = ">=1.0" },
     { name = "notion-client", marker = "extra == 'notion'", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.0" },

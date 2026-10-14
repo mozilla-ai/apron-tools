@@ -12,6 +12,7 @@ import zlib
 
 from docx import Document
 from docx.document import Document as DocxDocument
+from lxml import etree  # ty: ignore[unresolved-import]
 
 from apron_tools._ooxml import OfficePackageError, TextBudget, check_package
 
@@ -31,7 +32,7 @@ def _open_document(docx_bytes: bytes) -> DocxDocument:
     check_package(docx_bytes)
     try:
         return Document(io.BytesIO(docx_bytes))
-    except (KeyError, ValueError, zipfile.BadZipFile, zlib.error) as exc:
+    except (KeyError, ValueError, etree.XMLSyntaxError, zipfile.BadZipFile, zlib.error) as exc:
         raise OfficePackageError("The file is not a valid Word document.") from exc
 
 

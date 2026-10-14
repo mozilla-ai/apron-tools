@@ -10,6 +10,7 @@ import io
 import zipfile
 import zlib
 
+from lxml import etree  # ty: ignore[unresolved-import]
 from pptx import Presentation as NewPresentation
 from pptx.presentation import Presentation
 from pptx.util import Inches
@@ -42,7 +43,7 @@ def _open_presentation(pptx_bytes: bytes) -> Presentation:
     check_package(pptx_bytes)
     try:
         return NewPresentation(io.BytesIO(pptx_bytes))
-    except (KeyError, ValueError, zipfile.BadZipFile, zlib.error) as exc:
+    except (KeyError, ValueError, etree.XMLSyntaxError, zipfile.BadZipFile, zlib.error) as exc:
         raise OfficePackageError("The file is not a valid PowerPoint presentation.") from exc
 
 

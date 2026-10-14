@@ -30,6 +30,15 @@ def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_
     return buf.getvalue()
 
 
+def _replace_part(package: bytes, name: str, data: bytes) -> bytes:
+    """Return a copy of a package with one part's content replaced."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(package)) as src, zipfile.ZipFile(buf, "w") as dst:
+        for info in src.infolist():
+            dst.writestr(info, data if info.filename == name else src.read(info))
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # build_docx
 # ---------------------------------------------------------------------------
@@ -204,6 +213,10 @@ class TestAppendContent:
         pytest.param(
             _package("[Content_Types].xml", b"\xff" * 16, declared_compression=zipfile.ZIP_DEFLATED),
             id="corrupt-part",
+        ),
+        pytest.param(_replace_part(build_docx("Text"), "word/document.xml", b"<not-closed"), id="malformed-main-part"),
+        pytest.param(
+            _replace_part(build_docx("Text"), "[Content_Types].xml", b"<not-closed"), id="malformed-content-types"
         ),
     ],
 )
