@@ -36,6 +36,7 @@ _INVALID_PRESENTATION_ERRORS = (
     IndexError,
     InvalidXmlError,
     KeyError,
+    TypeError,
     ValueError,
     etree.XMLSyntaxError,
     zipfile.BadZipFile,

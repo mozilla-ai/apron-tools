@@ -42,6 +42,14 @@ def _replace_part(package: bytes, name: str, data: bytes) -> bytes:
     return buf.getvalue()
 
 
+def _edit_part(package: bytes, name: str, old: bytes, new: bytes) -> bytes:
+    """Return a copy of a package with one piece of text in one part replaced."""
+    with zipfile.ZipFile(io.BytesIO(package)) as zf:
+        data = zf.read(name)
+    assert old in data
+    return _replace_part(package, name, data.replace(old, new))
+
+
 # ---------------------------------------------------------------------------
 # build_docx
 # ---------------------------------------------------------------------------
@@ -228,6 +236,10 @@ class TestAppendContent:
         ),
         pytest.param(
             _replace_part(build_docx("Text"), "[Content_Types].xml", b"<foo/>"), id="wrong-root-content-types"
+        ),
+        pytest.param(
+            _edit_part(build_docx("Text"), "word/_rels/document.xml.rels", b' Target="styles.xml"', b""),
+            id="relationship-without-target",
         ),
     ],
 )
