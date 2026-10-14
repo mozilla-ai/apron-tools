@@ -9,6 +9,7 @@ import io
 import zipfile
 
 import pytest
+from lxml import etree
 from pptx import Presentation
 
 from apron_tools import _ooxml
@@ -292,3 +293,11 @@ class TestInvalidPackage:
     def test_update_text_rejects_package(self, data: bytes) -> None:
         with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
             update_text(data, 1, "Text", 0)
+
+
+@pytest.mark.parametrize("part", ["ppt/presentation.xml", "[Content_Types].xml"])
+def test_malformed_xml_part_keeps_parse_error_as_cause(part: str) -> None:
+    data = _replace_part(build_pptx("Title"), part, b"<not-closed")
+    with pytest.raises(OfficePackageError) as exc_info:
+        extract_slides(data)
+    assert isinstance(exc_info.value.__cause__, etree.XMLSyntaxError)

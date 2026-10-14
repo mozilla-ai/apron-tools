@@ -10,6 +10,7 @@ import zipfile
 
 import pytest
 from docx import Document
+from lxml import etree
 
 from apron_tools import _ooxml
 from apron_tools._ooxml import OfficePackageError
@@ -228,3 +229,11 @@ class TestInvalidPackage:
     def test_append_content_rejects_package(self, data: bytes) -> None:
         with pytest.raises(OfficePackageError, match="not a valid Word document"):
             append_content(data, "Text")
+
+
+@pytest.mark.parametrize("part", ["word/document.xml", "[Content_Types].xml"])
+def test_malformed_xml_part_keeps_parse_error_as_cause(part: str) -> None:
+    data = _replace_part(build_docx("Title"), part, b"<not-closed")
+    with pytest.raises(OfficePackageError) as exc_info:
+        extract_text(data)
+    assert isinstance(exc_info.value.__cause__, etree.XMLSyntaxError)
