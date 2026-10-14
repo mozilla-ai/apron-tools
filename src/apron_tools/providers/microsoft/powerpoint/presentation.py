@@ -36,6 +36,7 @@ _INVALID_PRESENTATION_ERRORS = (
     IndexError,
     InvalidXmlError,
     KeyError,
+    NotImplementedError,
     TypeError,
     ValueError,
     etree.XMLSyntaxError,

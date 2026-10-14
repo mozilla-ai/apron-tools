@@ -24,6 +24,7 @@ _INVALID_DOCUMENT_ERRORS = (
     IndexError,
     InvalidXmlError,
     KeyError,
+    NotImplementedError,
     TypeError,
     ValueError,
     etree.XMLSyntaxError,

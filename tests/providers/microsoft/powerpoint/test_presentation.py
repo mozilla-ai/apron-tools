@@ -53,6 +53,18 @@ def _edit_part(package: bytes, name: str, old: bytes, new: bytes) -> bytes:
     return _replace_part(package, name, data.replace(old, new))
 
 
+def _set_entry_fields(package: bytes, **fields: int) -> bytes:
+    """Return a copy of a package with the given zip header fields set on every entry."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(package)) as src, zipfile.ZipFile(buf, "w") as dst:
+        for info in src.infolist():
+            dst.writestr(info, src.read(info))
+        for info in dst.infolist():
+            for field, value in fields.items():
+                setattr(info, field, value)
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # build_pptx
 # ---------------------------------------------------------------------------
@@ -294,6 +306,8 @@ class TestResolveLayoutIndex:
         pytest.param(
             _replace_part(build_pptx("Title"), "[Content_Types].xml", b"<foo/>"), id="wrong-root-content-types"
         ),
+        pytest.param(_set_entry_fields(build_pptx("Text"), extract_version=99), id="unsupported-zip-version"),
+        pytest.param(_set_entry_fields(build_pptx("Text"), flag_bits=0x40), id="unsupported-zip-feature"),
     ],
 )
 class TestInvalidPackage:
