@@ -149,7 +149,7 @@ async def download_file(
         httpx.HTTPError: If the download request fails.
         FileTooLargeError: If the file is larger than the download limit.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         result = await download(
             client,
             f"{base_url}/me/drive/items/{item_id}/content",

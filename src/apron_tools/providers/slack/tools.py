@@ -327,7 +327,7 @@ async def _download_slack_file(url: str, token: str, max_size_mb: int, *, timeou
         httpx.HTTPError: If the request fails or the response status is not a success.
         FileTooLargeError: If the file is larger than the limit.
     """
-    async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout) as client:
         return await download(
             client,
             url,
