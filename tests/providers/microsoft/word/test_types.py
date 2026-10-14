@@ -67,6 +67,10 @@ class TestCreateDocumentParams:
         with pytest.raises(ValidationError, match="U\\+0000"):
             CreateDocumentParams(name="Test.docx", content="a\x00b")
 
+    @pytest.mark.parametrize("content", ["Line1\vLine2", "Line1\fLine2", "Line1\x1cLine2"])
+    def test_accepts_line_separators(self, content: str) -> None:
+        assert CreateDocumentParams(name="Test.docx", content=content).content == content
+
 
 class TestUpdateDocumentParams:
     def test_required(self) -> None:

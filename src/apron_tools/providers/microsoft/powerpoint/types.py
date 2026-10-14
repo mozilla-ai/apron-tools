@@ -2,12 +2,33 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from apron_tools._ooxml import validate_xml_text
 from apron_tools.types import FileInput, ToolResult
+
+# NOTE: python-pptx escapes control characters, so only these characters cannot be stored in slide text.
+_UNSTORABLE_CHAR = re.compile("[\ud800-\udfff\ufffe\uffff]")
+
+
+def _validate_slide_text(text: str) -> str:
+    """Check that text holds only characters that a slide can store.
+
+    Args:
+        text: Text to store on a slide.
+
+    Returns:
+        The text, unchanged.
+
+    Raises:
+        ValueError: If the text holds a character that a slide cannot store.
+    """
+    if match := _UNSTORABLE_CHAR.search(text):
+        raise ValueError(f"The text contains U+{ord(match.group()):04X}, which a presentation cannot hold.")
+    return text
+
 
 # ---------------------------------------------------------------------------
 # Input parameter models
@@ -34,7 +55,7 @@ class CreatePresentationParams(BaseModel):
     title: str = ""
     folder_path: str = "root"
 
-    _validate_title = field_validator("title")(validate_xml_text)
+    _validate_title = field_validator("title")(_validate_slide_text)
 
 
 class AddSlideParams(BaseModel):
@@ -45,7 +66,7 @@ class AddSlideParams(BaseModel):
     title: str = ""
     content: str = ""
 
-    _validate_text = field_validator("title", "content")(validate_xml_text)
+    _validate_text = field_validator("title", "content")(_validate_slide_text)
 
 
 class UpdateSlideTextParams(BaseModel):
@@ -56,7 +77,7 @@ class UpdateSlideTextParams(BaseModel):
     text: str
     shape_index: int = 0
 
-    _validate_text = field_validator("text")(validate_xml_text)
+    _validate_text = field_validator("text")(_validate_slide_text)
 
 
 class UploadToOnedriveParams(BaseModel):
