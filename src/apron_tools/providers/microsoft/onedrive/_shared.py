@@ -146,7 +146,7 @@ async def download_file(
         Raw file bytes.
 
     Raises:
-        httpx.HTTPStatusError: If the download request fails.
+        httpx.HTTPError: If the download request fails.
         FileTooLargeError: If the file is larger than the download limit.
     """
     async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:

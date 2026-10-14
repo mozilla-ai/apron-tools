@@ -49,13 +49,15 @@ async def download(
         The body, its content type, and its text encoding.
 
     Raises:
-        httpx.HTTPStatusError: If the response status is not a success.
+        httpx.HTTPError: If the request fails, the response status is not a success, or the body is compressed.
         FileTooLargeError: If the body is larger than the limit.
     """
     # Without compression, Content-Length is the real size and each chunk stays small.
     request_headers = {**headers, "Accept-Encoding": "identity"}
     async with client.stream("GET", url, headers=request_headers) as resp:
         resp.raise_for_status()
+        if resp.headers.get("content-encoding", "identity").strip().lower() not in {"", "identity"}:
+            raise httpx.DecodingError("The server sent a compressed file, which the download does not accept.")
         declared = resp.headers.get("content-length", "")
         if declared.isdigit() and int(declared) > max_bytes:
             raise FileTooLargeError(max_bytes)

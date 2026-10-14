@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import gzip
+
 import httpx
 import pytest
 from pytest_httpx import HTTPXMock, IteratorStream
@@ -37,6 +39,17 @@ class TestDownload:
         )
 
         assert await _download() == b"hello"
+
+    async def test_accepts_body_declared_as_uncompressed(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=_URL, content=b"hello", headers={"content-encoding": "identity"})
+
+        assert await _download() == b"hello"
+
+    async def test_rejects_compressed_body(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=_URL, content=gzip.compress(b"hello"), headers={"content-encoding": "gzip"})
+
+        with pytest.raises(httpx.DecodingError, match="compressed"):
+            await _download()
 
     async def test_accepts_body_at_limit(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(url=_URL, content=b"x" * _LIMIT)
