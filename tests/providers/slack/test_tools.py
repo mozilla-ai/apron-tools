@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-from pytest_httpx import HTTPXMock
+from pytest_httpx import HTTPXMock, IteratorStream
 from slack_sdk.errors import SlackApiError
 from slack_sdk.web.async_slack_response import AsyncSlackResponse
 
@@ -1054,18 +1054,13 @@ class TestSlackGetFileInfo:
 
 
 class TestSlackDownloadFile:
-    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
-    async def test_text_file(self, mock_cls: AsyncMock) -> None:
-        mock_client = AsyncMock()
-        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        mock_response.headers = {"content-type": "text/plain; charset=utf-8"}
-        mock_response.content = b"Hello, world!"
-        mock_response.text = "Hello, world!"
-        mock_client.get.return_value = mock_response
+    async def test_text_file(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url="https://files.slack.com/test.txt",
+            match_headers={"Authorization": f"Bearer {_TOKEN}"},
+            content="Grüße".encode("latin-1"),
+            headers={"content-type": "text/plain; charset=latin-1"},
+        )
 
         result = await slack_download_file(
             DownloadFileParams(url="https://files.slack.com/test.txt"),
@@ -1075,20 +1070,11 @@ class TestSlackDownloadFile:
 
         assert isinstance(result, DownloadFileResult)
         assert result.success is True
-        assert result.content == "Hello, world!"
+        assert result.content == "Grüße"
         assert result.mime_type == "text/plain"
 
-    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
-    async def test_binary_file(self, mock_cls: AsyncMock) -> None:
-        mock_client = AsyncMock()
-        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        mock_response.headers = {"content-type": "image/png"}
-        mock_response.content = b"\x89PNG"
-        mock_client.get.return_value = mock_response
+    async def test_binary_file(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(content=b"\x89PNG", headers={"content-type": "image/png"})
 
         result = await slack_download_file(
             DownloadFileParams(url="https://files.slack.com/test.png"),
@@ -1098,19 +1084,13 @@ class TestSlackDownloadFile:
 
         assert result.success is True
         assert result.mime_type == "image/png"
-        assert len(result.content) > 0
+        assert result.content == "iVBORw=="
 
-    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
-    async def test_file_too_large(self, mock_cls: AsyncMock) -> None:
-        mock_client = AsyncMock()
-        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        mock_response.headers = {"content-length": str(20 * 1024 * 1024), "content-type": "application/octet-stream"}
-        mock_response.content = b"x"
-        mock_client.get.return_value = mock_response
+    async def test_file_too_large(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            stream=IteratorStream([b"x"]),
+            headers={"content-length": str(20 * 1024 * 1024), "content-type": "application/octet-stream"},
+        )
 
         result = await slack_download_file(
             DownloadFileParams(url="https://files.slack.com/big.bin", max_size_mb=10),
@@ -1119,18 +1099,50 @@ class TestSlackDownloadFile:
         )
 
         assert result.success is False
-        assert "too large" in result.error
+        assert "10 MB download limit" in (result.error or "")
 
-    @patch("apron_tools.providers.slack.tools.httpx.AsyncClient")
-    async def test_http_error(self, mock_cls: AsyncMock) -> None:
-        mock_client = AsyncMock()
-        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+    async def test_stops_streamed_file_over_limit_without_content_length(self, httpx_mock: HTTPXMock) -> None:
+        chunk = b"x" * (512 * 1024 + 1)
+        httpx_mock.add_response(stream=IteratorStream([chunk, chunk]))
 
-        mock_response = AsyncMock()
-        mock_response.status_code = 403
-        mock_response.headers = {}
-        mock_client.get.return_value = mock_response
+        result = await slack_download_file(
+            DownloadFileParams(url="https://files.slack.com/big.bin", max_size_mb=1),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "1 MB download limit" in (result.error or "")
+
+    async def test_rejects_compressed_file(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(content=b"\x1f\x8b", headers={"content-encoding": "gzip"})
+
+        result = await slack_download_file(
+            DownloadFileParams(url="https://files.slack.com/report.txt"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "compressed" in (result.error or "")
+
+    async def test_ignores_content_length_that_is_not_a_number(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            stream=IteratorStream([b"hello"]),
+            headers={"content-length": "lots", "content-type": "text/plain"},
+        )
+
+        result = await slack_download_file(
+            DownloadFileParams(url="https://files.slack.com/test.txt"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is True
+        assert result.content == "hello"
+
+    async def test_http_error(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(status_code=403)
 
         result = await slack_download_file(
             DownloadFileParams(url="https://files.slack.com/forbidden.txt"),
@@ -1139,7 +1151,7 @@ class TestSlackDownloadFile:
         )
 
         assert result.success is False
-        assert "403" in result.error
+        assert result.error == "HTTP 403"
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_download_file._tool_definition
@@ -1354,15 +1366,9 @@ class TestSlackAddReactions:
 class TestSlackSaveFileForUpload:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         file_bytes = b"\x89PNG\r\n\x1a\nfakeimage"
-
-        # HEAD response.
-        httpx_mock.add_response(
-            method="HEAD",
-            headers={"content-length": str(len(file_bytes)), "content-type": "image/png"},
-        )
-        # GET response.
         httpx_mock.add_response(
             method="GET",
+            match_headers={"Authorization": f"Bearer {_TOKEN}"},
             content=file_bytes,
             headers={"content-type": "image/png"},
         )
@@ -1385,10 +1391,10 @@ class TestSlackSaveFileForUpload:
         restored = SaveFileForUploadResult.model_validate_json(json_str)
         assert restored.data == file_bytes
 
-    async def test_file_too_large_from_head(self, httpx_mock: HTTPXMock) -> None:
-        # HEAD reports file larger than 10 MB.
+    async def test_file_too_large(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            method="HEAD",
+            method="GET",
+            stream=IteratorStream([b"x"]),
             headers={"content-length": str(11 * 1024 * 1024), "content-type": "image/png"},
         )
 
@@ -1398,10 +1404,33 @@ class TestSlackSaveFileForUpload:
         )
 
         assert result.success is False
-        assert "too large" in result.error.lower()
+        assert "10 MB download limit" in (result.error or "")
+
+    async def test_stops_streamed_file_over_limit_without_content_length(self, httpx_mock: HTTPXMock) -> None:
+        chunk = b"x" * (512 * 1024 + 1)
+        httpx_mock.add_response(method="GET", stream=IteratorStream([chunk, chunk]))
+
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="https://files.slack.com/files-pri/T1/huge.zip", max_size_mb=1),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "1 MB download limit" in (result.error or "")
+
+    async def test_rejects_compressed_file(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(method="GET", content=b"\x1f\x8b", headers={"content-encoding": "gzip"})
+
+        result = await slack_save_file_for_upload(
+            SaveFileForUploadParams(url="https://files.slack.com/files-pri/T1/report.txt"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert "compressed" in (result.error or "")
 
     async def test_http_error(self, httpx_mock: HTTPXMock) -> None:
-        httpx_mock.add_response(method="HEAD", status_code=403)
+        httpx_mock.add_response(method="GET", status_code=403)
 
         result = await slack_save_file_for_upload(
             SaveFileForUploadParams(url="https://files.slack.com/files-pri/T1/secret.pdf"),
@@ -1409,7 +1438,7 @@ class TestSlackSaveFileForUpload:
         )
 
         assert result.success is False
-        assert "403" in result.error
+        assert result.error == "HTTP 403"
 
     async def test_has_tool_definition(self) -> None:
         defn = slack_save_file_for_upload._tool_definition

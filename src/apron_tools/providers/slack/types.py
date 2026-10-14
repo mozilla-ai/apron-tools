@@ -8,6 +8,8 @@ from pydantic import Base64Bytes, BaseModel, ConfigDict, Field, model_validator
 
 from apron_tools.types import FileInput, ToolResult
 
+_MAX_FILE_SIZE_MB = 50
+
 # ---------------------------------------------------------------------------
 # Input parameter models
 # ---------------------------------------------------------------------------
@@ -103,7 +105,7 @@ class DownloadFileParams(BaseModel):
     """Parameters for downloading a file from Slack."""
 
     url: str
-    max_size_mb: int = 10
+    max_size_mb: int = Field(default=10, gt=0, le=_MAX_FILE_SIZE_MB)
 
 
 class SaveFileForUploadParams(BaseModel):
@@ -116,7 +118,7 @@ class SaveFileForUploadParams(BaseModel):
     """
 
     url: str
-    max_size_mb: int = Field(default=10, gt=0)
+    max_size_mb: int = Field(default=10, gt=0, le=_MAX_FILE_SIZE_MB)
 
 
 class GetReactionsParams(BaseModel):

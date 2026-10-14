@@ -119,6 +119,22 @@ class TestDownloadFile:
         except httpx.HTTPStatusError as exc:
             assert exc.response.status_code == 404
 
+    async def test_follows_redirect_to_download_url_without_token(self, httpx_mock: HTTPXMock) -> None:
+        download_url = "https://public.dm.files.1drv.com/y4m-pptx-001"
+        httpx_mock.add_response(
+            url=f"{_GRAPH_BASE}/me/drive/items/pptx-001/content",
+            status_code=302,
+            headers={"location": download_url},
+        )
+        httpx_mock.add_response(url=download_url, content=b"fake-pptx-bytes")
+
+        result = await download_file(_TOKEN, "pptx-001", base_url=_GRAPH_BASE)
+
+        assert result == b"fake-pptx-bytes"
+        redirected = httpx_mock.get_request(url=download_url)
+        assert redirected is not None
+        assert "Authorization" not in redirected.headers
+
     async def test_requests_uncompressed_content(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GRAPH_BASE}/me/drive/items/pptx-001/content",
