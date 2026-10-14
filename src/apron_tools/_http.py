@@ -55,14 +55,15 @@ async def download(
     Args:
         client: The client that sends the request.
         url: The URL to download.
-        headers: The request headers.
+        headers: The request headers. The download replaces any Accept-Encoding header in them.
         max_bytes: The largest body to accept, in bytes.
 
     Returns:
         The body, its content type, and its text encoding.
 
     Raises:
-        httpx.HTTPError: If the request fails or the response status is not a success.
+        httpx.HTTPError: If the request fails.
+        httpx.HTTPStatusError: If the response status is not a success. The error response body is not read.
         httpx.TooManyRedirects: If the redirects exceed the client's redirect limit.
         CompressedResponseError: If the body is compressed.
         FileTooLargeError: If the body is larger than the limit.
