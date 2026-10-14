@@ -10,7 +10,20 @@ from __future__ import annotations
 import httpx
 
 _BASE_URL = "https://graph.microsoft.com/v1.0"
+_MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024
 _TIMEOUT = 60.0
+
+
+class FileTooLargeError(Exception):
+    """A file is larger than the download size limit."""
+
+    def __init__(self, limit_bytes: int) -> None:
+        """Build the error for the given limit.
+
+        Args:
+            limit_bytes: The download size limit in bytes.
+        """
+        super().__init__(f"The file is larger than the {limit_bytes // (1024 * 1024)} MB download limit.")
 
 
 def _headers(token: str, *, content_type: str | None = None) -> dict[str, str]:
@@ -130,7 +143,9 @@ async def download_file(
     *,
     base_url: str = _BASE_URL,
 ) -> bytes:
-    """Download file content from OneDrive by item ID.
+    """Download file content from OneDrive by item ID, up to a fixed size limit.
+
+    The limit bounds memory use, because the file content is untrusted and is held in memory.
 
     Args:
         token: OAuth bearer token.
@@ -142,14 +157,24 @@ async def download_file(
 
     Raises:
         httpx.HTTPStatusError: If the download request fails.
+        FileTooLargeError: If the file is larger than the download limit.
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
-        resp = await client.get(
-            f"{base_url}/me/drive/items/{item_id}/content",
-            headers=_headers(token),
-        )
+    # Without compression, Content-Length is the real size and each chunk stays small.
+    headers = {**_headers(token), "Accept-Encoding": "identity"}
+    async with (
+        httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client,
+        client.stream("GET", f"{base_url}/me/drive/items/{item_id}/content", headers=headers) as resp,
+    ):
         resp.raise_for_status()
-        return resp.content
+        declared = resp.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > _MAX_DOWNLOAD_BYTES:
+            raise FileTooLargeError(_MAX_DOWNLOAD_BYTES)
+        data = bytearray()
+        async for chunk in resp.aiter_bytes():
+            if len(data) + len(chunk) > _MAX_DOWNLOAD_BYTES:
+                raise FileTooLargeError(_MAX_DOWNLOAD_BYTES)
+            data += chunk
+        return bytes(data)
 
 
 async def upload_file(

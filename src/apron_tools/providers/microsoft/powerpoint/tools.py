@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import httpx
 
+from apron_tools._ooxml import OfficePackageError
 from apron_tools.providers.microsoft import onedrive
 from apron_tools.providers.microsoft.powerpoint import presentation
 from apron_tools.providers.microsoft.powerpoint.types import (
@@ -83,16 +84,20 @@ async def microsoft_powerpoint_read_presentation(
     try:
         meta = await onedrive.get_file_metadata(token, params.presentation_id, base_url=base_url)
         pptx_bytes = await onedrive.download_file(token, params.presentation_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return ReadPresentationResult(success=False, error=str(exc))
 
-    slides_data = presentation.extract_slides(pptx_bytes, params.include_notes)
-    slides = [SlideInfo(**s) for s in slides_data]
+    try:
+        slides_data = presentation.extract_slides(pptx_bytes, params.include_notes)
+    except OfficePackageError as exc:
+        return ReadPresentationResult(success=False, error=str(exc))
+    slides = [SlideInfo(**s) for s in slides_data["slides"]]
 
     return ReadPresentationResult(
         success=True,
         name=meta.get("name", ""),
         slides=slides,
+        truncated=slides_data["truncated"],
     )
 
 
@@ -148,10 +153,13 @@ async def microsoft_powerpoint_add_slide(
     try:
         meta = await onedrive.get_file_metadata(token, params.presentation_id, base_url=base_url)
         pptx_bytes = await onedrive.download_file(token, params.presentation_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return AddSlideResult(success=False, error=str(exc))
 
-    updated_bytes, slide_count = presentation.add_slide(pptx_bytes, params.layout, params.title, params.content)
+    try:
+        updated_bytes, slide_count = presentation.add_slide(pptx_bytes, params.layout, params.title, params.content)
+    except OfficePackageError as exc:
+        return AddSlideResult(success=False, error=str(exc))
 
     try:
         await onedrive.update_file_content(
@@ -188,12 +196,15 @@ async def microsoft_powerpoint_update_slide_text(
     try:
         meta = await onedrive.get_file_metadata(token, params.presentation_id, base_url=base_url)
         pptx_bytes = await onedrive.download_file(token, params.presentation_id, base_url=base_url)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, onedrive.FileTooLargeError) as exc:
         return UpdateSlideTextResult(success=False, error=str(exc))
 
-    updated_bytes, shape_name, error = presentation.update_text(
-        pptx_bytes, params.slide_number, params.text, params.shape_index
-    )
+    try:
+        updated_bytes, shape_name, error = presentation.update_text(
+            pptx_bytes, params.slide_number, params.text, params.shape_index
+        )
+    except OfficePackageError as exc:
+        return UpdateSlideTextResult(success=False, error=str(exc))
 
     if error:
         return UpdateSlideTextResult(success=False, error=error)

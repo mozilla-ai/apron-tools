@@ -131,6 +131,7 @@ class ReadPresentationResult(ToolResult):
 
     name: str = ""
     slides: list[SlideInfo] = []
+    truncated: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -154,6 +155,8 @@ class ReadPresentationResult(ToolResult):
                 lines.append(f"    - {t}")
             if s.notes:
                 lines.append(f"    Notes: {s.notes}")
+        if self.truncated:
+            lines.append("  Note: The text was truncated because the document is over the length limit.")
         return "\n".join(lines)
 
 

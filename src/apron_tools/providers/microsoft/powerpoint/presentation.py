@@ -7,10 +7,14 @@ Independently testable by creating real .pptx content in memory.
 from __future__ import annotations
 
 import io
+import zipfile
+import zlib
 
 from pptx import Presentation as NewPresentation
 from pptx.presentation import Presentation
 from pptx.util import Inches
+
+from apron_tools._ooxml import OfficePackageError, TextBudget, check_package
 
 # Default layout index mapping for the standard python-pptx template.
 _LAYOUT_PRESETS: dict[str, int] = {
@@ -21,6 +25,25 @@ _LAYOUT_PRESETS: dict[str, int] = {
     "two_content": 3,
     "title_only": 5,
 }
+
+
+def _open_presentation(pptx_bytes: bytes) -> Presentation:
+    """Open a PowerPoint presentation from untrusted bytes.
+
+    Args:
+        pptx_bytes: Raw .pptx file bytes.
+
+    Returns:
+        The open presentation.
+
+    Raises:
+        OfficePackageError: If the package is not a valid PowerPoint presentation or is over the size limits.
+    """
+    check_package(pptx_bytes)
+    try:
+        return NewPresentation(io.BytesIO(pptx_bytes))
+    except (KeyError, ValueError, zipfile.BadZipFile, zlib.error) as exc:
+        raise OfficePackageError("The file is not a valid PowerPoint presentation.") from exc
 
 
 def resolve_layout_index(prs: Presentation, layout: str) -> int:
@@ -81,21 +104,30 @@ def build_pptx(title: str = "") -> bytes:
 def extract_slides(
     pptx_bytes: bytes,
     include_notes: bool = False,
-) -> list[dict]:
-    """Extract structured text data from every slide in a presentation.
+) -> dict:
+    """Extract structured text data from the slides in a presentation, up to the text limit.
 
     Args:
         pptx_bytes: Raw .pptx file bytes.
         include_notes: Whether to include speaker notes.
 
     Returns:
-        A list of dicts, one per slide, each containing:
-        number, title, texts (list of str), and notes (str).
+        A dict containing:
+        - slides: list of dicts, one per slide, each containing
+          number, title, texts (list of str), and notes (str).
+        - truncated: whether text was cut at the text limit.
+          Slides after the cut are omitted.
+
+    Raises:
+        OfficePackageError: If the package is not valid or is over the size limits.
     """
-    prs = NewPresentation(io.BytesIO(pptx_bytes))
+    prs = _open_presentation(pptx_bytes)
+    budget = TextBudget()
     slides: list[dict] = []
 
     for i, slide in enumerate(prs.slides):
+        if budget.exhausted:
+            break
         slide_data: dict = {
             "number": i + 1,
             "title": "",
@@ -103,24 +135,28 @@ def extract_slides(
             "notes": "",
         }
 
+        title = ""
         title_shape = slide.shapes.title
         if title_shape and title_shape.has_text_frame:
-            slide_data["title"] = title_shape.text_frame.text.strip()
+            title = title_shape.text_frame.text.strip()
+            slide_data["title"] = budget.take(title)
 
         for shape in slide.shapes:
+            if budget.exhausted:
+                break
             if shape.has_text_frame:
                 text = shape.text_frame.text.strip()
-                if text and text != slide_data["title"]:
-                    slide_data["texts"].append(text)
+                if text and text != title and (kept := budget.take(text)):
+                    slide_data["texts"].append(kept)
 
-        if include_notes and slide.has_notes_slide:
+        if include_notes and slide.has_notes_slide and not budget.exhausted:
             notes_text = slide.notes_slide.notes_text_frame.text.strip()
             if notes_text:
-                slide_data["notes"] = notes_text
+                slide_data["notes"] = budget.take(notes_text)
 
         slides.append(slide_data)
 
-    return slides
+    return {"slides": slides, "truncated": budget.exhausted}
 
 
 def add_slide(
@@ -139,8 +175,11 @@ def add_slide(
 
     Returns:
         A tuple of (updated .pptx bytes, total slide count after insertion).
+
+    Raises:
+        OfficePackageError: If the package is not valid or is over the size limits.
     """
-    prs = NewPresentation(io.BytesIO(pptx_bytes))
+    prs = _open_presentation(pptx_bytes)
 
     layout_idx = resolve_layout_index(prs, layout)
     slide_layout = prs.slide_layouts[layout_idx]
@@ -181,8 +220,11 @@ def update_text(
 
     Returns:
         A tuple of (updated bytes, shape name, error string or None).
+
+    Raises:
+        OfficePackageError: If the package is not valid or is over the size limits.
     """
-    prs = NewPresentation(io.BytesIO(pptx_bytes))
+    prs = _open_presentation(pptx_bytes)
 
     if slide_number < 1 or slide_number > len(prs.slides):
         return (

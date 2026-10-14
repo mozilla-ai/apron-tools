@@ -8,6 +8,7 @@ tools, alongside the public OneDrive tool functions defined in
 """
 
 from apron_tools.providers.microsoft.onedrive._shared import (
+    FileTooLargeError,
     download_file,
     get_file_metadata,
     search_files,
@@ -16,6 +17,7 @@ from apron_tools.providers.microsoft.onedrive._shared import (
 )
 
 __all__ = [
+    "FileTooLargeError",
     "download_file",
     "get_file_metadata",
     "search_files",

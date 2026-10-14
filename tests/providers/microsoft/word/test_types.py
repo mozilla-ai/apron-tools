@@ -147,6 +147,24 @@ class TestExploreDocumentsResult:
 
 
 class TestReadDocumentResult:
+    def test_str_notes_truncation(self) -> None:
+        result = ReadDocumentResult(
+            success=True,
+            name="Test.docx",
+            paragraphs=["Intro"],
+            truncated=True,
+        )
+        assert "truncated" in str(result)
+
+    def test_not_truncated_by_default(self) -> None:
+        result = ReadDocumentResult(
+            success=True,
+            name="Test.docx",
+            paragraphs=["Intro"],
+        )
+        assert result.truncated is False
+        assert "truncated" not in str(result)
+
     def test_success(self) -> None:
         result = ReadDocumentResult(
             success=True,

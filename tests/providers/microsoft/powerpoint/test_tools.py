@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from pytest_httpx import HTTPXMock
 
+from apron_tools import _ooxml
+from apron_tools.providers.microsoft.onedrive import _shared as onedrive_shared
 from apron_tools.providers.microsoft.powerpoint.presentation import build_pptx
 from apron_tools.providers.microsoft.powerpoint.tools import (
     microsoft_powerpoint_add_slide,
@@ -35,10 +38,37 @@ TESTDATA_DIR = Path(__file__).parent / "testdata"
 _TOKEN = "test_oauth_token"
 _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _ITEM_ID = "pptx-001"
+_DOWNLOAD_LIMIT = 1024 * 1024
 
 
 def _load_json(filename: str) -> dict:
     return json.loads((TESTDATA_DIR / filename).read_text())
+
+
+def _add_oversized_download(httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lower the download limit and serve a file one byte over it."""
+    monkeypatch.setattr(onedrive_shared, "_MAX_DOWNLOAD_BYTES", _DOWNLOAD_LIMIT)
+    httpx_mock.add_response(
+        url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}",
+        json=_load_json("file_metadata.json"),
+    )
+    httpx_mock.add_response(
+        url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}/content",
+        content=b"x" * (_DOWNLOAD_LIMIT + 1),
+    )
+
+
+def _add_document_over_unpacked_limit(httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Lower the unpacked size limit below a real document and serve that document."""
+    monkeypatch.setattr(_ooxml, "_MAX_UNPACKED_BYTES", 1024)
+    httpx_mock.add_response(
+        url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}",
+        json=_load_json("file_metadata.json"),
+    )
+    httpx_mock.add_response(
+        url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}/content",
+        content=build_pptx("Title"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +166,57 @@ class TestReadPresentation:
 
         assert result.success is False
         assert result.error is not None
+
+    async def test_rejects_file_over_download_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_oversized_download(httpx_mock, monkeypatch)
+
+        result = await microsoft_powerpoint_read_presentation(
+            ReadPresentationParams(presentation_id=_ITEM_ID),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "download limit" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
+
+    async def test_rejects_document_over_unpacked_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_document_over_unpacked_limit(httpx_mock, monkeypatch)
+
+        result = await microsoft_powerpoint_read_presentation(
+            ReadPresentationParams(presentation_id=_ITEM_ID),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "when unpacked" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
+
+    async def test_truncates_long_text(self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_ooxml, "_MAX_TEXT_CHARS", 5)
+        httpx_mock.add_response(
+            url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}",
+            json=_load_json("file_metadata.json"),
+        )
+        httpx_mock.add_response(
+            url=f"{_GRAPH_BASE}/me/drive/items/{_ITEM_ID}/content",
+            content=build_pptx("Hello World"),
+        )
+
+        result = await microsoft_powerpoint_read_presentation(
+            ReadPresentationParams(presentation_id=_ITEM_ID),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is True
+        assert result.truncated is True
+        assert "Hello World" not in str(result)
 
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_powerpoint_read_presentation._tool_definition
@@ -287,6 +368,46 @@ class TestAddSlide:
 
         assert result.success is False
 
+    async def test_rejects_file_over_download_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_oversized_download(httpx_mock, monkeypatch)
+
+        result = await microsoft_powerpoint_add_slide(
+            AddSlideParams(
+                presentation_id=_ITEM_ID,
+                layout="title_and_content",
+                title="New Slide",
+                content="Some content",
+            ),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "download limit" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
+
+    async def test_rejects_document_over_unpacked_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_document_over_unpacked_limit(httpx_mock, monkeypatch)
+
+        result = await microsoft_powerpoint_add_slide(
+            AddSlideParams(
+                presentation_id=_ITEM_ID,
+                layout="title_and_content",
+                title="New Slide",
+                content="Some content",
+            ),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "when unpacked" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
+
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_powerpoint_add_slide._tool_definition
         assert defn.name == "microsoft_powerpoint_add_slide"
@@ -374,6 +495,36 @@ class TestUpdateSlideText:
         )
 
         assert result.success is False
+
+    async def test_rejects_file_over_download_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_oversized_download(httpx_mock, monkeypatch)
+
+        result = await microsoft_powerpoint_update_slide_text(
+            UpdateSlideTextParams(presentation_id=_ITEM_ID, slide_number=1, text="Updated Title"),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "download limit" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
+
+    async def test_rejects_document_over_unpacked_limit(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _add_document_over_unpacked_limit(httpx_mock, monkeypatch)
+
+        result = await microsoft_powerpoint_update_slide_text(
+            UpdateSlideTextParams(presentation_id=_ITEM_ID, slide_number=1, text="Updated Title"),
+            token=_TOKEN,
+            base_url=_GRAPH_BASE,
+        )
+
+        assert result.success is False
+        assert "when unpacked" in (result.error or "")
+        assert all(r.method == "GET" for r in httpx_mock.get_requests())
 
     async def test_has_tool_definition(self) -> None:
         defn = microsoft_powerpoint_update_slide_text._tool_definition

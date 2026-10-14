@@ -190,6 +190,24 @@ class TestExplorePresentationsResult:
 
 
 class TestReadPresentationResult:
+    def test_str_notes_truncation(self) -> None:
+        result = ReadPresentationResult(
+            success=True,
+            name="Test.pptx",
+            slides=[SlideInfo(number=1, title="Intro")],
+            truncated=True,
+        )
+        assert "truncated" in str(result)
+
+    def test_not_truncated_by_default(self) -> None:
+        result = ReadPresentationResult(
+            success=True,
+            name="Test.pptx",
+            slides=[SlideInfo(number=1, title="Intro")],
+        )
+        assert result.truncated is False
+        assert "truncated" not in str(result)
+
     def test_success(self) -> None:
         result = ReadPresentationResult(
             success=True,

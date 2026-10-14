@@ -6,9 +6,13 @@ No mocks — creates real .pptx bytes and verifies their content.
 from __future__ import annotations
 
 import io
+import zipfile
 
+import pytest
 from pptx import Presentation
 
+from apron_tools import _ooxml
+from apron_tools._ooxml import OfficePackageError
 from apron_tools.providers.microsoft.powerpoint.presentation import (
     add_slide,
     build_pptx,
@@ -16,6 +20,17 @@ from apron_tools.providers.microsoft.powerpoint.presentation import (
     resolve_layout_index,
     update_text,
 )
+from apron_tools.providers.microsoft.word.document import build_docx
+
+
+def _package(name: str, data: bytes, *, declared_compression: int = zipfile.ZIP_STORED) -> bytes:
+    """Build a one-part package whose central directory declares the given compression method."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(name, data)
+        zf.infolist()[0].compress_type = declared_compression
+    return buf.getvalue()
+
 
 # ---------------------------------------------------------------------------
 # build_pptx
@@ -48,23 +63,38 @@ class TestBuildPptx:
 
 
 class TestExtractSlides:
+    def test_not_truncated_within_limit(self) -> None:
+        assert extract_slides(build_pptx("Hello"))["truncated"] is False
+
+    def test_truncates_text_over_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_ooxml, "_MAX_TEXT_CHARS", 10)
+        data = build_pptx("Slide 1")
+        data, _ = add_slide(data, "title_and_content", "Slide 2", "Body text")
+        data, _ = add_slide(data, "title_and_content", "Slide 3", "More")
+
+        result = extract_slides(data)
+
+        assert [s["title"] for s in result["slides"]] == ["Slide 1", "Sli"]
+        assert result["slides"][1]["texts"] == []
+        assert result["truncated"] is True
+
     def test_basic_extraction(self) -> None:
         data = build_pptx("Hello World")
-        slides = extract_slides(data)
+        slides = extract_slides(data)["slides"]
         assert len(slides) == 1
         assert slides[0]["number"] == 1
         assert slides[0]["title"] == "Hello World"
 
     def test_blank_slide_extraction(self) -> None:
         data = build_pptx()
-        slides = extract_slides(data)
+        slides = extract_slides(data)["slides"]
         assert len(slides) == 1
         assert slides[0]["title"] == ""
         assert slides[0]["texts"] == []
 
     def test_notes_excluded_by_default(self) -> None:
         data = build_pptx("Title")
-        slides = extract_slides(data, include_notes=False)
+        slides = extract_slides(data, include_notes=False)["slides"]
         assert slides[0]["notes"] == ""
 
     def test_notes_included_when_requested(self) -> None:
@@ -77,13 +107,13 @@ class TestExtractSlides:
         buf = io.BytesIO()
         prs.save(buf)
 
-        slides = extract_slides(buf.getvalue(), include_notes=True)
+        slides = extract_slides(buf.getvalue(), include_notes=True)["slides"]
         assert slides[0]["notes"] == "Remember this point"
 
     def test_multi_slide_extraction(self) -> None:
         data = build_pptx("Slide 1")
         data, _ = add_slide(data, "title_and_content", "Slide 2", "Body text")
-        slides = extract_slides(data)
+        slides = extract_slides(data)["slides"]
         assert len(slides) == 2
         assert slides[0]["title"] == "Slide 1"
         assert slides[1]["title"] == "Slide 2"
@@ -106,7 +136,7 @@ class TestAddSlide:
         data = build_pptx()
         updated, count = add_slide(data, "title_and_content", "New Title", "New Content")
         assert count == 2
-        slides = extract_slides(updated)
+        slides = extract_slides(updated)["slides"]
         assert slides[1]["title"] == "New Title"
         assert "New Content" in slides[1]["texts"]
 
@@ -136,7 +166,7 @@ class TestUpdateText:
         updated, shape_name, error = update_text(data, 1, "New Title", 0)
         assert error is None
         assert shape_name != ""
-        slides = extract_slides(updated)
+        slides = extract_slides(updated)["slides"]
         assert slides[0]["title"] == "New Title"
 
     def test_slide_out_of_range(self) -> None:
@@ -173,7 +203,7 @@ class TestUpdateText:
         updated, shape_name, error = update_text(buf.getvalue(), 1, "New text", 0)
         assert error is None
         assert shape_name != ""
-        slides = extract_slides(updated)
+        slides = extract_slides(updated)["slides"]
         assert "New text" in slides[0]["texts"]
 
 
@@ -217,3 +247,33 @@ class TestResolveLayoutIndex:
         prs = Presentation()
         idx = resolve_layout_index(prs, "nonexistent_layout")
         assert idx == 0
+
+
+# ---------------------------------------------------------------------------
+# invalid packages
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(build_docx("Title"), id="wrong-format"),
+        pytest.param(_package("part.xml", b"<x/>"), id="missing-parts"),
+        pytest.param(
+            _package("[Content_Types].xml", b"\xff" * 16, declared_compression=zipfile.ZIP_DEFLATED),
+            id="corrupt-part",
+        ),
+    ],
+)
+class TestInvalidPackage:
+    def test_extract_slides_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
+            extract_slides(data)
+
+    def test_add_slide_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
+            add_slide(data, "blank", "", "")
+
+    def test_update_text_rejects_package(self, data: bytes) -> None:
+        with pytest.raises(OfficePackageError, match="not a valid PowerPoint presentation"):
+            update_text(data, 1, "Text", 0)
