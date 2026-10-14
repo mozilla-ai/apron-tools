@@ -46,7 +46,7 @@ _INVALID_PRESENTATION_ERRORS = (
 
 
 @contextmanager
-def _invalid_presentation_errors() -> Iterator[None]:
+def _as_invalid_presentation_error() -> Iterator[None]:
     """Report a presentation that the parser cannot read, or whose XML has an unexpected structure, as invalid.
 
     The parser reports unexpected structure through the errors that its object model raises,
@@ -68,7 +68,7 @@ def _invalid_presentation_errors() -> Iterator[None]:
         raise OfficePackageError("The file is not a valid PowerPoint presentation.") from exc
 
 
-@_invalid_presentation_errors()
+@_as_invalid_presentation_error()
 def _open_presentation(pptx_bytes: bytes) -> Presentation:
     """Open a PowerPoint presentation from untrusted bytes.
 
@@ -140,7 +140,7 @@ def build_pptx(title: str = "") -> bytes:
     return buf.getvalue()
 
 
-@_invalid_presentation_errors()
+@_as_invalid_presentation_error()
 def extract_slides(
     pptx_bytes: bytes,
     include_notes: bool = False,
@@ -199,7 +199,7 @@ def extract_slides(
     return {"slides": slides, "truncated": budget.exhausted}
 
 
-@_invalid_presentation_errors()
+@_as_invalid_presentation_error()
 def add_slide(
     pptx_bytes: bytes,
     layout: str,
@@ -243,7 +243,7 @@ def add_slide(
     return buf.getvalue(), len(prs.slides)
 
 
-@_invalid_presentation_errors()
+@_as_invalid_presentation_error()
 def update_text(
     pptx_bytes: bytes,
     slide_number: int,

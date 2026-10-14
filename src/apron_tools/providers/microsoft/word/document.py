@@ -34,7 +34,7 @@ _INVALID_DOCUMENT_ERRORS = (
 
 
 @contextmanager
-def _invalid_document_errors() -> Iterator[None]:
+def _as_invalid_document_error() -> Iterator[None]:
     """Report a document that the parser cannot read, or whose XML has an unexpected structure, as invalid.
 
     The parser reports unexpected structure through the errors that its object model raises,
@@ -56,7 +56,7 @@ def _invalid_document_errors() -> Iterator[None]:
         raise OfficePackageError("The file is not a valid Word document.") from exc
 
 
-@_invalid_document_errors()
+@_as_invalid_document_error()
 def _open_document(docx_bytes: bytes) -> DocxDocument:
     """Open a Word document from untrusted bytes.
 
@@ -94,7 +94,7 @@ def build_docx(content: str = "") -> bytes:
     return buf.getvalue()
 
 
-@_invalid_document_errors()
+@_as_invalid_document_error()
 def extract_text(docx_bytes: bytes) -> dict:
     """Extract plain text from paragraphs and tables in a Word document, up to the text limit.
 
@@ -149,7 +149,7 @@ def extract_text(docx_bytes: bytes) -> dict:
     }
 
 
-@_invalid_document_errors()
+@_as_invalid_document_error()
 def append_content(docx_bytes: bytes, content: str) -> bytes:
     """Append paragraphs to an existing Word document.
 
