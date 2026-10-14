@@ -50,7 +50,7 @@ def _invalid_presentation_errors() -> Iterator[None]:
     The parser reports unexpected structure through the errors that its object model raises,
     such as a missing attribute or child, so these errors are treated as an invalid presentation.
 
-    NOTE: A defect in the wrapped code that raises one of these errors is also reported as an invalid presentation.
+    NOTE: An error from another cause, such as a defect or caller text that XML cannot hold, is also reported this way.
     The original error is kept as the cause.
     Worth re-reviewing if the parser starts to validate the presentation structure when it opens a file.
 

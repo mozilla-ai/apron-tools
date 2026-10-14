@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 
 import pytest
 
 from apron_tools import _ooxml
-from apron_tools._ooxml import OfficePackageError, TextBudget, check_package
+from apron_tools._ooxml import OfficePackageError, TextBudget, check_package, validate_xml_text
 from apron_tools.providers.microsoft.powerpoint.presentation import build_pptx
 from apron_tools.providers.microsoft.word.document import build_docx
 
@@ -103,3 +104,22 @@ class TestTextBudget:
         assert budget.take("World!") == "World"
         assert budget.exhausted is True
         assert budget.take("More") == ""
+
+
+class TestValidateXmlText:
+    @pytest.mark.parametrize("text", ["", "Plain text", "Tab\tand\nnewlines\r", "Accents é and emoji 🎉", "\ufffd"])
+    def test_accepts_text_xml_can_hold(self, text: str) -> None:
+        assert validate_xml_text(text) == text
+
+    @pytest.mark.parametrize(
+        ("text", "code_point"),
+        [
+            pytest.param("a\x00b", "U+0000", id="null"),
+            pytest.param("a\x1fb", "U+001F", id="control"),
+            pytest.param("a\ufffeb", "U+FFFE", id="noncharacter"),
+            pytest.param("a\ud800b", "U+D800", id="lone-surrogate"),
+        ],
+    )
+    def test_rejects_text_xml_cannot_hold(self, text: str, code_point: str) -> None:
+        with pytest.raises(ValueError, match=re.escape(code_point)):
+            validate_xml_text(text)

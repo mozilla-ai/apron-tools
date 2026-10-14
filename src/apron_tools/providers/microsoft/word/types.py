@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from apron_tools._ooxml import validate_xml_text
 from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
@@ -32,12 +33,16 @@ class CreateDocumentParams(BaseModel):
     content: str = ""
     folder_path: str = "root"
 
+    _validate_content = field_validator("content")(validate_xml_text)
+
 
 class UpdateDocumentParams(BaseModel):
     """Parameters for appending content to an existing document."""
 
     document_id: str
     content: str
+
+    _validate_content = field_validator("content")(validate_xml_text)
 
 
 class UploadToOnedriveParams(BaseModel):

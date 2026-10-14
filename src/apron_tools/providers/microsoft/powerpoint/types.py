@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from apron_tools._ooxml import validate_xml_text
 from apron_tools.types import FileInput, ToolResult
 
 # ---------------------------------------------------------------------------
@@ -33,6 +34,8 @@ class CreatePresentationParams(BaseModel):
     title: str = ""
     folder_path: str = "root"
 
+    _validate_title = field_validator("title")(validate_xml_text)
+
 
 class AddSlideParams(BaseModel):
     """Parameters for adding a slide to an existing presentation."""
@@ -42,6 +45,8 @@ class AddSlideParams(BaseModel):
     title: str = ""
     content: str = ""
 
+    _validate_text = field_validator("title", "content")(validate_xml_text)
+
 
 class UpdateSlideTextParams(BaseModel):
     """Parameters for updating text on a specific slide."""
@@ -50,6 +55,8 @@ class UpdateSlideTextParams(BaseModel):
     slide_number: int
     text: str
     shape_index: int = 0
+
+    _validate_text = field_validator("text")(validate_xml_text)
 
 
 class UploadToOnedriveParams(BaseModel):

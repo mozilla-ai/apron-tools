@@ -5,6 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from apron_tools.providers.microsoft.powerpoint.types import (
     AddSlideParams,
     AddSlideResult,
@@ -68,6 +71,10 @@ class TestCreatePresentationParams:
         assert params.title == "Q4 Report"
         assert params.folder_path == "Documents"
 
+    def test_rejects_title_a_presentation_cannot_hold(self) -> None:
+        with pytest.raises(ValidationError, match="U\\+FFFE"):
+            CreatePresentationParams(name="Test.pptx", title="a\ufffeb")
+
 
 class TestAddSlideParams:
     def test_required(self) -> None:
@@ -87,6 +94,11 @@ class TestAddSlideParams:
         assert params.layout == "title_and_content"
         assert params.title == "Slide Title"
 
+    @pytest.mark.parametrize("field", ["title", "content"])
+    def test_rejects_text_a_presentation_cannot_hold(self, field: str) -> None:
+        with pytest.raises(ValidationError, match="U\\+FFFE"):
+            AddSlideParams.model_validate({"presentation_id": "pptx-001", field: "a\ufffeb"})
+
 
 class TestUpdateSlideTextParams:
     def test_required(self) -> None:
@@ -94,6 +106,10 @@ class TestUpdateSlideTextParams:
         assert params.slide_number == 1
         assert params.text == "Updated"
         assert params.shape_index == 0
+
+    def test_rejects_text_a_presentation_cannot_hold(self) -> None:
+        with pytest.raises(ValidationError, match="U\\+FFFE"):
+            UpdateSlideTextParams(presentation_id="pptx-001", slide_number=1, text="a\ufffeb")
 
 
 class TestUploadToOnedriveParams:
