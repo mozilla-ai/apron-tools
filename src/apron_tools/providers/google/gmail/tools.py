@@ -474,7 +474,24 @@ async def gmail_edit_draft(
                 final_body = params.body
             else:
                 parts = list(_walk_parts(payload))
-                if any(part.get("filename") or part.get("body", {}).get("attachmentId") for part in parts):
+                if any(
+                    part.get("filename")
+                    or part.get("body", {}).get("attachmentId")
+                    or any(
+                        (header.get("name", "").lower() == "content-id" and header.get("value"))
+                        or (
+                            header.get("name", "").lower() == "content-disposition"
+                            and header.get("value", "").split(";", 1)[0].strip().lower() in {"attachment", "inline"}
+                        )
+                        for header in part.get("headers", [])
+                    )
+                    or (
+                        part.get("body", {}).get("data")
+                        and part.get("mimeType") not in {"text/plain", "text/html"}
+                        and not part.get("mimeType", "").startswith("multipart/")
+                    )
+                    for part in parts
+                ):
                     return EditDraftResult(
                         success=False,
                         error="The existing draft has attachments or inline parts. Provide a new body to replace it.",

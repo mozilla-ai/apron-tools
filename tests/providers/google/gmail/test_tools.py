@@ -625,13 +625,69 @@ class TestEditDraft:
         assert "body" in result.error.lower()
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-    async def test_explicit_body_can_replace_html_and_attachments(self, httpx_mock: HTTPXMock) -> None:
+    @pytest.mark.parametrize(
+        "part",
+        [
+            {
+                "mimeType": "image/png",
+                "filename": "",
+                "headers": [
+                    {"name": "Content-Disposition", "value": "inline"},
+                    {"name": "Content-ID", "value": "<logo>"},
+                ],
+                "body": {"size": 8, "data": "iVBORw0KGgo="},
+            },
+            {
+                "mimeType": "text/plain",
+                "headers": [{"name": "content-disposition", "value": "INLINE; filename=note.txt"}],
+                "body": {"data": _b64("Inline note")},
+            },
+            {
+                "mimeType": "text/plain",
+                "headers": [{"name": "content-id", "value": "<note>"}],
+                "body": {"data": _b64("Referenced note")},
+            },
+            {
+                "mimeType": "application/pdf",
+                "headers": [{"name": "Content-Disposition", "value": "attachment"}],
+                "body": {},
+            },
+            {"mimeType": "image/png", "body": {"data": "iVBORw0KGgo="}},
+        ],
+        ids=["embedded-inline-image", "inline-text", "content-id", "attachment-disposition", "nontext-data"],
+    )
+    async def test_subject_only_edit_refuses_unnamed_parts(self, httpx_mock: HTTPXMock, part: dict) -> None:
         draft = _load_json("get_draft.json")
         draft["message"]["payload"] = {
-            "mimeType": "text/html",
-            "filename": "inline.html",
-            "body": {"data": "!!!invalid!!!"},
+            "mimeType": "multipart/related",
+            "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Keep this body")}}, part],
         }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001",
+            json=_load_json("edit_draft.json"),
+            is_optional=True,
+        )
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+        assert result.success is False
+        assert "attachments or inline parts" in result.error
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"mimeType": "text/html", "filename": "inline.html", "body": {"data": "!!!invalid!!!"}},
+            {
+                "mimeType": "image/png",
+                "headers": [{"name": "Content-ID", "value": "<logo>"}],
+                "body": {"data": "iVBORw0KGgo="},
+            },
+        ],
+        ids=["html-attachment", "embedded-inline-image"],
+    )
+    async def test_explicit_body_can_replace_html_and_attachments(self, httpx_mock: HTTPXMock, payload: dict) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = payload
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="Replacement"), token=_TOKEN)
