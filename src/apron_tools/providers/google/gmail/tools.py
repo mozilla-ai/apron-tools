@@ -99,17 +99,18 @@ def _walk_parts(payload: dict) -> Iterator[dict]:
         yield from _walk_parts(part)
 
 
-def _extract_body(payload: dict) -> str | None:
+def _extract_body(payload: dict, *, allow_html: bool = True) -> str | None:
     """Extract body text, preferring plain text over HTML in document order.
 
     The first readable part of each type wins, including nested parts.
     An unreadable part does not hide readable children or siblings.
+    Set allow_html=False when rebuilding a plain-text draft to avoid converting HTML.
 
     Returns:
         The decoded body text, or None if there is no body data.
 
     Raises:
-        ValueError: If body data is present but no part can be decoded.
+        ValueError: If body data is present but no permitted part can be decoded.
     """
     plain_text: str | None = None
     html_text: str | None = None
@@ -135,6 +136,8 @@ def _extract_body(payload: dict) -> str | None:
     if plain_text is not None:
         return plain_text
     if html_text is not None:
+        if not allow_html:
+            raise ValueError("The email body has no readable plain-text content")
         return html_text
     if decode_failed:
         raise ValueError("Could not decode email body")
@@ -502,7 +505,7 @@ async def gmail_edit_draft(
                         error="The existing draft has no plain-text content. Provide a new body to replace it.",
                     )
                 try:
-                    existing_body = _extract_body(payload)
+                    existing_body = _extract_body(payload, allow_html=False)
                 except ValueError:
                     return EditDraftResult(
                         success=False,
