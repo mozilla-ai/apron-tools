@@ -7,9 +7,11 @@ import email
 import json
 from pathlib import Path
 
+import pytest
 from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.gmail.tools import (
+    _extract_body,
     gmail_add_labels_to_emails,
     gmail_create_draft,
     gmail_create_label,
@@ -341,9 +343,8 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == "(Could not decode email body)"
 
-    async def test_multipart_body_with_non_utf8_bytes_falls_through(self, httpx_mock: HTTPXMock) -> None:
-        # On the multipart path an undecodable part is suppressed, leaving no
-        # usable body, so extraction falls through to the sentinel.
+    async def test_multipart_body_with_non_utf8_bytes_returns_decode_placeholder(self, httpx_mock: HTTPXMock) -> None:
+        # An undecodable multipart body is unreadable rather than absent.
         non_utf8 = base64.urlsafe_b64encode(b"\xff\xfe").decode("ascii")
 
         message = _load_json("get_message_full.json")
@@ -360,13 +361,10 @@ class TestReadEmail:
         )
 
         assert result.success is True
-        assert result.body == "(No email body found)"
+        assert result.body == "(Could not decode email body)"
 
     async def test_multipart_sibling_text_survives_undecodable_nested_sibling(self, httpx_mock: HTTPXMock) -> None:
-        # Regression for the recursion-guard bug: a text/plain sibling appears
-        # before a nested multipart sibling whose own body.data is undecodable.
-        # The undecodable nested part must not be mistaken for a successful
-        # extraction and must not discard the already-collected plain text.
+        # The first readable sibling wins even when a later parent has invalid data.
         sibling_text = "Sibling one text"
         sibling_data = base64.urlsafe_b64encode(sibling_text.encode()).decode("ascii")
         nested_text = "Nested sibling text"
@@ -428,6 +426,64 @@ class TestReadEmail:
 # ---------------------------------------------------------------------------
 # send_email
 # ---------------------------------------------------------------------------
+
+
+def _b64(value: str | bytes) -> str:
+    return base64.urlsafe_b64encode(value if isinstance(value, bytes) else value.encode()).decode()
+
+
+class TestExtractBody:
+    def test_nested_body_precedes_later_footer(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "multipart/alternative",
+                    "parts": [
+                        {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                        {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
+                    ],
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
+            ],
+        }
+        assert _extract_body(payload) == "MAIN BODY"
+
+    def test_child_body_survives_undecodable_parent_body(self) -> None:
+        payload = {
+            "mimeType": "multipart/related",
+            "body": {"data": "!!!invalid!!!"},
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": _b64("Child text")}},
+            ],
+        }
+        assert _extract_body(payload) == "Child text"
+
+    def test_first_same_type_sibling_wins(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": _b64("part A")}},
+                {"mimeType": "image/jpeg", "body": {}},
+                {"mimeType": "text/plain", "body": {"data": _b64("part B")}},
+            ],
+        }
+        assert _extract_body(payload) == "part A"
+
+    def test_plain_text_preferred_over_nested_html(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "multipart/alternative",
+                    "parts": [
+                        {"mimeType": "text/html", "body": {"data": _b64("<p>HTML</p>")}},
+                    ],
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("Plain text")}},
+            ],
+        }
+        assert _extract_body(payload) == "Plain text"
 
 
 class TestSendEmail:
@@ -521,6 +577,92 @@ class TestCreateDraft:
 
 
 class TestEditDraft:
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {
+                "mimeType": "multipart/alternative",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": _b64(b"caf\xe9")}},
+                ],
+            },
+            {"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}},
+            {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
+                    {"mimeType": "application/pdf", "filename": "file.pdf", "body": {"data": _b64("PDF")}},
+                ],
+            },
+            {
+                "mimeType": "multipart/related",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
+                    {"mimeType": "image/png", "body": {"attachmentId": "inline-image"}},
+                ],
+            },
+            {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
+                    {
+                        "mimeType": "multipart/related",
+                        "parts": [
+                            {"mimeType": "image/png", "filename": "inline.png", "body": {}},
+                        ],
+                    },
+                ],
+            },
+        ],
+        ids=["undecodable-multipart", "html-only", "attachment", "inline", "nested-inline"],
+    )
+    async def test_subject_only_edit_refuses_unrecoverable_content(self, httpx_mock: HTTPXMock, payload: dict) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = payload
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+        assert result.success is False
+        assert "body" in result.error.lower()
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_explicit_body_can_replace_html_and_attachments(self, httpx_mock: HTTPXMock) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = {
+            "mimeType": "text/html",
+            "filename": "inline.html",
+            "body": {"data": "!!!invalid!!!"},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="Replacement"), token=_TOKEN)
+        assert result.success is True
+        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+        raw = json.loads(put.content)["message"]["raw"]
+        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "Replacement"
+
+    async def test_subject_only_edit_preserves_nested_body_before_footer(self, httpx_mock: HTTPXMock) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "multipart/alternative",
+                    "parts": [
+                        {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                        {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
+                    ],
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+        assert result.success is True
+        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+        raw = json.loads(put.content)["message"]["raw"]
+        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "MAIN BODY"
+
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/draft-001?format=full",
@@ -597,10 +739,7 @@ class TestEditDraft:
         assert requests[0].method == "GET"
 
     async def test_multipart_sibling_survives_undecodable_nested_sibling_on_edit(self, httpx_mock: HTTPXMock) -> None:
-        # Same recursion-guard bug as the read_email regression, but exercised
-        # through gmail_edit_draft: the recovered body must be the real
-        # sibling text, not discarded, and must round-trip into the raw MIME
-        # message that gets PUT back to Gmail.
+        # The recovered sibling text must survive the MIME round trip.
         sibling_text = "Sibling one text"
         sibling_data = base64.urlsafe_b64encode(sibling_text.encode()).decode("ascii")
 
