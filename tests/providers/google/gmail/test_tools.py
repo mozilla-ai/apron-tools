@@ -246,6 +246,28 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    @pytest.mark.parametrize(
+        "plain_body",
+        [{"size": 0}, {"data": base64.urlsafe_b64encode(b"caf\xe9").decode("ascii")}],
+        ids=["missing-plain-data", "invalid-plain-utf8"],
+    )
+    async def test_read_email_keeps_html_fallback(self, httpx_mock: HTTPXMock, plain_body: dict) -> None:
+        body = "<p>Keep this HTML body</p>"
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/alternative",
+            "parts": [
+                {"mimeType": "text/plain", "body": plain_body},
+                {"mimeType": "text/html", "body": {"data": _b64(body)}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == body
+
     async def test_success_with_unpadded_html_body(self, httpx_mock: HTTPXMock) -> None:
         # Unlike the other unpadded regression tests above, this payload requires
         # two padding characters ('==') rather than just one.
@@ -577,6 +599,44 @@ class TestCreateDraft:
 
 
 class TestEditDraft:
+    @pytest.mark.parametrize(
+        "plain_body",
+        [{"size": 0}, {"data": base64.urlsafe_b64encode(b"caf\xe9").decode("ascii")}],
+        ids=["missing-plain-data", "invalid-plain-utf8"],
+    )
+    async def test_subject_only_edit_refuses_html_fallback(self, httpx_mock: HTTPXMock, plain_body: dict) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = {
+            "mimeType": "multipart/alternative",
+            "parts": [
+                {"mimeType": "text/plain", "body": plain_body},
+                {"mimeType": "text/html", "body": {"data": _b64("<p>Keep this HTML body</p>")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"), is_optional=True
+        )
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is False
+        assert "body" in result.error.lower()
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_subject_only_edit_preserves_empty_plain_body(self, httpx_mock: HTTPXMock) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"]["body"] = {"size": 0}
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is True
+        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+        raw = json.loads(put.content)["message"]["raw"]
+        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == ""
+
     @pytest.mark.parametrize(
         "payload",
         [
