@@ -12,6 +12,7 @@ from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.gmail.tools import (
     _extract_body,
+    _preservable_plain_body,
     gmail_add_labels_to_emails,
     gmail_create_draft,
     gmail_create_label,
@@ -507,7 +508,9 @@ class TestExtractBody:
         }
         assert _extract_body(payload) == "Plain text"
 
-    def test_strict_mode_raises_on_undecodable_part_before_readable_part(self) -> None:
+
+class TestPreservablePlainBody:
+    def test_undecodable_part_before_readable_part_is_refused(self) -> None:
         payload = {
             "mimeType": "multipart/mixed",
             "parts": [
@@ -515,9 +518,8 @@ class TestExtractBody:
                 {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
             ],
         }
-        assert _extract_body(payload) == "-- list footer"
-        with pytest.raises(ValueError, match="Could not decode"):
-            _extract_body(payload, strict=True)
+        with pytest.raises(ValueError, match="could not be read"):
+            _preservable_plain_body(payload)
 
 
 class TestSendEmail:
