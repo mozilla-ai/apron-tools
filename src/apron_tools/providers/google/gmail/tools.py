@@ -200,6 +200,18 @@ def _preservable_plain_body(payload: dict) -> str:
 
     if not plain_texts and has_html:
         raise ValueError("The existing draft body could not be read.")
+
+    parents = {id(child): part for part in parts for child in part.get("parts", [])}
+    for part in parts:
+        if part.get("mimeType") != "text/html" or not part.get("body", {}).get("data"):
+            continue
+        parent = parents.get(id(part), {})
+        if parent.get("mimeType") != "multipart/alternative" or not any(
+            sibling.get("mimeType") == "text/plain" and sibling.get("body", {}).get("data")
+            for sibling in parent.get("parts", [])
+        ):
+            raise ValueError("The existing draft has HTML content that is not an alternative of its plain text.")
+
     if len(plain_texts) > 1:
         raise ValueError("The existing draft has more than one plain-text part.")
     return plain_texts[0] if plain_texts else ""

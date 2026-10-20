@@ -521,6 +521,74 @@ class TestPreservablePlainBody:
         with pytest.raises(ValueError, match="could not be read"):
             _preservable_plain_body(payload)
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {
+                "mimeType": "multipart/alternative",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                    {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
+                ],
+            },
+            {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {
+                        "mimeType": "multipart/alternative",
+                        "parts": [
+                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
+                        ],
+                    },
+                ],
+            },
+        ],
+        ids=["alternative", "nested-alternative"],
+    )
+    def test_html_alternative_of_plain_text_is_dropped(self, payload: dict) -> None:
+        assert _preservable_plain_body(payload) == "MAIN BODY"
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                    {"mimeType": "text/html", "body": {"data": _b64("<p>-- footer</p>")}},
+                ],
+            },
+            {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {
+                        "mimeType": "multipart/alternative",
+                        "parts": [
+                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
+                        ],
+                    },
+                    {"mimeType": "text/html", "body": {"data": _b64("<p>-- footer</p>")}},
+                ],
+            },
+            {
+                "mimeType": "multipart/mixed",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                    {
+                        "mimeType": "multipart/alternative",
+                        "parts": [{"mimeType": "text/html", "body": {"data": _b64("<p>Other</p>")}}],
+                    },
+                ],
+            },
+        ],
+        ids=["html-sibling", "html-footer-after-alternative", "alternative-without-plain-text"],
+    )
+    def test_html_that_is_not_an_alternative_of_plain_text_is_refused(self, payload: dict) -> None:
+        with pytest.raises(ValueError, match="HTML content that is not an alternative"):
+            _preservable_plain_body(payload)
+
 
 class TestSendEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
