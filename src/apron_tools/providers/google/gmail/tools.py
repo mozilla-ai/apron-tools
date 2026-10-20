@@ -99,18 +99,20 @@ def _walk_parts(payload: dict) -> Iterator[dict]:
         yield from _walk_parts(part)
 
 
-def _extract_body(payload: dict, *, allow_html: bool = True) -> str | None:
+def _extract_body(payload: dict, *, allow_html: bool = True, strict: bool = False) -> str | None:
     """Extract body text, preferring plain text over HTML in document order.
 
     The first readable part of each type wins, including nested parts.
-    An unreadable part does not hide readable children or siblings.
-    Set allow_html=False when rebuilding a plain-text draft to avoid converting HTML.
+    By default, an unreadable part does not hide readable children or siblings.
+    Set allow_html=False to refuse HTML when no plain text is readable.
+    Set strict=True to refuse a payload that has any unreadable part.
 
     Returns:
         The decoded body text, or None if there is no body data.
 
     Raises:
-        ValueError: If body data is present but no permitted part can be decoded.
+        ValueError: If body data is present but no permitted part can be decoded,
+            or if strict is set and any part cannot be decoded.
     """
     plain_text: str | None = None
     html_text: str | None = None
@@ -122,7 +124,9 @@ def _extract_body(payload: dict, *, allow_html: bool = True) -> str | None:
             continue
         try:
             text = _decode_base64url(part_data).decode("utf-8")
-        except ValueError:
+        except ValueError as exc:
+            if strict:
+                raise ValueError("Could not decode email body") from exc
             decode_failed = True
             continue
 
@@ -505,7 +509,7 @@ async def gmail_edit_draft(
                         error="The existing draft has no plain-text content. Provide a new body to replace it.",
                     )
                 try:
-                    existing_body = _extract_body(payload, allow_html=False)
+                    existing_body = _extract_body(payload, allow_html=False, strict=True)
                 except ValueError:
                     return EditDraftResult(
                         success=False,
