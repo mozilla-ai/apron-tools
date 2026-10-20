@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-import contextlib
+from collections.abc import Iterator
 from email.mime.text import MIMEText
 
 import httpx
@@ -44,6 +44,10 @@ from .scopes import SCOPES
 
 _GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
 _TIMEOUT = 60.0
+
+# NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
+_BODY_DECODE_FAILED = "(Could not decode email body)"
+_BODY_NOT_FOUND = "(No email body found)"
 
 
 def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
@@ -88,44 +92,56 @@ def _extract_header(headers: list[dict[str, str]], name: str) -> str:
     return ""
 
 
-def _extract_body(payload: dict) -> str:
-    """Extract the plain-text body from a Gmail message payload.
+def _walk_parts(payload: dict) -> Iterator[dict]:
+    """Yield the payload and its MIME parts in document order."""
+    yield payload
+    for part in payload.get("parts", []):
+        yield from _walk_parts(part)
 
-    Handles both single-part and multipart MIME payloads, preferring
-    text/plain over text/html. Nested multipart structures are traversed
-    recursively.
+
+def _extract_body(payload: dict, *, allow_html: bool = True) -> str | None:
+    """Extract body text, preferring plain text over HTML in document order.
+
+    The first readable part of each type wins, including nested parts.
+    An unreadable part does not hide readable children or siblings.
+    Set allow_html=False when rebuilding a plain-text draft to avoid converting HTML.
+
+    Returns:
+        The decoded body text, or None if there is no body data.
+
+    Raises:
+        ValueError: If body data is present but no permitted part can be decoded.
     """
-    body_data = payload.get("body", {}).get("data", "")
-    if body_data:
-        try:
-            return _decode_base64url(body_data).decode("utf-8")
-        except ValueError:
-            return "(Could not decode email body)"
-
-    parts = payload.get("parts", [])
     plain_text: str | None = None
     html_text: str | None = None
+    decode_failed = False
 
-    for part in parts:
-        mime_type = part.get("mimeType", "")
+    for part in _walk_parts(payload):
         part_data = part.get("body", {}).get("data", "")
+        if not part_data:
+            continue
+        try:
+            text = _decode_base64url(part_data).decode("utf-8")
+        except ValueError:
+            decode_failed = True
+            continue
 
-        if mime_type == "text/plain" and part_data:
-            with contextlib.suppress(ValueError):
-                plain_text = _decode_base64url(part_data).decode("utf-8")
-        elif mime_type == "text/html" and part_data:
-            with contextlib.suppress(ValueError):
-                html_text = _decode_base64url(part_data).decode("utf-8")
-        elif part.get("parts"):
-            nested = _extract_body(part)
-            if nested and nested != "(No email body found)":
-                return nested
+        mime_type = part.get("mimeType", "")
+        if mime_type == "text/html":
+            if html_text is None:
+                html_text = text
+        elif mime_type in ("", "text/plain") and plain_text is None:
+            plain_text = text
 
-    if plain_text:
+    if plain_text is not None:
         return plain_text
-    if html_text:
+    if html_text is not None:
+        if not allow_html:
+            raise ValueError("The email body has no readable plain-text content")
         return html_text
-    return "(No email body found)"
+    if decode_failed:
+        raise ValueError("Could not decode email body")
+    return None
 
 
 def _build_raw_message(
@@ -257,6 +273,14 @@ async def gmail_read_email(
     payload = data.get("payload", {})
     hdrs = payload.get("headers", [])
 
+    try:
+        body = _extract_body(payload)
+    except ValueError:
+        body = _BODY_DECODE_FAILED
+    else:
+        if body is None:
+            body = _BODY_NOT_FOUND
+
     return ReadEmailResult(
         success=True,
         id=data.get("id", ""),
@@ -266,7 +290,7 @@ async def gmail_read_email(
         to_address=_extract_header(hdrs, "To"),
         cc=_extract_header(hdrs, "Cc"),
         date=_extract_header(hdrs, "Date"),
-        body=_extract_body(payload),
+        body=body,
         label_ids=data.get("labelIds", []),
     )
 
@@ -448,7 +472,47 @@ async def gmail_edit_draft(
 
             final_to = params.to if params.to is not None else _extract_header(hdrs, "To")
             final_subject = params.subject if params.subject is not None else _extract_header(hdrs, "Subject")
-            final_body = params.body if params.body is not None else _extract_body(payload)
+
+            if params.body is not None:
+                final_body = params.body
+            else:
+                parts = list(_walk_parts(payload))
+                if any(
+                    part.get("filename")
+                    or part.get("body", {}).get("attachmentId")
+                    or any(
+                        (header.get("name", "").lower() == "content-id" and header.get("value"))
+                        or (
+                            header.get("name", "").lower() == "content-disposition"
+                            and header.get("value", "").split(";", 1)[0].strip().lower() in {"attachment", "inline"}
+                        )
+                        for header in part.get("headers", [])
+                    )
+                    or (
+                        part.get("body", {}).get("data")
+                        and part.get("mimeType") not in {"text/plain", "text/html"}
+                        and not part.get("mimeType", "").startswith("multipart/")
+                    )
+                    for part in parts
+                ):
+                    return EditDraftResult(
+                        success=False,
+                        error="The existing draft has attachments or inline parts. Provide a new body to replace it.",
+                    )
+                if not any(part.get("mimeType") == "text/plain" for part in parts):
+                    return EditDraftResult(
+                        success=False,
+                        error="The existing draft has no plain-text content. Provide a new body to replace it.",
+                    )
+                try:
+                    existing_body = _extract_body(payload, allow_html=False)
+                except ValueError:
+                    return EditDraftResult(
+                        success=False,
+                        error="The existing draft body could not be read. Provide a new body to replace it.",
+                    )
+                final_body = existing_body if existing_body is not None else ""
+
             final_cc = params.cc if params.cc is not None else _extract_header(hdrs, "Cc") or None
             final_bcc = params.bcc if params.bcc is not None else _extract_header(hdrs, "Bcc") or None
 
