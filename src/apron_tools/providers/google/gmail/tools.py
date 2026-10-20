@@ -515,6 +515,14 @@ async def gmail_edit_draft(
                         success=False,
                         error="The existing draft body could not be read. Provide a new body to replace it.",
                     )
+                plain_parts = [
+                    part for part in parts if part.get("mimeType") == "text/plain" and part.get("body", {}).get("data")
+                ]
+                if len(plain_parts) > 1:
+                    return EditDraftResult(
+                        success=False,
+                        error="The existing draft has more than one plain-text part. Provide a new body to replace it.",
+                    )
                 final_body = existing_body if existing_body is not None else ""
 
             final_cc = params.cc if params.cc is not None else _extract_header(hdrs, "Cc") or None
