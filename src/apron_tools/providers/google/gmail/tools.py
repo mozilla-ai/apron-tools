@@ -104,8 +104,11 @@ def _extract_body(payload: dict, *, allow_html: bool = True, strict: bool = Fals
 
     The first readable part of each type wins, including nested parts.
     By default, an unreadable part does not hide readable children or siblings.
-    Set allow_html=False to refuse HTML when no plain text is readable.
-    Set strict=True to refuse a payload that has any unreadable part.
+
+    Args:
+        payload: The Gmail message payload to read.
+        allow_html: Whether to return HTML when no plain text is readable.
+        strict: Whether to refuse a payload that has any unreadable part.
 
     Returns:
         The decoded body text, or None if there is no body data.
@@ -453,7 +456,7 @@ async def gmail_edit_draft(
     token: str,
     base_url: str = _GMAIL_BASE_URL,
 ) -> EditDraftResult:
-    """Edit an existing Gmail draft."""
+    """Edit an existing Gmail draft, which needs a new body unless the current body is one readable plain-text part."""
     draft_url = f"{base_url}/drafts/{quote_path_segment(params.draft_id)}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
