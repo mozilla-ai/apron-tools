@@ -515,7 +515,8 @@ class TestExtractBody:
                 {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
             ],
         }
-        with pytest.raises(ValueError):
+        assert _extract_body(payload) == "-- list footer"
+        with pytest.raises(ValueError, match="Could not decode"):
             _extract_body(payload, strict=True)
 
 
