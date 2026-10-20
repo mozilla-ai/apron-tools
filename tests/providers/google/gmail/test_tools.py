@@ -649,6 +649,25 @@ class TestEditDraft:
         raw = json.loads(put.content)["message"]["raw"]
         assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == ""
 
+    async def test_subject_only_edit_keeps_plain_body_of_html_alternative(self, httpx_mock: HTTPXMock) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = {
+            "mimeType": "multipart/alternative",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is True
+        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+        raw = json.loads(put.content)["message"]["raw"]
+        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "MAIN BODY"
+
     @pytest.mark.parametrize(
         "payload",
         [
