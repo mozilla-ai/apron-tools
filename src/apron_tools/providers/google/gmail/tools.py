@@ -86,9 +86,9 @@ def _decode_base64url(data: str) -> bytes:
 
 
 def _extract_header(headers: list[dict[str, str]], name: str) -> str:
-    """Extract a single header value from a Gmail payload headers list."""
+    """Extract a single header value from a Gmail payload headers list, matching the name in any case."""
     for h in headers:
-        if h.get("name") == name:
+        if h.get("name", "").lower() == name.lower():
             return h.get("value", "")
     return ""
 

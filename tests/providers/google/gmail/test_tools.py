@@ -815,6 +815,27 @@ class TestEditDraft:
         assert sent["In-Reply-To"] == "<orig@example.com>"
         assert sent["References"] == "<root@example.com> <orig@example.com>"
 
+    async def test_edit_reads_header_names_in_any_case(self, httpx_mock: HTTPXMock) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"]["headers"] = [
+            {"name": "to", "value": "bob@example.com"},
+            {"name": "subject", "value": "Draft Subject"},
+            {"name": "CC", "value": "carol@example.com"},
+            {"name": "in-reply-to", "value": "<orig@example.com>"},
+        ]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+        sent = email.message_from_bytes(base64.urlsafe_b64decode(json.loads(put.content)["message"]["raw"]))
+        assert sent["To"] == "bob@example.com"
+        assert sent["Subject"] == "Draft Subject"
+        assert sent["Cc"] == "carol@example.com"
+        assert sent["In-Reply-To"] == "<orig@example.com>"
+
     @pytest.mark.parametrize(
         "payload",
         [
