@@ -568,12 +568,18 @@ async def gmail_edit_draft(
                 final_body,
                 cc=final_cc,
                 bcc=final_bcc,
+                in_reply_to=_extract_header(hdrs, "In-Reply-To") or None,
+                references=_extract_header(hdrs, "References") or None,
             )
+
+            message: dict[str, str] = {"raw": raw}
+            if thread_id := draft_data.get("message", {}).get("threadId"):
+                message["threadId"] = thread_id
 
             put_resp = await client.put(
                 draft_url,
                 headers=_headers(token, content_type=True),
-                json={"message": {"raw": raw}},
+                json={"message": message},
             )
     except httpx.HTTPError as exc:
         return EditDraftResult(success=False, error=str(exc))

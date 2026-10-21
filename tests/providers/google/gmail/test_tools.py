@@ -752,6 +752,25 @@ class TestEditDraft:
         raw = json.loads(put.content)["message"]["raw"]
         assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "MAIN BODY"
 
+    async def test_edit_keeps_reply_draft_in_its_thread(self, httpx_mock: HTTPXMock) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"]["headers"] += [
+            {"name": "In-Reply-To", "value": "<orig@example.com>"},
+            {"name": "References", "value": "<root@example.com> <orig@example.com>"},
+        ]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+        message = json.loads(put.content)["message"]
+        assert message["threadId"] == "thread-003"
+        sent = email.message_from_bytes(base64.urlsafe_b64decode(message["raw"]))
+        assert sent["In-Reply-To"] == "<orig@example.com>"
+        assert sent["References"] == "<root@example.com> <orig@example.com>"
+
     @pytest.mark.parametrize(
         "payload",
         [
