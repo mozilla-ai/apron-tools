@@ -186,13 +186,18 @@ def _preservable_plain_body(payload: dict) -> str:
     plain_texts: list[str] = []
     has_html = False
     for part in parts:
-        data = part.get("body", {}).get("data")
+        body = part.get("body", {})
+        data = body.get("data")
         if not data:
+            if body.get("size", 0) > 0:
+                raise ValueError("The existing draft body could not be read.")
             continue
         try:
             text = _decode_base64url(data).decode("utf-8")
         except ValueError as exc:
             raise ValueError("The existing draft body could not be read.") from exc
+        if part.get("mimeType", "").startswith("multipart/"):
+            raise ValueError("The existing draft has content outside its text parts.")
         if part.get("mimeType") == "text/plain":
             plain_texts.append(text)
         elif part.get("mimeType") == "text/html":

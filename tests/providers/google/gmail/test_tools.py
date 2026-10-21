@@ -589,6 +589,20 @@ class TestPreservablePlainBody:
         with pytest.raises(ValueError, match="HTML content that is not an alternative"):
             _preservable_plain_body(payload)
 
+    def test_data_on_a_multipart_container_is_refused(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "body": {"data": _b64("Container text")},
+            "parts": [{"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}}],
+        }
+        with pytest.raises(ValueError, match="content outside its text parts"):
+            _preservable_plain_body(payload)
+
+    def test_part_with_a_size_but_no_data_is_refused(self) -> None:
+        payload = {"mimeType": "text/plain", "body": {"size": 100}}
+        with pytest.raises(ValueError, match="could not be read"):
+            _preservable_plain_body(payload)
+
 
 class TestSendEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
