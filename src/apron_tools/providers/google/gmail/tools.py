@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import codecs
 from collections.abc import Iterator
 from email.message import Message
 from email.mime.text import MIMEText
@@ -146,12 +147,21 @@ def _extract_body(payload: dict) -> str | None:
 
 
 def _declared_charset(part: dict) -> str | None:
-    """Return the lowercase charset that a MIME part declares in its Content-Type header, if any."""
+    """Return the standard name of the charset that a MIME part declares in its Content-Type header, if any.
+
+    NOTE: An unknown charset is returned as declared.
+    """
     for header in part.get("headers", []):
         if header.get("name", "").lower() == "content-type":
             message = Message()
             message["Content-Type"] = header.get("value", "")
-            return message.get_content_charset()
+            charset = message.get_content_charset()
+            if charset is None:
+                return None
+            try:
+                return codecs.lookup(charset).name
+            except LookupError:
+                return charset
     return None
 
 
@@ -202,7 +212,7 @@ def _preservable_plain_body(payload: dict) -> str:
             if body.get("size", 0) > 0 and not part.get("mimeType", "").startswith("multipart/"):
                 raise ValueError("The existing draft body could not be read.")
             continue
-        if _declared_charset(part) not in {None, "us-ascii", "utf-8"}:
+        if _declared_charset(part) not in {None, "ascii", "utf-8"}:
             raise ValueError("The existing draft body could not be read.")
         try:
             text = _decode_base64url(data).decode("utf-8")

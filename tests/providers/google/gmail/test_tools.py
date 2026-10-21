@@ -649,7 +649,16 @@ class TestPreservablePlainBody:
         with pytest.raises(ValueError, match="could not be read"):
             _preservable_plain_body(payload)
 
-    @pytest.mark.parametrize("charset", ['"UTF-8"', "us-ascii"])
+    def test_part_with_an_unknown_charset_is_refused(self) -> None:
+        payload = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": "text/plain; charset=x-unknown"}],
+            "body": {"data": _b64("MAIN BODY")},
+        }
+        with pytest.raises(ValueError, match="could not be read"):
+            _preservable_plain_body(payload)
+
+    @pytest.mark.parametrize("charset", ['"UTF-8"', "utf8", "us-ascii", "ascii"])
     def test_part_with_a_utf8_compatible_charset_is_kept(self, charset: str) -> None:
         payload = {
             "mimeType": "text/plain",
