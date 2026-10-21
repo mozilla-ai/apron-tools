@@ -740,11 +740,16 @@ class TestCreateDraft:
 
 class TestEditDraft:
     @pytest.mark.parametrize(
-        "plain_body",
-        [{"size": 0}, {"data": base64.urlsafe_b64encode(b"caf\xe9").decode("ascii")}],
+        ("plain_body", "reason"),
+        [
+            ({"size": 0}, "HTML content that is not an alternative"),
+            ({"data": base64.urlsafe_b64encode(b"caf\xe9").decode("ascii")}, "could not be read"),
+        ],
         ids=["missing-plain-data", "invalid-plain-utf8"],
     )
-    async def test_subject_only_edit_refuses_html_fallback(self, httpx_mock: HTTPXMock, plain_body: dict) -> None:
+    async def test_subject_only_edit_refuses_html_fallback(
+        self, httpx_mock: HTTPXMock, plain_body: dict, reason: str
+    ) -> None:
         draft = _load_json("get_draft.json")
         draft["message"]["payload"] = {
             "mimeType": "multipart/alternative",
@@ -761,7 +766,7 @@ class TestEditDraft:
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
 
         assert result.success is False
-        assert "body" in result.error.lower()
+        assert reason in result.error
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_subject_only_edit_preserves_empty_plain_body(self, httpx_mock: HTTPXMock) -> None:
@@ -837,54 +842,76 @@ class TestEditDraft:
         assert sent["In-Reply-To"] == "<orig@example.com>"
 
     @pytest.mark.parametrize(
-        "payload",
+        ("payload", "reason"),
         [
-            {
-                "mimeType": "multipart/alternative",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64(b"caf\xe9")}},
-                ],
-            },
-            {"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}},
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                    {"mimeType": "application/pdf", "filename": "file.pdf", "body": {"data": _b64("PDF")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/related",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                    {"mimeType": "image/png", "body": {"attachmentId": "inline-image"}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                    {
-                        "mimeType": "multipart/related",
-                        "parts": [
-                            {"mimeType": "image/png", "filename": "inline.png", "body": {}},
-                        ],
-                    },
-                ],
-            },
+            (
+                {
+                    "mimeType": "multipart/alternative",
+                    "parts": [
+                        {"mimeType": "text/plain", "body": {"data": _b64(b"caf\xe9")}},
+                    ],
+                },
+                "could not be read",
+            ),
+            ({"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}}, "no plain-text content"),
+            (
+                {
+                    "mimeType": "multipart/mixed",
+                    "parts": [
+                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
+                        {"mimeType": "application/pdf", "filename": "file.pdf", "body": {"data": _b64("PDF")}},
+                    ],
+                },
+                "attachments or inline parts",
+            ),
+            (
+                {
+                    "mimeType": "multipart/related",
+                    "parts": [
+                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
+                        {"mimeType": "image/png", "body": {"attachmentId": "inline-image"}},
+                    ],
+                },
+                "attachments or inline parts",
+            ),
+            (
+                {
+                    "mimeType": "multipart/mixed",
+                    "parts": [
+                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
+                        {
+                            "mimeType": "multipart/related",
+                            "parts": [
+                                {"mimeType": "image/png", "filename": "inline.png", "body": {}},
+                            ],
+                        },
+                    ],
+                },
+                "attachments or inline parts",
+            ),
         ],
         ids=["undecodable-multipart", "html-only", "attachment", "inline", "nested-inline"],
     )
-    async def test_subject_only_edit_refuses_unrecoverable_content(self, httpx_mock: HTTPXMock, payload: dict) -> None:
+    async def test_subject_only_edit_refuses_unrecoverable_content(
+        self, httpx_mock: HTTPXMock, payload: dict, reason: str
+    ) -> None:
         draft = _load_json("get_draft.json")
         draft["message"]["payload"] = payload
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
         assert result.success is False
-        assert "body" in result.error.lower()
-        assert "saved as plain text" in result.error
-        assert "attachments" in result.error
+        assert reason in result.error
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_refused_edit_says_what_a_new_body_removes(self, httpx_mock: HTTPXMock) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"] = {"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}}
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+        assert result.error == (
+            "The existing draft has no plain-text content. Provide a new body to continue. The draft is then saved "
+            "as plain text, and its attachments, inline images, and HTML formatting are removed."
+        )
 
     @pytest.mark.parametrize(
         "part",
