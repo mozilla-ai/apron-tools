@@ -603,6 +603,20 @@ class TestPreservablePlainBody:
         with pytest.raises(ValueError, match="could not be read"):
             _preservable_plain_body(payload)
 
+    def test_attached_email_without_a_filename_is_refused(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "message/rfc822",
+                    "body": {"size": 0},
+                    "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Forwarded text")}}],
+                },
+            ],
+        }
+        with pytest.raises(ValueError, match="attachments or inline parts"):
+            _preservable_plain_body(payload)
+
 
 class TestSendEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:

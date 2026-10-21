@@ -145,9 +145,10 @@ def _extract_body(payload: dict) -> str | None:
 
 
 def _is_attachment_or_inline(part: dict) -> bool:
-    """Report whether a MIME part is an attachment, inline content, or non-text data."""
+    """Report whether a MIME part is an attachment, an attached email, inline content, or non-text data."""
     body = part.get("body", {})
-    if part.get("filename") or body.get("attachmentId"):
+    mime_type = part.get("mimeType", "")
+    if part.get("filename") or body.get("attachmentId") or mime_type.startswith("message/"):
         return True
     for header in part.get("headers", []):
         name = header.get("name", "").lower()
@@ -156,7 +157,6 @@ def _is_attachment_or_inline(part: dict) -> bool:
             return True
         if name == "content-disposition" and value.split(";", 1)[0].strip().lower() in {"attachment", "inline"}:
             return True
-    mime_type = part.get("mimeType", "")
     return (
         bool(body.get("data"))
         and mime_type not in {"text/plain", "text/html"}
