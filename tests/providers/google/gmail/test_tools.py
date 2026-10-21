@@ -831,6 +831,28 @@ class TestEditDraft:
         assert sent["In-Reply-To"] == "<orig@example.com>"
         assert sent["References"] == "<root@example.com> <orig@example.com>"
 
+    @pytest.mark.parametrize(
+        ("reply_headers", "params"),
+        [
+            ([], {"body": "New body"}),
+            ([{"name": "In-Reply-To", "value": "<orig@example.com>"}], {"subject": "New subject"}),
+        ],
+        ids=["standalone-draft", "reply-draft-with-new-subject"],
+    )
+    async def test_edit_sends_no_thread_id_when_the_draft_cannot_stay_in_its_thread(
+        self, httpx_mock: HTTPXMock, reply_headers: list[dict[str, str]], params: dict[str, str]
+    ) -> None:
+        draft = _load_json("get_draft.json")
+        draft["message"]["payload"]["headers"] += reply_headers
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", **params), token=_TOKEN)
+
+        assert result.success is True
+        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+        assert "threadId" not in json.loads(put.content)["message"]
+
     async def test_edit_reads_header_names_in_any_case(self, httpx_mock: HTTPXMock) -> None:
         draft = _load_json("get_draft.json")
         draft["message"]["payload"]["headers"] = [

@@ -575,18 +575,23 @@ async def gmail_edit_draft(
             final_cc = params.cc if params.cc is not None else _extract_header(hdrs, "Cc") or None
             final_bcc = params.bcc if params.bcc is not None else _extract_header(hdrs, "Bcc") or None
 
+            in_reply_to = _extract_header(hdrs, "In-Reply-To") or None
+            references = _extract_header(hdrs, "References") or None
+
             raw = _build_raw_message(
                 final_to,
                 final_subject,
                 final_body,
                 cc=final_cc,
                 bcc=final_bcc,
-                in_reply_to=_extract_header(hdrs, "In-Reply-To") or None,
-                references=_extract_header(hdrs, "References") or None,
+                in_reply_to=in_reply_to,
+                references=references,
             )
 
             message: dict[str, str] = {"raw": raw}
-            if thread_id := draft_data.get("message", {}).get("threadId"):
+            thread_id = draft_data.get("message", {}).get("threadId")
+            # Gmail keeps a message in a thread only when it has reply headers and the same subject.
+            if thread_id and (in_reply_to or references) and final_subject == _extract_header(hdrs, "Subject"):
                 message["threadId"] = thread_id
 
             put_resp = await client.put(
