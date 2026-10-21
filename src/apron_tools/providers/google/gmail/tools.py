@@ -199,7 +199,7 @@ def _preservable_plain_body(payload: dict) -> str:
         body = part.get("body", {})
         data = body.get("data")
         if not data:
-            if body.get("size", 0) > 0:
+            if body.get("size", 0) > 0 and not part.get("mimeType", "").startswith("multipart/"):
                 raise ValueError("The existing draft body could not be read.")
             continue
         if _declared_charset(part) not in {None, "us-ascii", "utf-8"}:

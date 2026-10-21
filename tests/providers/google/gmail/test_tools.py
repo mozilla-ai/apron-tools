@@ -610,6 +610,17 @@ class TestPreservablePlainBody:
         with pytest.raises(ValueError, match="could not be read"):
             _preservable_plain_body(payload)
 
+    def test_multipart_container_with_a_size_but_no_data_is_kept(self) -> None:
+        payload = {
+            "mimeType": "multipart/alternative",
+            "body": {"size": 120},
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
+                {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
+            ],
+        }
+        assert _preservable_plain_body(payload) == "MAIN BODY"
+
     def test_attached_email_without_a_filename_is_refused(self) -> None:
         payload = {
             "mimeType": "multipart/mixed",
