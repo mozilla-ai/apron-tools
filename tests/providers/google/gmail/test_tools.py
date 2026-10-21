@@ -617,6 +617,29 @@ class TestPreservablePlainBody:
         with pytest.raises(ValueError, match="attachments or inline parts"):
             _preservable_plain_body(payload)
 
+    @pytest.mark.parametrize(
+        ("charset", "text"),
+        [("ISO-2022-JP", "日本語"), ("UTF-7", "café")],
+        ids=["iso-2022-jp", "utf-7"],
+    )
+    def test_part_with_a_charset_that_is_not_utf8_is_refused(self, charset: str, text: str) -> None:
+        payload = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
+            "body": {"data": _b64(text.encode(charset))},
+        }
+        with pytest.raises(ValueError, match="could not be read"):
+            _preservable_plain_body(payload)
+
+    @pytest.mark.parametrize("charset", ['"UTF-8"', "us-ascii"])
+    def test_part_with_a_utf8_compatible_charset_is_kept(self, charset: str) -> None:
+        payload = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
+            "body": {"data": _b64("MAIN BODY")},
+        }
+        assert _preservable_plain_body(payload) == "MAIN BODY"
+
 
 class TestSendEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Iterator
+from email.message import Message
 from email.mime.text import MIMEText
 
 import httpx
@@ -144,6 +145,16 @@ def _extract_body(payload: dict) -> str | None:
     return None
 
 
+def _declared_charset(part: dict) -> str | None:
+    """Return the lowercase charset that a MIME part declares in its Content-Type header, if any."""
+    for header in part.get("headers", []):
+        if header.get("name", "").lower() == "content-type":
+            message = Message()
+            message["Content-Type"] = header.get("value", "")
+            return message.get_content_charset()
+    return None
+
+
 def _is_attachment_or_inline(part: dict) -> bool:
     """Report whether a MIME part is an attachment, an attached email, inline content, or non-text data."""
     body = part.get("body", {})
@@ -192,6 +203,8 @@ def _preservable_plain_body(payload: dict) -> str:
             if body.get("size", 0) > 0:
                 raise ValueError("The existing draft body could not be read.")
             continue
+        if _declared_charset(part) not in {None, "us-ascii", "utf-8"}:
+            raise ValueError("The existing draft body could not be read.")
         try:
             text = _decode_base64url(data).decode("utf-8")
         except ValueError as exc:
