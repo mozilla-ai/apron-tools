@@ -570,7 +570,13 @@ async def gmail_edit_draft(
                 try:
                     final_body = _preservable_plain_body(payload)
                 except ValueError as exc:
-                    return EditDraftResult(success=False, error=f"{exc} Provide a new body to replace it.")
+                    return EditDraftResult(
+                        success=False,
+                        error=(
+                            f"{exc} Provide a new body to continue. The draft is then saved as plain text, "
+                            "and its attachments, inline images, and HTML formatting are removed."
+                        ),
+                    )
 
             final_cc = params.cc if params.cc is not None else _extract_header(hdrs, "Cc") or None
             final_bcc = params.bcc if params.bcc is not None else _extract_header(hdrs, "Bcc") or None

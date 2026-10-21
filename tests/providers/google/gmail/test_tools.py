@@ -854,6 +854,8 @@ class TestEditDraft:
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
         assert result.success is False
         assert "body" in result.error.lower()
+        assert "saved as plain text" in result.error
+        assert "attachments" in result.error
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     @pytest.mark.parametrize(
