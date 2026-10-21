@@ -582,8 +582,15 @@ class TestPreservablePlainBody:
                     },
                 ],
             },
+            {
+                "mimeType": "multipart/alternative",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"size": 0}},
+                    {"mimeType": "text/html", "body": {"data": _b64("<p>Hi</p>")}},
+                ],
+            },
         ],
-        ids=["html-sibling", "html-footer-after-alternative", "alternative-without-plain-text"],
+        ids=["html-sibling", "html-footer-after-alternative", "alternative-without-plain-text", "empty-plain-text"],
     )
     def test_html_that_is_not_an_alternative_of_plain_text_is_refused(self, payload: dict) -> None:
         with pytest.raises(ValueError, match="HTML content that is not an alternative"):
