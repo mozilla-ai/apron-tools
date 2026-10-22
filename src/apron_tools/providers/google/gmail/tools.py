@@ -550,7 +550,7 @@ async def gmail_edit_draft(
     token: str,
     base_url: str = _GMAIL_BASE_URL,
 ) -> EditDraftResult:
-    """Edit a Gmail draft as plain text, which needs a new body if the draft has attachments or no plain-text body."""
+    """Edit a Gmail draft as plain text, which drops HTML formatting and needs a new body if the text cannot be kept."""
     draft_url = f"{base_url}/drafts/{quote_path_segment(params.draft_id)}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
