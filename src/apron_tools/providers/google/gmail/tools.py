@@ -146,6 +146,10 @@ def _extract_body(payload: dict) -> str | None:
     return None
 
 
+class _UnpreservableDraftError(ValueError):
+    """A draft cannot be rebuilt as plain text without losing or changing its content."""
+
+
 def _declared_charset(part: dict) -> str | None:
     """Return the standard name of the charset that a MIME part declares in its Content-Type header, if any.
 
@@ -195,14 +199,14 @@ def _preservable_plain_body(payload: dict) -> str:
         The plain-text body, or an empty string if the draft body is empty.
 
     Raises:
-        ValueError: If rebuilding the draft as plain text would lose or change content.
+        _UnpreservableDraftError: If rebuilding the draft as plain text would lose or change content.
             The message states the reason.
     """
     parts = list(_walk_parts(payload))
     if any(_is_attachment_or_inline(part) for part in parts):
-        raise ValueError("The existing draft has attachments or inline parts.")
+        raise _UnpreservableDraftError("The existing draft has attachments or inline parts.")
     if not any(part.get("mimeType") == "text/plain" for part in parts):
-        raise ValueError("The existing draft has no plain-text content.")
+        raise _UnpreservableDraftError("The existing draft has no plain-text content.")
 
     plain_texts: list[str] = []
     for part in parts:
@@ -210,16 +214,16 @@ def _preservable_plain_body(payload: dict) -> str:
         data = body.get("data")
         if not data:
             if body.get("size", 0) > 0 and not part.get("mimeType", "").startswith("multipart/"):
-                raise ValueError("The existing draft body could not be read.")
+                raise _UnpreservableDraftError("The existing draft body could not be read.")
             continue
         if _declared_charset(part) not in {None, "ascii", "utf-8"}:
-            raise ValueError("The existing draft body could not be read.")
+            raise _UnpreservableDraftError("The existing draft body could not be read.")
         try:
             text = _decode_base64url(data).decode("utf-8")
         except ValueError as exc:
-            raise ValueError("The existing draft body could not be read.") from exc
+            raise _UnpreservableDraftError("The existing draft body could not be read.") from exc
         if part.get("mimeType", "").startswith("multipart/"):
-            raise ValueError("The existing draft has content outside its text parts.")
+            raise _UnpreservableDraftError("The existing draft has content outside its text parts.")
         if part.get("mimeType") == "text/plain":
             plain_texts.append(text)
 
@@ -232,10 +236,12 @@ def _preservable_plain_body(payload: dict) -> str:
             sibling.get("mimeType") == "text/plain" and sibling.get("body", {}).get("data")
             for sibling in parent.get("parts", [])
         ):
-            raise ValueError("The existing draft has HTML content that is not an alternative of its plain text.")
+            raise _UnpreservableDraftError(
+                "The existing draft has HTML content that is not an alternative of its plain text."
+            )
 
     if len(plain_texts) > 1:
-        raise ValueError("The existing draft has more than one plain-text part.")
+        raise _UnpreservableDraftError("The existing draft has more than one plain-text part.")
     return plain_texts[0] if plain_texts else ""
 
 
@@ -573,7 +579,7 @@ async def gmail_edit_draft(
             else:
                 try:
                     final_body = _preservable_plain_body(payload)
-                except ValueError as exc:
+                except _UnpreservableDraftError as exc:
                     return EditDraftResult(
                         success=False,
                         error=(

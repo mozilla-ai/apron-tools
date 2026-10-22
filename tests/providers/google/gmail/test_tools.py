@@ -13,6 +13,7 @@ from pytest_httpx import HTTPXMock
 from apron_tools.providers.google.gmail.tools import (
     _extract_body,
     _preservable_plain_body,
+    _UnpreservableDraftError,
     gmail_add_labels_to_emails,
     gmail_create_draft,
     gmail_create_label,
@@ -518,7 +519,7 @@ class TestPreservablePlainBody:
                 {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
             ],
         }
-        with pytest.raises(ValueError, match="could not be read"):
+        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
             _preservable_plain_body(payload)
 
     @pytest.mark.parametrize(
@@ -593,7 +594,7 @@ class TestPreservablePlainBody:
         ids=["html-sibling", "html-footer-after-alternative", "alternative-without-plain-text", "empty-plain-text"],
     )
     def test_html_that_is_not_an_alternative_of_plain_text_is_refused(self, payload: dict) -> None:
-        with pytest.raises(ValueError, match="HTML content that is not an alternative"):
+        with pytest.raises(_UnpreservableDraftError, match="HTML content that is not an alternative"):
             _preservable_plain_body(payload)
 
     def test_data_on_a_multipart_container_is_refused(self) -> None:
@@ -602,12 +603,12 @@ class TestPreservablePlainBody:
             "body": {"data": _b64("Container text")},
             "parts": [{"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}}],
         }
-        with pytest.raises(ValueError, match="content outside its text parts"):
+        with pytest.raises(_UnpreservableDraftError, match="content outside its text parts"):
             _preservable_plain_body(payload)
 
     def test_part_with_a_size_but_no_data_is_refused(self) -> None:
         payload = {"mimeType": "text/plain", "body": {"size": 100}}
-        with pytest.raises(ValueError, match="could not be read"):
+        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
             _preservable_plain_body(payload)
 
     def test_multipart_container_with_a_size_but_no_data_is_kept(self) -> None:
@@ -632,7 +633,7 @@ class TestPreservablePlainBody:
                 },
             ],
         }
-        with pytest.raises(ValueError, match="attachments or inline parts"):
+        with pytest.raises(_UnpreservableDraftError, match="attachments or inline parts"):
             _preservable_plain_body(payload)
 
     @pytest.mark.parametrize(
@@ -646,7 +647,7 @@ class TestPreservablePlainBody:
             "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
             "body": {"data": _b64(text.encode(charset))},
         }
-        with pytest.raises(ValueError, match="could not be read"):
+        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
             _preservable_plain_body(payload)
 
     def test_part_with_an_unknown_charset_is_refused(self) -> None:
@@ -655,7 +656,7 @@ class TestPreservablePlainBody:
             "headers": [{"name": "Content-Type", "value": "text/plain; charset=x-unknown"}],
             "body": {"data": _b64("MAIN BODY")},
         }
-        with pytest.raises(ValueError, match="could not be read"):
+        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
             _preservable_plain_body(payload)
 
     @pytest.mark.parametrize("charset", ['"UTF-8"', "utf8", "us-ascii", "ascii"])
@@ -954,6 +955,17 @@ class TestEditDraft:
             "The existing draft has no plain-text content. Provide a new body to continue. The draft is then saved "
             "as plain text, and its attachments, inline images, and HTML formatting are removed."
         )
+
+    async def test_unexpected_error_while_reading_the_draft_is_not_a_refusal(
+        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fail(payload: dict) -> str:
+            raise ValueError("unexpected")
+
+        monkeypatch.setattr("apron_tools.providers.google.gmail.tools._preservable_plain_body", fail)
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=_load_json("get_draft.json"))
+        with pytest.raises(ValueError, match="unexpected"):
+            await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
 
     @pytest.mark.parametrize(
         "part",
