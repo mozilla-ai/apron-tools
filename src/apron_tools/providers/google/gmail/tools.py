@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import base64
-import codecs
+import email
 from collections.abc import Iterator
-from email.message import Message
+from email import policy
+from email.message import EmailMessage
 from email.mime.text import MIMEText
 
 import httpx
@@ -146,103 +147,25 @@ def _extract_body(payload: dict) -> str | None:
     return None
 
 
-class _UnpreservableDraftError(ValueError):
-    """A draft cannot be rebuilt as plain text without losing or changing its content."""
-
-
-def _declared_charset(part: dict) -> str | None:
-    """Return the standard name of the charset that a MIME part declares in its Content-Type header, if any.
-
-    NOTE: An unknown charset is returned as declared.
-    """
-    for header in part.get("headers", []):
-        if header.get("name", "").lower() == "content-type":
-            message = Message()
-            message["Content-Type"] = header.get("value", "")
-            charset = message.get_content_charset()
-            if charset is None:
-                return None
-            try:
-                return codecs.lookup(charset).name
-            except LookupError:
-                return charset
-    return None
-
-
-def _is_attachment_or_inline(part: dict) -> bool:
-    """Report whether a MIME part is an attachment, an attached email, inline content, or non-text data."""
-    body = part.get("body", {})
-    mime_type = part.get("mimeType", "")
-    if part.get("filename") or body.get("attachmentId") or mime_type.startswith("message/"):
-        return True
-    for header in part.get("headers", []):
-        name = header.get("name", "").lower()
-        value = header.get("value", "")
-        if name == "content-id" and value:
-            return True
-        if name == "content-disposition" and value.split(";", 1)[0].strip().lower() in {"attachment", "inline"}:
-            return True
-    return (
-        bool(body.get("data"))
-        and mime_type not in {"text/plain", "text/html"}
-        and not mime_type.startswith("multipart/")
-    )
-
-
-def _preservable_plain_body(payload: dict) -> str:
-    """Return the draft body when a plain-text rebuild of the draft keeps all of its content.
-
-    Args:
-        payload: The Gmail message payload of the draft.
-
-    Returns:
-        The plain-text body, or an empty string if the draft body is empty.
+def _parse_raw_message(raw: str) -> EmailMessage:
+    """Parse a base64url-encoded email message from the Gmail API, keeping its CRLF line endings when written out.
 
     Raises:
-        _UnpreservableDraftError: If rebuilding the draft as plain text would lose or change content.
-            The message states the reason.
+        ValueError: If ``raw`` cannot be decoded.
     """
-    parts = list(_walk_parts(payload))
-    if any(_is_attachment_or_inline(part) for part in parts):
-        raise _UnpreservableDraftError("The existing draft has attachments or inline parts.")
-    if not any(part.get("mimeType") == "text/plain" for part in parts):
-        raise _UnpreservableDraftError("The existing draft has no plain-text content.")
+    return email.message_from_bytes(_decode_base64url(raw), policy=policy.SMTP)
 
-    plain_texts: list[str] = []
-    for part in parts:
-        body = part.get("body", {})
-        data = body.get("data")
-        if not data:
-            if body.get("size", 0) > 0 and not part.get("mimeType", "").startswith("multipart/"):
-                raise _UnpreservableDraftError("The existing draft body could not be read.")
-            continue
-        if _declared_charset(part) not in {None, "ascii", "utf-8"}:
-            raise _UnpreservableDraftError("The existing draft body could not be read.")
-        try:
-            text = _decode_base64url(data).decode("utf-8")
-        except ValueError as exc:
-            raise _UnpreservableDraftError("The existing draft body could not be read.") from exc
-        if part.get("mimeType", "").startswith("multipart/"):
-            raise _UnpreservableDraftError("The existing draft has content outside its text parts.")
-        if part.get("mimeType") == "text/plain":
-            plain_texts.append(text)
 
-    parents = {id(child): part for part in parts for child in part.get("parts", [])}
-    for part in parts:
-        if part.get("mimeType") != "text/html" or not part.get("body", {}).get("data"):
-            continue
-        parent = parents.get(id(part), {})
-        if parent.get("mimeType") != "multipart/alternative" or not any(
-            sibling.get("mimeType") == "text/plain" and sibling.get("body", {}).get("data")
-            for sibling in parent.get("parts", [])
-        ):
-            raise _UnpreservableDraftError(
-                "The existing draft has HTML content that is not an alternative of its plain text."
-            )
-
-    if len(plain_texts) > 1:
-        raise _UnpreservableDraftError("The existing draft has more than one plain-text part.")
-    return plain_texts[0] if plain_texts else ""
+def _replace_body(message: EmailMessage, body: str) -> None:
+    """Replace the text and HTML of a message with a plain-text body, keeping its attachments."""
+    # The parts of a multipart/related message belong to the HTML that the new body replaces.
+    attachments = list(message.iter_attachments()) if message.get_content_type() == "multipart/mixed" else []
+    message.clear_content()
+    message.set_content(body)
+    if attachments:
+        message.make_mixed()
+        for attachment in attachments:
+            message.attach(attachment)
 
 
 def _build_raw_message(
@@ -550,15 +473,14 @@ async def gmail_edit_draft(
     token: str,
     base_url: str = _GMAIL_BASE_URL,
 ) -> EditDraftResult:
-    """Edit a Gmail draft as plain text, which drops HTML formatting and needs a new body if the text cannot be kept."""
+    """Edit a Gmail draft and keep its other content. A new subject moves a reply draft out of its thread."""
     draft_url = f"{base_url}/drafts/{quote_path_segment(params.draft_id)}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            # Fetch existing draft to merge fields.
             get_resp = await client.get(
                 draft_url,
                 headers=_headers(token),
-                params={"format": "full"},
+                params={"format": "raw"},
             )
 
             if not get_resp.is_success:
@@ -567,53 +489,32 @@ async def gmail_edit_draft(
                     error=f"Gmail API error {get_resp.status_code}: {get_resp.text}",
                 )
 
-            draft_data = get_resp.json()
-            payload = draft_data.get("message", {}).get("payload", {})
-            hdrs = payload.get("headers", [])
+            draft_message = get_resp.json().get("message", {})
+            try:
+                message = _parse_raw_message(draft_message["raw"])
+            except (KeyError, ValueError):
+                return EditDraftResult(success=False, error="The existing draft could not be read.")
 
-            final_to = params.to if params.to is not None else _extract_header(hdrs, "To")
-            final_subject = params.subject if params.subject is not None else _extract_header(hdrs, "Subject")
-
+            original_subject = message.get("Subject", "")
+            for name, value in (("To", params.to), ("Subject", params.subject), ("Cc", params.cc), ("Bcc", params.bcc)):
+                if value is not None:
+                    del message[name]
+                    if value:
+                        message[name] = value
             if params.body is not None:
-                final_body = params.body
-            else:
-                try:
-                    final_body = _preservable_plain_body(payload)
-                except _UnpreservableDraftError as exc:
-                    return EditDraftResult(
-                        success=False,
-                        error=(
-                            f"{exc} Provide a new body to continue. The draft is then saved as plain text, "
-                            "and its attachments, inline images, and HTML formatting are removed."
-                        ),
-                    )
+                _replace_body(message, params.body)
 
-            final_cc = params.cc if params.cc is not None else _extract_header(hdrs, "Cc") or None
-            final_bcc = params.bcc if params.bcc is not None else _extract_header(hdrs, "Bcc") or None
-
-            in_reply_to = _extract_header(hdrs, "In-Reply-To") or None
-            references = _extract_header(hdrs, "References") or None
-
-            raw = _build_raw_message(
-                final_to,
-                final_subject,
-                final_body,
-                cc=final_cc,
-                bcc=final_bcc,
-                in_reply_to=in_reply_to,
-                references=references,
-            )
-
-            message: dict[str, str] = {"raw": raw}
-            thread_id = draft_data.get("message", {}).get("threadId")
+            update: dict[str, str] = {"raw": base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")}
+            thread_id = draft_message.get("threadId")
+            is_reply = "In-Reply-To" in message or "References" in message
             # Gmail keeps a message in a thread only when it has reply headers and the same subject.
-            if thread_id and (in_reply_to or references) and final_subject == _extract_header(hdrs, "Subject"):
-                message["threadId"] = thread_id
+            if thread_id and is_reply and message.get("Subject", "") == original_subject:
+                update["threadId"] = thread_id
 
             put_resp = await client.put(
                 draft_url,
                 headers=_headers(token, content_type=True),
-                json={"message": message},
+                json={"message": update},
             )
     except httpx.HTTPError as exc:
         return EditDraftResult(success=False, error=str(exc))

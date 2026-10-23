@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import email
 import json
+from email import policy
+from email.message import EmailMessage
 from pathlib import Path
 
 import pytest
@@ -12,8 +14,6 @@ from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.gmail.tools import (
     _extract_body,
-    _preservable_plain_body,
-    _UnpreservableDraftError,
     gmail_add_labels_to_emails,
     gmail_create_draft,
     gmail_create_label,
@@ -456,6 +456,12 @@ def _b64(value: str | bytes) -> str:
     return base64.urlsafe_b64encode(value if isinstance(value, bytes) else value.encode()).decode()
 
 
+def _parse_raw(raw: str) -> EmailMessage:
+    message = email.message_from_bytes(base64.urlsafe_b64decode(raw), policy=policy.default)
+    assert isinstance(message, EmailMessage)
+    return message
+
+
 class TestExtractBody:
     def test_nested_body_precedes_later_footer(self) -> None:
         payload = {
@@ -508,165 +514,6 @@ class TestExtractBody:
             ],
         }
         assert _extract_body(payload) == "Plain text"
-
-
-class TestPreservablePlainBody:
-    def test_undecodable_part_before_readable_part_is_refused(self) -> None:
-        payload = {
-            "mimeType": "multipart/mixed",
-            "parts": [
-                {"mimeType": "text/plain", "body": {"data": _b64(b"MAIN caf\xe9")}},
-                {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
-            ],
-        }
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/alternative",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                        ],
-                    },
-                ],
-            },
-        ],
-        ids=["alternative", "nested-alternative"],
-    )
-    def test_html_alternative_of_plain_text_is_dropped(self, payload: dict) -> None:
-        assert _preservable_plain_body(payload) == "MAIN BODY"
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>-- footer</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                        ],
-                    },
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>-- footer</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [{"mimeType": "text/html", "body": {"data": _b64("<p>Other</p>")}}],
-                    },
-                ],
-            },
-            {
-                "mimeType": "multipart/alternative",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"size": 0}},
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>Hi</p>")}},
-                ],
-            },
-        ],
-        ids=["html-sibling", "html-footer-after-alternative", "alternative-without-plain-text", "empty-plain-text"],
-    )
-    def test_html_that_is_not_an_alternative_of_plain_text_is_refused(self, payload: dict) -> None:
-        with pytest.raises(_UnpreservableDraftError, match="HTML content that is not an alternative"):
-            _preservable_plain_body(payload)
-
-    def test_data_on_a_multipart_container_is_refused(self) -> None:
-        payload = {
-            "mimeType": "multipart/mixed",
-            "body": {"data": _b64("Container text")},
-            "parts": [{"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}}],
-        }
-        with pytest.raises(_UnpreservableDraftError, match="content outside its text parts"):
-            _preservable_plain_body(payload)
-
-    def test_part_with_a_size_but_no_data_is_refused(self) -> None:
-        payload = {"mimeType": "text/plain", "body": {"size": 100}}
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    def test_multipart_container_with_a_size_but_no_data_is_kept(self) -> None:
-        payload = {
-            "mimeType": "multipart/alternative",
-            "body": {"size": 120},
-            "parts": [
-                {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-            ],
-        }
-        assert _preservable_plain_body(payload) == "MAIN BODY"
-
-    def test_attached_email_without_a_filename_is_refused(self) -> None:
-        payload = {
-            "mimeType": "multipart/mixed",
-            "parts": [
-                {
-                    "mimeType": "message/rfc822",
-                    "body": {"size": 0},
-                    "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Forwarded text")}}],
-                },
-            ],
-        }
-        with pytest.raises(_UnpreservableDraftError, match="attachments or inline parts"):
-            _preservable_plain_body(payload)
-
-    @pytest.mark.parametrize(
-        ("charset", "text"),
-        [("ISO-2022-JP", "日本語"), ("UTF-7", "café")],
-        ids=["iso-2022-jp", "utf-7"],
-    )
-    def test_part_with_a_charset_that_is_not_utf8_is_refused(self, charset: str, text: str) -> None:
-        payload = {
-            "mimeType": "text/plain",
-            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
-            "body": {"data": _b64(text.encode(charset))},
-        }
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    def test_part_with_an_unknown_charset_is_refused(self) -> None:
-        payload = {
-            "mimeType": "text/plain",
-            "headers": [{"name": "Content-Type", "value": "text/plain; charset=x-unknown"}],
-            "body": {"data": _b64("MAIN BODY")},
-        }
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    @pytest.mark.parametrize("charset", ['"UTF-8"', "utf8", "us-ascii", "ascii"])
-    def test_part_with_a_utf8_compatible_charset_is_kept(self, charset: str) -> None:
-        payload = {
-            "mimeType": "text/plain",
-            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
-            "body": {"data": _b64("MAIN BODY")},
-        }
-        assert _preservable_plain_body(payload) == "MAIN BODY"
 
 
 class TestSendEmail:
@@ -759,329 +606,258 @@ class TestCreateDraft:
 # ---------------------------------------------------------------------------
 
 
+def _mime(*lines: str | bytes) -> bytes:
+    return b"\r\n".join(line if isinstance(line, bytes) else line.encode() for line in lines)
+
+
+_DRAFT_HEADERS = (
+    "From: Ana <alias@example.com>",
+    "Reply-To: team@example.com",
+    "To: bob@example.com",
+    "Subject: Draft Subject",
+    "MIME-Version: 1.0",
+)
+
+_DRAFTS = {
+    "plain-text": _mime("To: bob@example.com", "Subject: Draft Subject", "", "Original body", ""),
+    "html-only": _mime(*_DRAFT_HEADERS, 'Content-Type: text/html; charset="utf-8"', "", "<p>HTML only</p>", ""),
+    "alternative-with-attachment": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        'Content-Type: multipart/alternative; boundary="alt"',
+        "",
+        "--alt",
+        "Content-Type: text/plain; charset=iso-8859-1",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        b"caf\xe9 body",
+        "--alt",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        "<p>café body</p>",
+        "--alt--",
+        "--mixed",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--mixed--",
+        "",
+    ),
+    "inline-image": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel--",
+        "",
+    ),
+    "attached-email": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "See the forwarded email.",
+        "--mixed",
+        "Content-Type: message/rfc822",
+        "",
+        "Subject: Forwarded",
+        "",
+        "Forwarded text",
+        "--mixed--",
+        "",
+    ),
+    "two-plain-text-parts": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "part A",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "-- list footer",
+        "--mixed--",
+        "",
+    ),
+    "iso-2022-jp": _mime(
+        *_DRAFT_HEADERS, "Content-Type: text/plain; charset=ISO-2022-JP", "", "日本語".encode("iso-2022-jp"), ""
+    ),
+    "undecodable-part": _mime(
+        *_DRAFT_HEADERS, "Content-Type: text/plain", "Content-Transfer-Encoding: base64", "", "!!!invalid!!!", ""
+    ),
+    "inline-body": _mime(*_DRAFT_HEADERS, "Content-Type: text/plain", "Content-Disposition: inline", "", "Body", ""),
+}
+
+
+def _raw_draft(raw: bytes) -> dict:
+    return {"id": "draft-001", "message": {"id": "msg-004", "threadId": "thread-003", "raw": _b64(raw)}}
+
+
+def _leaf_parts(message: EmailMessage) -> list[tuple[str, object]]:
+    return [(part.get_content_type(), part.get_payload()) for part in message.walk() if not part.is_multipart()]
+
+
+def _put_message(httpx_mock: HTTPXMock) -> dict:
+    put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+    return json.loads(put.content)["message"]
+
+
 class TestEditDraft:
-    @pytest.mark.parametrize(
-        ("plain_body", "reason"),
-        [
-            ({"size": 0}, "HTML content that is not an alternative"),
-            ({"data": base64.urlsafe_b64encode(b"caf\xe9").decode("ascii")}, "could not be read"),
-        ],
-        ids=["missing-plain-data", "invalid-plain-utf8"],
-    )
-    async def test_subject_only_edit_refuses_html_fallback(
-        self, httpx_mock: HTTPXMock, plain_body: dict, reason: str
-    ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {
-            "mimeType": "multipart/alternative",
-            "parts": [
-                {"mimeType": "text/plain", "body": plain_body},
-                {"mimeType": "text/html", "body": {"data": _b64("<p>Keep this HTML body</p>")}},
-            ],
-        }
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"), is_optional=True
+    @pytest.mark.parametrize("raw", list(_DRAFTS.values()), ids=list(_DRAFTS))
+    async def test_header_edit_keeps_the_rest_of_the_draft(self, httpx_mock: HTTPXMock, raw: bytes) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated ☕"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(raw, policy=policy.default)
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent["Subject"] == "Updated ☕"
+        assert [sent[name] for name in ("From", "Reply-To", "To")] == [
+            original[name] for name in ("From", "Reply-To", "To")
+        ]
+        assert _leaf_parts(sent) == _leaf_parts(original)
+
+    async def test_edit_replaces_only_the_given_headers(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(*_DRAFT_HEADERS, "Cc: old@example.com", "Bcc: dave@example.com", "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to="José <jose@example.com>", cc="carol@example.com", bcc=""),
+            token=_TOKEN,
         )
 
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-
-        assert result.success is False
-        assert reason in result.error
-        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
-
-    async def test_subject_only_edit_preserves_empty_plain_body(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["body"] = {"size": 0}
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
-
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        raw = json.loads(put.content)["message"]["raw"]
-        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == ""
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [(a.display_name, a.addr_spec) for a in sent["To"].addresses] == [("José", "jose@example.com")]
+        assert sent.get_all("Cc") == ["carol@example.com"]
+        assert "Bcc" not in sent
+        assert sent["Subject"] == "Draft Subject"
+        assert sent["From"] == "Ana <alias@example.com>"
 
-    async def test_subject_only_edit_keeps_plain_body_of_html_alternative(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {
-            "mimeType": "multipart/alternative",
-            "parts": [
-                {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-            ],
-        }
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
-
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-
-        assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        raw = json.loads(put.content)["message"]["raw"]
-        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "MAIN BODY"
-
-    async def test_edit_keeps_reply_draft_in_its_thread(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["headers"] += [
-            {"name": "In-Reply-To", "value": "<orig@example.com>"},
-            {"name": "References", "value": "<root@example.com> <orig@example.com>"},
-        ]
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+    @pytest.mark.parametrize("draft", ["html-only", "inline-image"])
+    async def test_new_body_replaces_the_text_and_html(self, httpx_mock: HTTPXMock, draft: str) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
 
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
 
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        message = json.loads(put.content)["message"]
-        assert message["threadId"] == "thread-003"
-        sent = email.message_from_bytes(base64.urlsafe_b64decode(message["raw"]))
-        assert sent["In-Reply-To"] == "<orig@example.com>"
-        assert sent["References"] == "<root@example.com> <orig@example.com>"
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent.get_content_type() == "text/plain"
+        assert sent.get_content() == "New body\r\n"
+        assert sent["From"] == "Ana <alias@example.com>"
+        assert sent.get_all("MIME-Version") == ["1.0"]
 
     @pytest.mark.parametrize(
-        ("reply_headers", "params"),
+        ("draft", "parts"),
         [
-            ([], {"body": "New body"}),
-            ([{"name": "In-Reply-To", "value": "<orig@example.com>"}], {"subject": "New subject"}),
+            ("alternative-with-attachment", ["multipart/mixed", "text/plain", "application/pdf"]),
+            ("attached-email", ["multipart/mixed", "text/plain", "message/rfc822", "text/plain"]),
+        ],
+    )
+    async def test_new_body_keeps_attachments(self, httpx_mock: HTTPXMock, draft: str, parts: list[str]) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(_DRAFTS[draft], policy=policy.default)
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == parts
+        body = sent.get_body(("plain",))
+        assert body is not None
+        assert body.get_content() == "New body\r\n"
+        assert [part.as_string() for part in sent.iter_attachments()] == [
+            part.as_string() for part in original.iter_attachments()
+        ]
+        assert sent.get_all("MIME-Version") == ["1.0"]
+
+    async def test_edit_keeps_reply_draft_in_its_thread(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(*_DRAFT_HEADERS, "In-Reply-To: <orig@example.com>", "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        message = _put_message(httpx_mock)
+        assert message["threadId"] == "thread-003"
+        assert _parse_raw(message["raw"])["In-Reply-To"] == "<orig@example.com>"
+
+    @pytest.mark.parametrize(
+        ("headers", "params"),
+        [
+            ((), {"body": "New body"}),
+            (("In-Reply-To: <orig@example.com>",), {"subject": "New subject"}),
         ],
         ids=["standalone-draft", "reply-draft-with-new-subject"],
     )
     async def test_edit_sends_no_thread_id_when_the_draft_cannot_stay_in_its_thread(
-        self, httpx_mock: HTTPXMock, reply_headers: list[dict[str, str]], params: dict[str, str]
+        self, httpx_mock: HTTPXMock, headers: tuple[str, ...], params: dict[str, str]
     ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["headers"] += reply_headers
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        raw = _mime(*_DRAFT_HEADERS, *headers, "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
 
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", **params), token=_TOKEN)
 
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        assert "threadId" not in json.loads(put.content)["message"]
+        assert "threadId" not in _put_message(httpx_mock)
 
     async def test_edit_reads_header_names_in_any_case(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["headers"] = [
-            {"name": "to", "value": "bob@example.com"},
-            {"name": "subject", "value": "Draft Subject"},
-            {"name": "CC", "value": "carol@example.com"},
-            {"name": "in-reply-to", "value": "<orig@example.com>"},
-        ]
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        raw = _mime("to: bob@example.com", "subject: Draft Subject", "in-reply-to: <orig@example.com>", "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
 
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
 
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        sent = email.message_from_bytes(base64.urlsafe_b64decode(json.loads(put.content)["message"]["raw"]))
-        assert sent["To"] == "bob@example.com"
-        assert sent["Subject"] == "Draft Subject"
-        assert sent["Cc"] == "carol@example.com"
-        assert sent["In-Reply-To"] == "<orig@example.com>"
+        message = _put_message(httpx_mock)
+        assert message["threadId"] == "thread-003"
+        assert _parse_raw(message["raw"]).get_all("To") == ["carol@example.com"]
 
     @pytest.mark.parametrize(
-        ("payload", "reason"),
-        [
-            (
-                {
-                    "mimeType": "multipart/alternative",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64(b"caf\xe9")}},
-                    ],
-                },
-                "could not be read",
-            ),
-            ({"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}}, "no plain-text content"),
-            (
-                {
-                    "mimeType": "multipart/mixed",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                        {"mimeType": "application/pdf", "filename": "file.pdf", "body": {"data": _b64("PDF")}},
-                    ],
-                },
-                "attachments or inline parts",
-            ),
-            (
-                {
-                    "mimeType": "multipart/related",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                        {"mimeType": "image/png", "body": {"attachmentId": "inline-image"}},
-                    ],
-                },
-                "attachments or inline parts",
-            ),
-            (
-                {
-                    "mimeType": "multipart/mixed",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                        {
-                            "mimeType": "multipart/related",
-                            "parts": [
-                                {"mimeType": "image/png", "filename": "inline.png", "body": {}},
-                            ],
-                        },
-                    ],
-                },
-                "attachments or inline parts",
-            ),
-        ],
-        ids=["undecodable-multipart", "html-only", "attachment", "inline", "nested-inline"],
+        "message",
+        [{"id": "msg-004"}, {"id": "msg-004", "raw": "!!!invalid!!!"}],
+        ids=["missing-raw", "invalid-raw"],
     )
-    async def test_subject_only_edit_refuses_unrecoverable_content(
-        self, httpx_mock: HTTPXMock, payload: dict, reason: str
-    ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-        assert result.success is False
-        assert reason in result.error
-        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
-
-    async def test_refused_edit_says_what_a_new_body_removes(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}}
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-        assert result.error == (
-            "The existing draft has no plain-text content. Provide a new body to continue. The draft is then saved "
-            "as plain text, and its attachments, inline images, and HTML formatting are removed."
-        )
-
-    async def test_unexpected_error_while_reading_the_draft_is_not_a_refusal(
-        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        def fail(payload: dict) -> str:
-            raise ValueError("unexpected")
-
-        monkeypatch.setattr("apron_tools.providers.google.gmail.tools._preservable_plain_body", fail)
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=_load_json("get_draft.json"))
-        with pytest.raises(ValueError, match="unexpected"):
-            await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-
-    @pytest.mark.parametrize(
-        "part",
-        [
-            {
-                "mimeType": "image/png",
-                "filename": "",
-                "headers": [
-                    {"name": "Content-Disposition", "value": "inline"},
-                    {"name": "Content-ID", "value": "<logo>"},
-                ],
-                "body": {"size": 8, "data": "iVBORw0KGgo="},
-            },
-            {
-                "mimeType": "text/plain",
-                "headers": [{"name": "content-disposition", "value": "INLINE; filename=note.txt"}],
-                "body": {"data": _b64("Inline note")},
-            },
-            {
-                "mimeType": "text/plain",
-                "headers": [{"name": "content-id", "value": "<note>"}],
-                "body": {"data": _b64("Referenced note")},
-            },
-            {
-                "mimeType": "application/pdf",
-                "headers": [{"name": "Content-Disposition", "value": "attachment"}],
-                "body": {},
-            },
-            {"mimeType": "image/png", "body": {"data": "iVBORw0KGgo="}},
-        ],
-        ids=["embedded-inline-image", "inline-text", "content-id", "attachment-disposition", "nontext-data"],
-    )
-    async def test_subject_only_edit_refuses_unnamed_parts(self, httpx_mock: HTTPXMock, part: dict) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {
-            "mimeType": "multipart/related",
-            "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Keep this body")}}, part],
-        }
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+    async def test_unreadable_draft_is_not_overwritten(self, httpx_mock: HTTPXMock, message: dict) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001",
-            json=_load_json("edit_draft.json"),
-            is_optional=True,
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json={"id": "draft-001", "message": message}
         )
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-        assert result.success is False
-        assert "attachments or inline parts" in result.error
-        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {"mimeType": "text/html", "filename": "inline.html", "body": {"data": "!!!invalid!!!"}},
-            {
-                "mimeType": "image/png",
-                "headers": [{"name": "Content-ID", "value": "<logo>"}],
-                "body": {"data": "iVBORw0KGgo="},
-            },
-        ],
-        ids=["html-attachment", "embedded-inline-image"],
-    )
-    async def test_explicit_body_can_replace_html_and_attachments(self, httpx_mock: HTTPXMock, payload: dict) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="Replacement"), token=_TOKEN)
-        assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        raw = json.loads(put.content)["message"]["raw"]
-        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "Replacement"
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                        ],
-                    },
-                    {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("part A")}},
-                    {"mimeType": "text/plain", "body": {"data": _b64("part B")}},
-                ],
-            },
-        ],
-        ids=["nested-body-and-footer", "sibling-parts"],
-    )
-    async def test_subject_only_edit_refuses_multiple_plain_text_parts(
-        self, httpx_mock: HTTPXMock, payload: dict
-    ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"), is_optional=True
-        )
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
         assert result.success is False
-        assert "more than one plain-text part" in result.error
+        assert result.error == "The existing draft could not be read."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001?format=full",
-            json=_load_json("get_draft.json"),
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw",
+            json=_raw_draft(_DRAFTS["plain-text"]),
         )
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/draft-001",
@@ -1097,11 +873,14 @@ class TestEditDraft:
         assert result.success is True
         assert result.id == "draft-001"
         assert result.message_id == "msg-005"
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent["Subject"] == "Updated Subject"
+        assert sent.get_content() == "Original body\r\n"
 
     async def test_encodes_draft_id_in_request_paths(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}?format=full",
-            json=_load_json("get_draft.json"),
+            url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}?format=raw",
+            json=_raw_draft(_DRAFTS["plain-text"]),
         )
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}",
@@ -1125,82 +904,6 @@ class TestEditDraft:
 
         assert result.success is False
         assert "404" in result.error
-
-    async def test_subject_only_edit_does_not_clobber_undecodable_body(self, httpx_mock: HTTPXMock) -> None:
-        # Editing only the subject (params.body is None, the documented
-        # normal case) of a draft whose stored body cannot be decoded must
-        # not write a placeholder string over the real body, and must not
-        # report success.
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["body"] = {"size": 13, "data": "!!!invalid!!!"}
-
-        httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001?format=full",
-            json=draft,
-        )
-
-        result = await gmail_edit_draft(
-            EditDraftParams(draft_id="draft-001", subject="Updated Subject Only"),
-            token=_TOKEN,
-        )
-
-        assert result.success is False
-        assert result.error
-
-        # No PUT was issued: the tool must bail out before writing anything,
-        # not merely report failure after already clobbering the draft.
-        requests = httpx_mock.get_requests()
-        assert len(requests) == 1
-        assert requests[0].method == "GET"
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64(b"MAIN caf\xe9")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN</p>")}},
-                        ],
-                    },
-                    {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/alternative",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("Keep this body")}},
-                    {"mimeType": "text/html", "body": {"data": _b64(b"<p>caf\xe9</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("Sibling text")}},
-                    {
-                        "mimeType": "multipart/related",
-                        "body": {"data": "!!!invalid!!!"},
-                        "parts": [{"mimeType": "text/plain", "body": {"data": _b64(b"caf\xe9")}}],
-                    },
-                ],
-            },
-        ],
-        ids=["undecodable-body-before-footer", "undecodable-html-alternative", "undecodable-nested-part"],
-    )
-    async def test_subject_only_edit_refuses_undecodable_parts(self, httpx_mock: HTTPXMock, payload: dict) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"), is_optional=True
-        )
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-        assert result.success is False
-        assert "could not be read" in result.error
-        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_has_tool_definition(self) -> None:
         defn = gmail_edit_draft._tool_definition
