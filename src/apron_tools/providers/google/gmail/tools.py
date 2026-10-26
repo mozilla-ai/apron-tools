@@ -264,7 +264,9 @@ def _build_raw_message(
     Raises:
         ValueError: If a header value contains a line break, or a value cannot be written to an email.
     """
-    message = EmailMessage(policy=policy.SMTP)
+    # NOTE: A 7-bit message holds no 8-bit bytes, which is what the API asks for. An edited draft keeps its own
+    # encoding instead, so that an edit does not rewrite a part that it did not change.
+    message = EmailMessage(policy=policy.SMTP.clone(cte_type="7bit"))
     message["To"] = to
     message["Subject"] = subject
     if cc:

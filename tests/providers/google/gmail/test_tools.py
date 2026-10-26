@@ -730,6 +730,20 @@ class TestSendEmail:
         assert result.success is False
         assert "400" in result.error
 
+    async def test_a_non_ascii_body_is_sent_as_ascii_bytes(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(to="bob@example.com", subject="Caf\u00e9", body="Caf\u00e9 \u2014 one coffee"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        raw = base64.urlsafe_b64decode(json.loads(send.content)["raw"])
+        assert raw.isascii(), "a message handed to the API must hold no 8-bit bytes"
+        assert _parse_raw(json.loads(send.content)["raw"]).get_content() == "Caf\u00e9 \u2014 one coffee\r\n"
+
     async def test_a_body_that_cannot_be_written_is_refused(self, httpx_mock: HTTPXMock) -> None:
         result = await gmail_send_email(
             SendEmailParams(to="bob@example.com", subject="Hello", body="lone surrogate: \ud800"),
