@@ -295,6 +295,22 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    @pytest.mark.parametrize("charset", ["us-ascii", "x-unknown-charset"], ids=["us-ascii", "unknown-charset"])
+    async def test_read_email_reads_utf8_bytes_that_a_part_mislabels(self, httpx_mock: HTTPXMock, charset: str) -> None:
+        body = "Caf\u00e9 \u2014 one coffee"
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
+            "body": {"data": _b64(body.encode())},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == body
+
     async def test_read_email_prefers_a_plain_part_in_another_charset_over_html(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
         message["payload"] = {

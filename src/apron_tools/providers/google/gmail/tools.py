@@ -88,6 +88,28 @@ def _decode_base64url(data: str) -> bytes:
     return base64.b64decode(data + "=" * (-len(data) % 4), altchars=b"-_", validate=True)
 
 
+def _decode_body_data(data: str, charset: str) -> str:
+    """Decode base64url body data as text in the given character set, or as UTF-8 when the bytes do not fit it.
+
+    NOTE: A message can declare a character set that its own bytes do not fit, most often us-ascii for UTF-8 bytes.
+
+    Args:
+        data: The base64url-encoded body data to decode.
+        charset: The character set that the body declares.
+
+    Returns:
+        The decoded text.
+
+    Raises:
+        ValueError: If the data is not valid base64url, or the bytes fit neither character set.
+    """
+    decoded = _decode_base64url(data)
+    try:
+        return decoded.decode(charset)
+    except (LookupError, ValueError):
+        return decoded.decode("utf-8")
+
+
 def _extract_header(headers: list[dict[str, str]], name: str) -> str:
     """Extract a single header value from a Gmail payload headers list, matching the name in any case."""
     for h in headers:
@@ -134,8 +156,8 @@ def _extract_body(payload: dict) -> str | None:
         if not part_data:
             continue
         try:
-            text = _decode_base64url(part_data).decode(_declared_charset(part))
-        except (LookupError, ValueError):
+            text = _decode_body_data(part_data, _declared_charset(part))
+        except ValueError:
             decode_failed = True
             continue
 
