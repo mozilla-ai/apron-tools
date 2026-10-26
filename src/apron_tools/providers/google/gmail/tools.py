@@ -9,6 +9,7 @@ import re
 from collections.abc import Iterator
 from email import policy
 from email.message import EmailMessage, Message, MIMEPart
+from email.utils import getaddresses
 
 import httpx
 
@@ -55,6 +56,7 @@ _BODY_NOT_FOUND = "(No email body found)"
 
 _HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
 _HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
+_NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
@@ -289,6 +291,15 @@ def _replace_headers(message: EmailMessage, params: EditDraftParams) -> None:
                 message[name] = value
 
 
+def _addresses_are_ascii(*values: str | None) -> bool:
+    """Report whether every address in the given recipient values holds only ASCII characters.
+
+    NOTE: An email carries an address outside ASCII only where both servers support it, and the Gmail API takes no
+    such address. The display name of an address is free to hold any character.
+    """
+    return all(address.isascii() for value in values if value for _, address in getaddresses([value]))
+
+
 def _build_raw_message(
     to: str,
     subject: str,
@@ -517,6 +528,9 @@ async def gmail_send_email(
     base_url: str = _GMAIL_BASE_URL,
 ) -> SendEmailResult:
     """Send an email via Gmail."""
+    if not _addresses_are_ascii(params.to, params.cc, params.bcc):
+        return SendEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
+
     try:
         raw = _build_raw_message(
             params.to,
@@ -567,6 +581,9 @@ async def gmail_create_draft(
     base_url: str = _GMAIL_BASE_URL,
 ) -> CreateDraftResult:
     """Create an email draft in Gmail."""
+    if not _addresses_are_ascii(params.to, params.cc, params.bcc):
+        return CreateDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
+
     try:
         raw = _build_raw_message(
             params.to,
@@ -632,6 +649,9 @@ async def gmail_edit_draft(
                 message = _parse_raw_message(draft_message["raw"])
             except (KeyError, TypeError, ValueError):
                 return EditDraftResult(success=False, error="The existing draft could not be read.")
+
+            if not _addresses_are_ascii(params.to, params.cc, params.bcc):
+                return EditDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
             original_subject = message.get("Subject", "")
             try:
@@ -716,6 +736,9 @@ async def gmail_reply_to_email(
             references = orig_references
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
+
+            if not _addresses_are_ascii(orig_reply_to or orig_from, params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
             try:
                 raw = _build_raw_message(

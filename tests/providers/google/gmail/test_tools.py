@@ -787,6 +787,21 @@ class TestSendEmail:
         assert raw.isascii(), "a message handed to the API must hold no 8-bit bytes"
         assert _parse_raw(json.loads(send.content)["raw"]).get_content() == "Caf\u00e9 \u2014 one coffee\r\n"
 
+    @pytest.mark.parametrize(
+        "to",
+        ["jos\u00e9@example.com", "a@ex\u00e4mple.com", "Ana <ana@ex\u00e4mple.com>"],
+        ids=["local-part", "domain", "domain-with-a-name"],
+    )
+    async def test_an_address_outside_ascii_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
+        result = await gmail_send_email(
+            SendEmailParams(to=to, subject="Hello", body="Hi"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient address must hold only ASCII characters."
+        assert httpx_mock.get_requests() == []
+
     async def test_a_body_that_cannot_be_written_is_refused(self, httpx_mock: HTTPXMock) -> None:
         result = await gmail_send_email(
             SendEmailParams(to="bob@example.com", subject="Hello", body="lone surrogate: \ud800"),
@@ -1428,6 +1443,20 @@ class TestEditDraft:
 
         assert result.success is False
         assert result.error == "The existing draft could not be read."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_an_address_outside_ascii_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to="jos\u00e9@example.com"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient address must hold only ASCII characters."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_a_body_that_cannot_be_written_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
