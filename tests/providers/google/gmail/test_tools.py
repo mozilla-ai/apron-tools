@@ -1236,6 +1236,21 @@ class TestEditDraft:
         assert sent.get_content_type() == "text/plain"
         assert sent.get_content() == "New body\r\n"
 
+    async def test_a_long_line_of_a_new_body_is_wrapped(self, httpx_mock: HTTPXMock) -> None:
+        body = "A" * 3000
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body=body), token=_TOKEN)
+
+        assert result.success is True
+        raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        longest = max(len(line) for line in raw.split(b"\r\n"))
+        assert longest <= 998, "a line of an email must hold at most 998 octets"
+        assert _parse_raw(_put_message(httpx_mock)["raw"]).get_content() == f"{body}\r\n"
+
     async def test_a_non_ascii_new_body_is_written_as_ascii_bytes(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["alternative-with-attachment"]
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))

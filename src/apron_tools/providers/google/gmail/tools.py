@@ -56,6 +56,8 @@ _BODY_NOT_FOUND = "(No email body found)"
 
 _HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
 _HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
+# NOTE: RFC 5322 allows at most 998 octets in a line, without the line break that ends it.
+_MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
@@ -269,9 +271,10 @@ def _replace_body(message: EmailMessage, body: str) -> None:
         copy.deepcopy(part) if part is message else part for part in _attached_files(message, in_related=False)
     ]
     message.clear_content()
-    # NOTE: The draft keeps the policy that read it, which allows 8-bit content, so the new body names a 7-bit
-    # encoding of its own. A part that the edit does not write keeps the encoding that it arrived with.
-    message.set_content(body, cte="7bit" if body.isascii() else "quoted-printable")
+    # NOTE: The draft keeps the policy that read it, which allows 8-bit content and does not wrap a long line, so
+    # the new body names an encoding of its own. A part that the edit does not write keeps the encoding it came with.
+    plain_ascii = body.isascii() and all(len(line) <= _MAX_LINE_OCTETS for line in body.splitlines())
+    message.set_content(body, cte="7bit" if plain_ascii else "quoted-printable")
     if attachments:
         message.make_mixed()
         for attachment in attachments:
