@@ -784,7 +784,7 @@ class TestSendEmail:
         assert result.success is True
         send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
         raw = base64.urlsafe_b64decode(json.loads(send.content)["raw"])
-        assert raw.isascii(), "a message handed to the API must hold no 8-bit bytes"
+        assert raw.isascii(), "a message that the tool builds must hold no 8-bit bytes"
         assert _parse_raw(json.loads(send.content)["raw"]).get_content() == "Caf\u00e9 \u2014 one coffee\r\n"
 
     @pytest.mark.parametrize(
@@ -1263,7 +1263,7 @@ class TestEditDraft:
 
         assert result.success is True
         raw = _put_message(httpx_mock)["raw"]
-        assert base64.urlsafe_b64decode(raw).isascii(), "a message handed to the API must hold no 8-bit bytes"
+        assert base64.urlsafe_b64decode(raw).isascii(), "a body that the tool writes must hold no 8-bit bytes"
         sent = _parse_raw(raw)
         body = sent.get_body(("plain",))
         assert body is not None

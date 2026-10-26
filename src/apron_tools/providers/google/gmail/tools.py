@@ -273,6 +273,7 @@ def _replace_body(message: EmailMessage, body: str) -> None:
     message.clear_content()
     # NOTE: The draft keeps the policy that read it, which allows 8-bit content and does not wrap a long line, so
     # the new body names an encoding of its own. A part that the edit does not write keeps the encoding it came with.
+    # An 8-bit part of the draft therefore stays 8-bit, which keeps the content of the draft exactly as it was.
     plain_ascii = body.isascii() and all(len(line) <= _MAX_LINE_OCTETS for line in body.splitlines())
     message.set_content(body, cte="7bit" if plain_ascii else "quoted-printable")
     if attachments:
@@ -318,8 +319,8 @@ def _build_raw_message(
     Raises:
         ValueError: If a header value contains a line break, or a value cannot be written to an email.
     """
-    # NOTE: A 7-bit message holds no 8-bit bytes, which is what the API asks for. An edited draft keeps its own
-    # encoding instead, so that an edit does not rewrite a part that it did not change.
+    # NOTE: A 7-bit message holds no 8-bit bytes, which every mail server carries. An edited draft keeps the
+    # encoding of each part that the edit does not write, so an edit never rewrites content that it did not change.
     message = EmailMessage(policy=policy.SMTP.clone(cte_type="7bit"))
     message["To"] = to
     message["Subject"] = subject
