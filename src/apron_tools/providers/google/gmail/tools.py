@@ -165,13 +165,11 @@ def _walk_parts(payload: dict) -> Iterator[dict]:
 
 
 def _body_candidates(payload: dict) -> Iterator[dict]:
-    """Yield the parts of a Gmail payload that can hold the body text, the parts that name a file last.
+    """Yield the parts of a Gmail payload that can hold the body text, in document order.
 
-    NOTE: Some mail programs name the body part of a message, so a part that names a file is still a candidate.
+    NOTE: Some mail programs name the body part of a message, so a part that names a file is a candidate as well.
     """
-    parts = [part for part in _walk_parts(payload) if part.get("mimeType", "") in ("", "text/html", "text/plain")]
-    yield from (part for part in parts if not part.get("filename"))
-    yield from (part for part in parts if part.get("filename"))
+    return (part for part in _walk_parts(payload) if part.get("mimeType", "") in ("", "text/html", "text/plain"))
 
 
 def _extract_body(payload: dict) -> str | None:

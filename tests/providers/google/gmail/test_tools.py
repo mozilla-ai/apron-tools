@@ -365,18 +365,18 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == "Real body"
 
-    async def test_read_email_prefers_a_body_part_that_names_no_file(self, httpx_mock: HTTPXMock) -> None:
+    async def test_read_email_reads_the_first_body_part_in_document_order(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
         message["payload"] = {
             "mimeType": "multipart/mixed",
             "parts": [
                 {
                     "mimeType": "text/plain",
-                    "filename": "notes.txt",
-                    "headers": [{"name": "Content-Disposition", "value": 'inline; filename="notes.txt"'}],
-                    "body": {"data": _b64("Attached note")},
+                    "filename": "message.txt",
+                    "headers": [{"name": "Content-Disposition", "value": 'inline; filename="message.txt"'}],
+                    "body": {"data": _b64("The body")},
                 },
-                {"mimeType": "text/plain", "body": {"data": _b64("Real body")}},
+                {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
             ],
         }
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
@@ -384,7 +384,7 @@ class TestReadEmail:
         result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
 
         assert result.success is True
-        assert result.body == "Real body"
+        assert result.body == "The body"
 
     async def test_read_email_ignores_the_text_inside_an_attached_email(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
