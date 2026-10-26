@@ -388,8 +388,12 @@ class TestReadEmail:
 
     @pytest.mark.parametrize(
         "headers",
-        [[{"name": "Content-Disposition", "value": 'attachment; filename="forwarded.eml"'}], []],
-        ids=["declared-attachment", "no-disposition"],
+        [
+            [{"name": "Content-Disposition", "value": 'attachment; filename="forwarded.eml"'}],
+            [{"name": "Content-Disposition", "value": " Attachment "}],
+            [],
+        ],
+        ids=["declared-attachment", "declared-in-mixed-case", "no-disposition"],
     )
     async def test_read_email_ignores_the_text_inside_an_attached_email(
         self, httpx_mock: HTTPXMock, headers: list[dict[str, str]]
@@ -399,7 +403,7 @@ class TestReadEmail:
             "mimeType": "multipart/mixed",
             "parts": [
                 {
-                    "mimeType": "message/rfc822",
+                    "mimeType": "Message/RFC822",
                     "filename": "forwarded.eml",
                     "headers": headers,
                     "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Text of the attached email")}}],

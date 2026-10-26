@@ -155,14 +155,21 @@ def _declared_charset(part: dict) -> str:
     return part_headers.get_content_charset() or "utf-8"
 
 
+def _mime_type(part: dict) -> str:
+    """Return the media type that a Gmail payload part declares, in the lower case that a comparison needs."""
+    return part.get("mimeType", "").strip().lower()
+
+
 def _is_attached_content(part: dict) -> bool:
     """Report whether a Gmail payload part holds content of its own rather than a piece of the message body.
 
     A part that declares itself an attachment holds its own content, and so does a part that holds a whole message.
     """
-    if _extract_header(part.get("headers", []), "Content-Disposition").lower().startswith("attachment"):
+    part_headers = Message()
+    part_headers["Content-Disposition"] = _extract_header(part.get("headers", []), "Content-Disposition")
+    if part_headers.get_content_disposition() == "attachment":
         return True
-    return part.get("mimeType", "").startswith("message/")
+    return _mime_type(part).startswith("message/")
 
 
 def _walk_parts(payload: dict) -> Iterator[dict]:
@@ -179,7 +186,7 @@ def _body_candidates(payload: dict) -> Iterator[dict]:
 
     NOTE: Some mail programs name the body part of a message, so a part that names a file is a candidate as well.
     """
-    return (part for part in _walk_parts(payload) if part.get("mimeType", "") in ("", "text/html", "text/plain"))
+    return (part for part in _walk_parts(payload) if _mime_type(part) in ("", "text/html", "text/plain"))
 
 
 def _extract_body(payload: dict) -> str | None:
@@ -211,7 +218,7 @@ def _extract_body(payload: dict) -> str | None:
             decode_failed = True
             continue
 
-        if part.get("mimeType", "") == "text/html":
+        if _mime_type(part) == "text/html":
             if html_text is None:
                 html_text = text
         elif plain_text is None:
