@@ -188,8 +188,9 @@ def _parse_raw_message(raw: str) -> EmailMessage:
 
 def _replace_body(message: EmailMessage, body: str) -> None:
     """Replace the text and HTML of a message with a plain-text body, keeping its attachments."""
-    # The parts of a multipart/related message belong to the HTML that the new body replaces.
-    attachments = list(message.iter_attachments()) if message.get_content_type() == "multipart/mixed" else []
+    # An inline part, such as an image of the HTML, belongs to the body that the new body replaces.
+    is_mixed = message.get_content_type() == "multipart/mixed"
+    attachments = [part for part in message.iter_attachments() if is_mixed or part.is_attachment()]
     message.clear_content()
     message.set_content(body)
     if attachments:

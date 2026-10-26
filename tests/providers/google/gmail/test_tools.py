@@ -792,6 +792,30 @@ _DRAFTS = {
         "--rel--",
         "",
     ),
+    "related-with-attachment": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--rel--",
+        "",
+    ),
     "attached-email": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="mixed"',
@@ -920,6 +944,24 @@ class TestEditDraft:
             part.as_string() for part in original.iter_attachments()
         ]
         assert sent.get_all("MIME-Version") == ["1.0"]
+
+    async def test_new_body_keeps_an_attachment_of_a_related_draft(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["related-with-attachment"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(draft, policy=policy.default)
+        original_pdf = next(part for part in original.iter_attachments() if part.get_filename() == "a.pdf")
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
 
     async def test_edit_keeps_reply_draft_in_its_thread(self, httpx_mock: HTTPXMock) -> None:
         raw = _mime(*_DRAFT_HEADERS, "In-Reply-To: <orig@example.com>", "", "Body", "")
