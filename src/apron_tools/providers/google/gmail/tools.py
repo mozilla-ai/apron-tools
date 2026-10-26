@@ -146,10 +146,20 @@ def _walk_parts(payload: dict) -> Iterator[dict]:
         yield from _walk_parts(part)
 
 
-def _extract_body(payload: dict) -> str | None:
-    """Extract body text, preferring plain text over HTML in document order.
+def _body_candidates(payload: dict) -> Iterator[dict]:
+    """Yield the parts of a Gmail payload that can hold the body text, the parts that name a file last.
 
-    The first readable part of each type wins, including nested parts.
+    NOTE: Some mail programs name the body part of a message, so a part that names a file is still a candidate.
+    """
+    parts = [part for part in _walk_parts(payload) if _is_body_part(part)]
+    yield from (part for part in parts if not part.get("filename"))
+    yield from (part for part in parts if part.get("filename"))
+
+
+def _extract_body(payload: dict) -> str | None:
+    """Extract body text, preferring plain text over HTML.
+
+    The first readable candidate part of each type wins, including nested parts.
     An unreadable part does not hide readable children or siblings.
 
     Args:
@@ -165,9 +175,9 @@ def _extract_body(payload: dict) -> str | None:
     html_text: str | None = None
     decode_failed = False
 
-    for part in _walk_parts(payload):
+    for part in _body_candidates(payload):
         part_data = part.get("body", {}).get("data", "")
-        if not part_data or not _is_body_part(part):
+        if not part_data:
             continue
         try:
             text = _decode_body_data(part_data, _declared_charset(part))
