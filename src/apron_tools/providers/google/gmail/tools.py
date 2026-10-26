@@ -547,10 +547,10 @@ async def gmail_edit_draft(
                     error=f"Gmail API error {get_resp.status_code}: {get_resp.text}",
                 )
 
-            draft_message = get_resp.json().get("message", {})
             try:
+                draft_message = get_resp.json()["message"]
                 message = _parse_raw_message(draft_message["raw"])
-            except (KeyError, ValueError):
+            except (KeyError, TypeError, ValueError):
                 return EditDraftResult(success=False, error="The existing draft could not be read.")
 
             original_subject = message.get("Subject", "")

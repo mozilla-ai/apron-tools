@@ -1091,10 +1091,10 @@ class TestEditDraft:
 
     @pytest.mark.parametrize(
         "message",
-        [{"id": "msg-004"}, {"id": "msg-004", "raw": "!!!invalid!!!"}],
-        ids=["missing-raw", "invalid-raw"],
+        [{"id": "msg-004"}, {"id": "msg-004", "raw": "!!!invalid!!!"}, None],
+        ids=["missing-raw", "invalid-raw", "no-message"],
     )
-    async def test_unreadable_draft_is_not_overwritten(self, httpx_mock: HTTPXMock, message: dict) -> None:
+    async def test_unreadable_draft_is_not_overwritten(self, httpx_mock: HTTPXMock, message: dict | None) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json={"id": "draft-001", "message": message}
         )
@@ -1155,6 +1155,15 @@ class TestEditDraft:
 
         assert result.success is False
         assert "404" in result.error
+
+    async def test_a_draft_response_that_is_not_json_is_reported(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", text="<html>not json</html>")
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The existing draft could not be read."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_a_header_value_with_a_line_break_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
