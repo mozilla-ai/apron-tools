@@ -1050,6 +1050,18 @@ class TestEditDraft:
         ]
         assert sent.get_all("MIME-Version") == ["1.0"]
 
+    async def test_new_body_replaces_every_text_part(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["two-plain-text-parts"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent.get_content_type() == "text/plain"
+        assert sent.get_content() == "New body\r\n"
+
     async def test_new_body_keeps_an_attachment_of_a_related_draft(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["related-with-attachment"]
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))

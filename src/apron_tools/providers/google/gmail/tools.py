@@ -199,11 +199,18 @@ def _parse_raw_message(raw: str) -> EmailMessage:
     return email.message_from_bytes(_decode_base64url(raw), policy=policy.SMTP)
 
 
+def _is_attached_file(part: EmailMessage, *, in_related: bool) -> bool:
+    """Report whether a message part holds an attached file rather than a piece of the body of the message."""
+    if part.is_attachment():
+        return True
+    # An inline part of a multipart/related message belongs to its HTML. A text part that is not attached is body text.
+    return not in_related and part.get_content_type() not in ("text/html", "text/plain")
+
+
 def _replace_body(message: EmailMessage, body: str) -> None:
-    """Replace the text and HTML of a message with a plain-text body, keeping its attachments."""
-    # An inline part, such as an image of the HTML, belongs to the body that the new body replaces.
-    is_mixed = message.get_content_type() == "multipart/mixed"
-    attachments = [part for part in message.iter_attachments() if is_mixed or part.is_attachment()]
+    """Replace the text and HTML of a message with a plain-text body, keeping its attached files."""
+    in_related = message.get_content_type() == "multipart/related"
+    attachments = [part for part in message.iter_attachments() if _is_attached_file(part, in_related=in_related)]
     message.clear_content()
     message.set_content(body)
     if attachments:
