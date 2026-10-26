@@ -311,6 +311,19 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    async def test_read_email_joins_a_folded_header_value(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"]["headers"] = [
+            {"name": "Subject", "value": "A very long subject\r\n that was folded"},
+            {"name": "From", "value": "alice@example.com"},
+        ]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.subject == "A very long subject that was folded"
+
     async def test_read_email_ignores_a_text_attachment_that_precedes_the_body(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
         message["payload"] = {
@@ -1255,6 +1268,34 @@ class TestReplyToEmail:
 
         assert result.success is False
         assert "404" in result.error
+
+    async def test_reply_keeps_a_folded_references_header(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "alice@example.com"},
+            {"name": "Subject", "value": "Long thread"},
+            {"name": "Message-ID", "value": "<third@example.com>"},
+            {"name": "References", "value": "<first@example.com>\r\n <second@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent["References"].split() == [
+            "<first@example.com>",
+            "<second@example.com>",
+            "<third@example.com>",
+        ]
 
     async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(

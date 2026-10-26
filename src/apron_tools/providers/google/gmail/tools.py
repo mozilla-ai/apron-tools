@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import email
+import re
 from collections.abc import Iterator
 from email import policy
 from email.message import EmailMessage, Message
@@ -51,6 +52,7 @@ _TIMEOUT = 60.0
 _BODY_DECODE_FAILED = "(Could not decode email body)"
 _BODY_NOT_FOUND = "(No email body found)"
 
+_HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
 _HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
 
 
@@ -111,10 +113,13 @@ def _decode_body_data(data: str, charset: str) -> str:
 
 
 def _extract_header(headers: list[dict[str, str]], name: str) -> str:
-    """Extract a single header value from a Gmail payload headers list, matching the name in any case."""
+    """Extract a single header value from a Gmail payload headers list, matching the name in any case.
+
+    A value that is folded over several lines is joined into one line, which is how a reader of a header must take it.
+    """
     for h in headers:
         if h.get("name", "").lower() == name.lower():
-            return h.get("value", "")
+            return _HEADER_FOLD_PATTERN.sub(r"\1", h.get("value", ""))
     return ""
 
 
