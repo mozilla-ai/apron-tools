@@ -7,7 +7,6 @@ import email
 from collections.abc import Iterator
 from email import policy
 from email.message import EmailMessage
-from email.mime.text import MIMEText
 
 import httpx
 
@@ -179,17 +178,18 @@ def _build_raw_message(
     references: str | None = None,
 ) -> str:
     """Construct a base64url-encoded MIME message for the Gmail send API."""
-    message = MIMEText(body)
-    message["to"] = to
-    message["subject"] = subject
+    message = EmailMessage(policy=policy.SMTP)
+    message["To"] = to
+    message["Subject"] = subject
     if cc:
-        message["cc"] = cc
+        message["Cc"] = cc
     if bcc:
-        message["bcc"] = bcc
+        message["Bcc"] = bcc
     if in_reply_to:
         message["In-Reply-To"] = in_reply_to
     if references:
         message["References"] = references
+    message.set_content(body)
     return base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
 
 

@@ -537,6 +537,21 @@ class TestSendEmail:
         assert result.id == "msg-003"
         assert result.thread_id == "thread-002"
 
+    async def test_recipients_with_non_ascii_names_keep_their_addresses(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        await gmail_send_email(
+            SendEmailParams(to="José <jose@example.com>", cc="Zoë <zoe@example.com>", subject="Café", body="Hi"),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [(a.display_name, a.addr_spec) for a in sent["To"].addresses] == [("José", "jose@example.com")]
+        assert [(a.display_name, a.addr_spec) for a in sent["Cc"].addresses] == [("Zoë", "zoe@example.com")]
+        assert sent["Subject"] == "Café"
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
@@ -955,6 +970,21 @@ class TestReplyToEmail:
         )
 
         assert result.success is True
+
+    async def test_reply_to_a_sender_with_a_non_ascii_name_keeps_the_address(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"][0]["value"] = "José Núñez <jose@example.com>"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks"), token=_TOKEN)
+
+        send = httpx_mock.get_requests()[-1]
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [(a.display_name, a.addr_spec) for a in sent["To"].addresses] == [("José Núñez", "jose@example.com")]
 
     async def test_fetch_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
