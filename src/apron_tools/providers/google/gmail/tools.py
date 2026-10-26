@@ -7,7 +7,7 @@ import email
 import re
 from collections.abc import Iterator
 from email import policy
-from email.message import EmailMessage, Message
+from email.message import EmailMessage, Message, MIMEPart
 
 import httpx
 
@@ -216,18 +216,33 @@ def _parse_raw_message(raw: str) -> EmailMessage:
     return email.message_from_bytes(_decode_base64url(raw), policy=policy.SMTP)
 
 
-def _is_attached_file(part: EmailMessage, *, in_related: bool) -> bool:
-    """Report whether a message part holds an attached file rather than a piece of the body of the message."""
-    if part.is_attachment():
-        return True
-    # An inline part of a multipart/related message belongs to its HTML. A text part that is not attached is body text.
-    return not in_related and part.get_content_type() not in ("text/html", "text/plain")
+def _attached_files(message: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
+    """Yield the parts of a message that hold an attached file, from any depth of its MIME tree.
+
+    A part that is not itself multipart is yielded whole, so an attached email keeps its own parts.
+
+    Args:
+        message: The message or message part to read.
+        in_related: True when ``message`` is a multipart/related part or sits inside one, which makes each
+            inline part below it a piece of the HTML of that part rather than a file.
+
+    Yields:
+        Each part that holds an attached file.
+    """
+    for part in message.iter_parts():
+        if part.is_attachment():
+            yield part
+        elif part.get_content_maintype() == "multipart":
+            yield from _attached_files(part, in_related=in_related or part.get_content_type() == "multipart/related")
+        # A text part that declares no file holds body text, so only a part of another type is a file here.
+        elif not in_related and part.get_content_type() not in ("text/html", "text/plain"):
+            yield part
 
 
 def _replace_body(message: EmailMessage, body: str) -> None:
     """Replace the text and HTML of a message with a plain-text body, keeping its attached files."""
     in_related = message.get_content_type() == "multipart/related"
-    attachments = [part for part in message.iter_attachments() if _is_attached_file(part, in_related=in_related)]
+    attachments = list(_attached_files(message, in_related=in_related))
     message.clear_content()
     message.set_content(body)
     if attachments:
