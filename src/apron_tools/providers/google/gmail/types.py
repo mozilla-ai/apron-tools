@@ -65,12 +65,30 @@ class CreateDraftParams(BaseModel):
 class EditDraftParams(BaseModel):
     """Parameters for editing an existing Gmail draft."""
 
-    draft_id: str
-    to: str | None = None
-    subject: str | None = None
-    body: str | None = None
-    cc: str | None = None
-    bcc: str | None = None
+    draft_id: str = Field(description="The ID of the draft to edit.")
+    to: str | None = Field(
+        default=None, description="New To recipients. Omit to keep them. An empty string clears them."
+    )
+    subject: str | None = Field(
+        default=None,
+        description=(
+            "New subject. Omit to keep it. An empty string clears it."
+            " A new subject moves a reply draft out of its thread."
+        ),
+    )
+    body: str | None = Field(
+        default=None,
+        description=(
+            "New plain text body. Omit to keep the content."
+            " It replaces the text and the HTML, and keeps the attachments."
+        ),
+    )
+    cc: str | None = Field(
+        default=None, description="New Cc recipients. Omit to keep them. An empty string clears them."
+    )
+    bcc: str | None = Field(
+        default=None, description="New Bcc recipients. Omit to keep them. An empty string clears them."
+    )
 
 
 class ReplyToEmailParams(BaseModel):

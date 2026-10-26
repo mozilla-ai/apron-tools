@@ -524,7 +524,7 @@ async def gmail_edit_draft(
     token: str,
     base_url: str = _GMAIL_BASE_URL,
 ) -> EditDraftResult:
-    """Edit a Gmail draft and keep its other content. A new subject moves a reply draft out of its thread."""
+    """Edit the To, Subject, Cc, Bcc or body of a Gmail draft. Everything the call does not give stays as it is."""
     draft_url = f"{base_url}/drafts/{quote_path_segment(params.draft_id)}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:

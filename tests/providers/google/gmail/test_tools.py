@@ -906,6 +906,39 @@ class TestEditDraft:
         assert sent["Subject"] == "Draft Subject"
         assert sent["From"] == "Ana <alias@example.com>"
 
+    @pytest.mark.parametrize(
+        ("header", "to", "subject", "cc", "bcc"),
+        [
+            ("To", "", None, None, None),
+            ("Subject", None, "", None, None),
+            ("Cc", None, None, "", None),
+            ("Bcc", None, None, None, ""),
+        ],
+        ids=["to", "subject", "cc", "bcc"],
+    )
+    async def test_an_empty_value_clears_a_header(
+        self,
+        httpx_mock: HTTPXMock,
+        header: str,
+        to: str | None,
+        subject: str | None,
+        cc: str | None,
+        bcc: str | None,
+    ) -> None:
+        raw = _mime(*_DRAFT_HEADERS, "Cc: carol@example.com", "Bcc: dan@example.com", "", "Original body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to=to, subject=subject, cc=cc, bcc=bcc),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent[header] is None
+        assert sent.get_content() == "Original body\r\n"
+
     @pytest.mark.parametrize("draft", ["html-only", "inline-image"])
     async def test_new_body_replaces_the_text_and_html(self, httpx_mock: HTTPXMock, draft: str) -> None:
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
