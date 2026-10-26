@@ -276,8 +276,10 @@ class TestReadEmail:
             ("iso-2022-jp", "\u304a\u8336\u3092\u3069\u3046\u305e"),
             ("iso-8859-1", "Caf\u00e9 au lait"),
             ("windows-1252", "A \u201cquoted\u201d caf\u00e9"),
+            ("gbk", "\u4e00\u4e0c\u4e10"),
+            ("big5", "\u4e33\u4e83\u4e84"),
         ],
-        ids=["iso-2022-jp", "latin-1", "windows-1252"],
+        ids=["iso-2022-jp", "latin-1", "windows-1252", "gbk", "big5"],
     )
     async def test_read_email_decodes_a_part_with_its_declared_charset(
         self, httpx_mock: HTTPXMock, charset: str, body: str

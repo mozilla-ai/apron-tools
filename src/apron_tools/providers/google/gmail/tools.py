@@ -91,12 +91,24 @@ def _decode_base64url(data: str) -> bytes:
     return base64.b64decode(data + "=" * (-len(data) % 4), altchars=b"-_", validate=True)
 
 
+def _reads_any_byte(charset: str) -> bool:
+    """Report whether a character set reads a single byte above ASCII, which no multi-byte character set does.
+
+    A character set that reads any byte cannot report that its bytes hold text of another character set.
+    """
+    try:
+        b"\xe9".decode(charset)
+    except (LookupError, ValueError):
+        return False
+    return True
+
+
 def _decode_body_data(data: str, charset: str) -> str:
     """Decode base64url body data as text, as UTF-8 where the bytes hold UTF-8, and in the given character set if not.
 
     NOTE: A message can declare a character set that its own bytes do not fit, most often us-ascii or a single-byte
-    character set for UTF-8 bytes. A single-byte character set reads any byte, so it cannot report the mismatch.
-    Bytes outside ASCII that read as UTF-8 are taken as UTF-8, because they are almost never single-byte text.
+    character set for UTF-8 bytes. Where the declared character set cannot report such a mismatch, bytes outside
+    ASCII that read as UTF-8 are taken as UTF-8, because they are almost never single-byte text.
 
     Args:
         data: The base64url-encoded body data to decode.
@@ -109,7 +121,7 @@ def _decode_body_data(data: str, charset: str) -> str:
         ValueError: If the data is not valid base64url, or the bytes fit neither character set.
     """
     decoded = _decode_base64url(data)
-    if not decoded.isascii():
+    if not decoded.isascii() and _reads_any_byte(charset):
         try:
             return decoded.decode("utf-8")
         except ValueError:
