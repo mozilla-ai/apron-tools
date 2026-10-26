@@ -989,6 +989,22 @@ _DRAFTS = {
         "--mixed--",
         "",
     ),
+    "inline-text-file": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "Body text",
+        "--mixed",
+        'Content-Type: text/plain; name="notes.txt"',
+        'Content-Disposition: inline; filename="notes.txt"',
+        "",
+        "note content",
+        "--mixed--",
+        "",
+    ),
     "two-plain-text-parts": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="mixed"',
@@ -1145,6 +1161,20 @@ class TestEditDraft:
         sent = _parse_raw(_put_message(httpx_mock)["raw"])
         assert sent.get_content_type() == "text/plain"
         assert sent.get_content() == "New body\r\n"
+
+    async def test_new_body_keeps_a_text_file_that_a_draft_holds(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["inline-text-file"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == ["multipart/mixed", "text/plain", "text/plain"]
+        kept = sent.get_payload()[1]
+        assert kept.get_filename() == "notes.txt"
+        assert kept.get_content() == "note content"
 
     async def test_new_body_keeps_an_attachment_inside_a_nested_part(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["nested-attachment"]

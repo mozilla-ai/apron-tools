@@ -233,8 +233,8 @@ def _attached_files(message: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart
             yield part
         elif part.get_content_maintype() == "multipart":
             yield from _attached_files(part, in_related=in_related or part.get_content_type() == "multipart/related")
-        # A text part that declares no file holds body text, so only a part of another type is a file here.
-        elif not in_related and part.get_content_type() not in ("text/html", "text/plain"):
+        # A text part holds body text unless it names a file, so only those two kinds of part are files here.
+        elif not in_related and (part.get_filename() or part.get_content_type() not in ("text/html", "text/plain")):
             yield part
 
 
