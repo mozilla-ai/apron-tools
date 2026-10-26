@@ -125,6 +125,14 @@ def _declared_charset(part: dict) -> str:
     return part_headers.get_content_charset() or "utf-8"
 
 
+def _is_body_part(part: dict) -> bool:
+    """Report whether a Gmail payload part can hold the body text of the message."""
+    disposition = _extract_header(part.get("headers", []), "Content-Disposition")
+    if disposition.lower().startswith("attachment"):
+        return False
+    return part.get("mimeType", "") in ("", "text/html", "text/plain")
+
+
 def _walk_parts(payload: dict) -> Iterator[dict]:
     """Yield the payload and its MIME parts in document order."""
     yield payload
@@ -153,7 +161,7 @@ def _extract_body(payload: dict) -> str | None:
 
     for part in _walk_parts(payload):
         part_data = part.get("body", {}).get("data", "")
-        if not part_data:
+        if not part_data or not _is_body_part(part):
             continue
         try:
             text = _decode_body_data(part_data, _declared_charset(part))
@@ -161,11 +169,10 @@ def _extract_body(payload: dict) -> str | None:
             decode_failed = True
             continue
 
-        mime_type = part.get("mimeType", "")
-        if mime_type == "text/html":
+        if part.get("mimeType", "") == "text/html":
             if html_text is None:
                 html_text = text
-        elif mime_type in ("", "text/plain") and plain_text is None:
+        elif plain_text is None:
             plain_text = text
 
     if plain_text is not None:

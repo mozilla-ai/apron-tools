@@ -311,6 +311,55 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    async def test_read_email_ignores_a_text_attachment_that_precedes_the_body(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "filename": "notes.txt",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="notes.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("Real body")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "Real body"
+
+    async def test_read_email_keeps_a_body_part_that_declares_a_file_name(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "filename": "message.txt",
+            "headers": [{"name": "Content-Disposition", "value": 'inline; filename="message.txt"'}],
+            "body": {"data": _b64("Inline body")},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "Inline body"
+
+    async def test_read_email_reports_no_body_when_only_a_non_text_part_has_data(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [{"mimeType": "image/png", "body": {"data": _b64(b"\x89PNG\r\n\x1a\n")}}],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "(No email body found)"
+
     async def test_read_email_prefers_a_plain_part_in_another_charset_over_html(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
         message["payload"] = {
