@@ -80,7 +80,8 @@ class EditDraftParams(BaseModel):
         default=None,
         description=(
             "New plain text body. Omit to keep the content."
-            " It replaces the text and the HTML, and keeps the attachments."
+            " It replaces the text and the HTML of the draft, and keeps each attached file."
+            " An image embedded in the HTML goes with the HTML."
         ),
     )
     cc: str | None = Field(
