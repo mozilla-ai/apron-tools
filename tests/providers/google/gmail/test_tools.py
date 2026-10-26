@@ -295,7 +295,11 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
-    @pytest.mark.parametrize("charset", ["us-ascii", "x-unknown-charset"], ids=["us-ascii", "unknown-charset"])
+    @pytest.mark.parametrize(
+        "charset",
+        ["us-ascii", "x-unknown-charset", "iso-8859-1", "windows-1252"],
+        ids=["us-ascii", "unknown-charset", "latin-1", "windows-1252"],
+    )
     async def test_read_email_reads_utf8_bytes_that_a_part_mislabels(self, httpx_mock: HTTPXMock, charset: str) -> None:
         body = "Caf\u00e9 \u2014 one coffee"
         message = _load_json("get_message_full.json")
