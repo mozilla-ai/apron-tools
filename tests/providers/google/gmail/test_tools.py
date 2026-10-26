@@ -627,6 +627,28 @@ class TestSendEmail:
         assert result.success is False
         assert "400" in result.error
 
+    @pytest.mark.parametrize(
+        ("to", "subject", "cc", "bcc"),
+        [
+            ("one\ntwo: injected", "Hello", None, None),
+            ("bob@example.com", "one\ntwo: injected", None, None),
+            ("bob@example.com", "Hello", "one\ntwo: injected", None),
+            ("bob@example.com", "Hello", None, "one\ntwo: injected"),
+        ],
+        ids=["to", "subject", "cc", "bcc"],
+    )
+    async def test_a_header_value_with_a_line_break_is_refused(
+        self, httpx_mock: HTTPXMock, to: str, subject: str, cc: str | None, bcc: str | None
+    ) -> None:
+        result = await gmail_send_email(
+            SendEmailParams(to=to, subject=subject, body="Hi Bob", cc=cc, bcc=bcc),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must not contain a line break."
+        assert httpx_mock.get_requests() == []
+
     async def test_has_tool_definition(self) -> None:
         defn = gmail_send_email._tool_definition
         assert defn.name == "gmail_send_email"
@@ -671,6 +693,16 @@ class TestCreateDraft:
 
         assert result.success is False
         assert "500" in result.error
+
+    async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        result = await gmail_create_draft(
+            CreateDraftParams(to="bob@example.com", subject="one\ntwo: injected", body="Hi Bob"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must not contain a line break."
+        assert httpx_mock.get_requests() == []
 
     async def test_has_tool_definition(self) -> None:
         defn = gmail_create_draft._tool_definition
@@ -984,6 +1016,20 @@ class TestEditDraft:
         assert result.success is False
         assert "404" in result.error
 
+    async def test_a_header_value_with_a_line_break_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", subject="one\ntwo: injected"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must not contain a line break."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
     async def test_has_tool_definition(self) -> None:
         defn = gmail_edit_draft._tool_definition
         assert defn.name == "gmail_edit_draft"
@@ -1060,6 +1106,21 @@ class TestReplyToEmail:
 
         assert result.success is False
         assert "404" in result.error
+
+    async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=_load_json("get_message_for_reply.json"),
+        )
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!", cc="one\ntwo: injected"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must not contain a line break."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_has_tool_definition(self) -> None:
         defn = gmail_reply_to_email._tool_definition

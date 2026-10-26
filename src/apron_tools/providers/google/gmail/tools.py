@@ -51,6 +51,8 @@ _TIMEOUT = 60.0
 _BODY_DECODE_FAILED = "(Could not decode email body)"
 _BODY_NOT_FOUND = "(No email body found)"
 
+_HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
+
 
 def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
     """Build authorization headers for a Gmail API request."""
@@ -172,6 +174,19 @@ def _replace_body(message: EmailMessage, body: str) -> None:
         message.make_mixed()
         for attachment in attachments:
             message.attach(attachment)
+
+
+def _replace_headers(message: EmailMessage, params: EditDraftParams) -> None:
+    """Replace each header that ``params`` gives a value for, and remove a header whose value is empty.
+
+    Raises:
+        ValueError: If a value contains a line break.
+    """
+    for name, value in (("To", params.to), ("Subject", params.subject), ("Cc", params.cc), ("Bcc", params.bcc)):
+        if value is not None:
+            del message[name]
+            if value:
+                message[name] = value
 
 
 def _build_raw_message(
@@ -396,13 +411,16 @@ async def gmail_send_email(
     base_url: str = _GMAIL_BASE_URL,
 ) -> SendEmailResult:
     """Send an email via Gmail."""
-    raw = _build_raw_message(
-        params.to,
-        params.subject,
-        params.body,
-        cc=params.cc,
-        bcc=params.bcc,
-    )
+    try:
+        raw = _build_raw_message(
+            params.to,
+            params.subject,
+            params.body,
+            cc=params.cc,
+            bcc=params.bcc,
+        )
+    except ValueError:
+        return SendEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -441,13 +459,16 @@ async def gmail_create_draft(
     base_url: str = _GMAIL_BASE_URL,
 ) -> CreateDraftResult:
     """Create an email draft in Gmail."""
-    raw = _build_raw_message(
-        params.to,
-        params.subject,
-        params.body,
-        cc=params.cc,
-        bcc=params.bcc,
-    )
+    try:
+        raw = _build_raw_message(
+            params.to,
+            params.subject,
+            params.body,
+            cc=params.cc,
+            bcc=params.bcc,
+        )
+    except ValueError:
+        return CreateDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -503,11 +524,10 @@ async def gmail_edit_draft(
                 return EditDraftResult(success=False, error="The existing draft could not be read.")
 
             original_subject = message.get("Subject", "")
-            for name, value in (("To", params.to), ("Subject", params.subject), ("Cc", params.cc), ("Bcc", params.bcc)):
-                if value is not None:
-                    del message[name]
-                    if value:
-                        message[name] = value
+            try:
+                _replace_headers(message, params)
+            except ValueError:
+                return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
             if params.body is not None:
                 _replace_body(message, params.body)
 
@@ -583,15 +603,18 @@ async def gmail_reply_to_email(
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
 
-            raw = _build_raw_message(
-                orig_from,
-                reply_subject,
-                params.body,
-                cc=params.cc,
-                bcc=params.bcc,
-                in_reply_to=orig_message_id or None,
-                references=references or None,
-            )
+            try:
+                raw = _build_raw_message(
+                    orig_from,
+                    reply_subject,
+                    params.body,
+                    cc=params.cc,
+                    bcc=params.bcc,
+                    in_reply_to=orig_message_id or None,
+                    references=references or None,
+                )
+            except ValueError:
+                return ReplyToEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
             send_resp = await client.post(
                 f"{base_url}/messages/send",
