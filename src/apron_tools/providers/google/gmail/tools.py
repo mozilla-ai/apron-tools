@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import email
 import re
 from collections.abc import Iterator
@@ -225,33 +226,41 @@ def _parse_raw_message(raw: str) -> EmailMessage:
     return email.message_from_bytes(_decode_base64url(raw), policy=policy.SMTP)
 
 
-def _attached_files(message: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
+def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
     """Yield the parts of a message that hold an attached file, from any depth of its MIME tree.
 
     A part that is not itself multipart is yielded whole, so an attached email keeps its own parts.
 
     Args:
-        message: The message or message part to read.
-        in_related: True when ``message`` is a multipart/related part or sits inside one, which makes each
-            inline part below it a piece of the HTML of that part rather than a file.
+        part: The message or the message part to read.
+        in_related: True when a multipart/related part holds ``part`` directly, which makes an inline ``part`` a
+            piece of the HTML of that message rather than a file of its own.
 
     Yields:
         Each part that holds an attached file.
     """
-    for part in message.iter_parts():
-        if part.is_attachment():
-            yield part
-        elif part.get_content_maintype() == "multipart":
-            yield from _attached_files(part, in_related=in_related or part.get_content_type() == "multipart/related")
-        # A text part holds body text unless it names a file, so only those two kinds of part are files here.
-        elif not in_related and (part.get_filename() or part.get_content_type() not in ("text/html", "text/plain")):
-            yield part
+    if part.get_content_maintype() == "multipart":
+        holds_inline_parts = part.get_content_type() == "multipart/related"
+        for child in part.iter_parts():
+            yield from _attached_files(child, in_related=holds_inline_parts)
+        return
+    if part.is_attachment():
+        yield part
+        return
+    # The HTML of a multipart/related message names each inline part of it by content ID, so such a part is no file.
+    if in_related and part["Content-ID"]:
+        return
+    # A text part holds body text unless it names a file, so only those two kinds of part are files here.
+    if part.get_filename() or part.get_content_type() not in ("text/html", "text/plain"):
+        yield part
 
 
 def _replace_body(message: EmailMessage, body: str) -> None:
     """Replace the text and HTML of a message with a plain-text body, keeping its attached files."""
-    in_related = message.get_content_type() == "multipart/related"
-    attachments = list(_attached_files(message, in_related=in_related))
+    # A message that is itself one attached file is copied, because the clearing below would empty it.
+    attachments = [
+        copy.deepcopy(part) if part is message else part for part in _attached_files(message, in_related=False)
+    ]
     message.clear_content()
     # NOTE: The draft keeps the policy that read it, which allows 8-bit content, so the new body names a 7-bit
     # encoding of its own. A part that the edit does not write keeps the encoding that it arrived with.

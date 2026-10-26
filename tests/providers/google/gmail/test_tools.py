@@ -988,6 +988,42 @@ _DRAFTS = {
         "--rel--",
         "",
     ),
+    "related-holding-a-mixed-part": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: multipart/mixed; boundary="mix"',
+        "",
+        "--mix",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--mix",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--mix--",
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel--",
+        "",
+    ),
+    "attachment-only": _mime(
+        *_DRAFT_HEADERS,
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "",
+    ),
     "attached-email": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="mixed"',
@@ -1209,6 +1245,27 @@ class TestEditDraft:
         kept = sent.get_payload()[1]
         assert kept.get_filename() == "notes.txt"
         assert kept.get_content() == "note content"
+
+    @pytest.mark.parametrize("draft", ["related-holding-a-mixed-part", "attachment-only"], ids=["related", "bare"])
+    async def test_new_body_keeps_a_file_that_no_part_marks_as_an_attachment(
+        self, httpx_mock: HTTPXMock, draft: str
+    ) -> None:
+        raw = _DRAFTS[draft]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(raw, policy=policy.default)
+        original_pdf = next(part for part in original.walk() if part.get_filename() == "a.pdf")
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
 
     async def test_new_body_keeps_an_attachment_inside_a_nested_part(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["nested-attachment"]
