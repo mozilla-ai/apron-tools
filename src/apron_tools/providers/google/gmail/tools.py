@@ -611,7 +611,7 @@ async def gmail_reply_to_email(
                 headers=_headers(token),
                 params={
                     "format": "metadata",
-                    "metadataHeaders": ["From", "To", "Subject", "Message-ID", "References"],
+                    "metadataHeaders": ["From", "Reply-To", "To", "Subject", "Message-ID", "References"],
                 },
             )
 
@@ -626,6 +626,7 @@ async def gmail_reply_to_email(
             hdrs = orig_data.get("payload", {}).get("headers", [])
 
             orig_from = _extract_header(hdrs, "From")
+            orig_reply_to = _extract_header(hdrs, "Reply-To")
             orig_subject = _extract_header(hdrs, "Subject")
             orig_message_id = _extract_header(hdrs, "Message-ID")
             orig_references = _extract_header(hdrs, "References")
@@ -640,7 +641,7 @@ async def gmail_reply_to_email(
 
             try:
                 raw = _build_raw_message(
-                    orig_from,
+                    orig_reply_to or orig_from,
                     reply_subject,
                     params.body,
                     cc=params.cc,

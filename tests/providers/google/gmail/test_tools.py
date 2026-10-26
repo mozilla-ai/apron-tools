@@ -1208,7 +1208,7 @@ class TestEditDraft:
 class TestReplyToEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=_load_json("get_message_for_reply.json"),
         )
         httpx_mock.add_response(
@@ -1228,7 +1228,7 @@ class TestReplyToEmail:
 
     async def test_encodes_message_id_in_request_path(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=_load_json("get_message_for_reply.json"),
         )
         httpx_mock.add_response(
@@ -1247,7 +1247,7 @@ class TestReplyToEmail:
         original = _load_json("get_message_for_reply.json")
         original["payload"]["headers"][0]["value"] = "José Núñez <jose@example.com>"
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=original,
         )
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
@@ -1269,6 +1269,30 @@ class TestReplyToEmail:
         assert result.success is False
         assert "404" in result.error
 
+    async def test_reply_goes_to_the_reply_to_address(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "notifications@example.com"},
+            {"name": "Reply-To", "value": "thread@example.com"},
+            {"name": "Subject", "value": "Re: Ticket 7"},
+            {"name": "Message-ID", "value": "<ticket-7@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent.get_all("To") == ["thread@example.com"]
+
     async def test_reply_keeps_a_folded_references_header(self, httpx_mock: HTTPXMock) -> None:
         original = _load_json("get_message_for_reply.json")
         original["payload"]["headers"] = [
@@ -1278,7 +1302,7 @@ class TestReplyToEmail:
             {"name": "References", "value": "<first@example.com>\r\n <second@example.com>"},
         ]
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=original,
         )
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
@@ -1299,7 +1323,7 @@ class TestReplyToEmail:
 
     async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=_load_json("get_message_for_reply.json"),
         )
 
