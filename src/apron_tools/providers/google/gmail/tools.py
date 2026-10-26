@@ -54,6 +54,7 @@ _BODY_NOT_FOUND = "(No email body found)"
 
 _HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
 _HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
+_UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
 def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
@@ -234,7 +235,11 @@ def _build_raw_message(
     in_reply_to: str | None = None,
     references: str | None = None,
 ) -> str:
-    """Construct a base64url-encoded MIME message for the Gmail send API."""
+    """Construct a base64url-encoded MIME message for the Gmail send API.
+
+    Raises:
+        ValueError: If a header value contains a line break, or a value cannot be written to an email.
+    """
     message = EmailMessage(policy=policy.SMTP)
     message["To"] = to
     message["Subject"] = subject
@@ -454,6 +459,8 @@ async def gmail_send_email(
             cc=params.cc,
             bcc=params.bcc,
         )
+    except UnicodeEncodeError:
+        return SendEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
     except ValueError:
         return SendEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
@@ -502,6 +509,8 @@ async def gmail_create_draft(
             cc=params.cc,
             bcc=params.bcc,
         )
+    except UnicodeEncodeError:
+        return CreateDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
     except ValueError:
         return CreateDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
@@ -561,12 +570,15 @@ async def gmail_edit_draft(
             original_subject = message.get("Subject", "")
             try:
                 _replace_headers(message, params)
+                if params.body is not None:
+                    _replace_body(message, params.body)
+                edited_raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+            except UnicodeEncodeError:
+                return EditDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
             except ValueError:
                 return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
-            if params.body is not None:
-                _replace_body(message, params.body)
 
-            update: dict[str, str] = {"raw": base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")}
+            update: dict[str, str] = {"raw": edited_raw}
             thread_id = draft_message.get("threadId")
             is_reply = "In-Reply-To" in message or "References" in message
             # Gmail keeps a message in a thread only when it has reply headers and the same subject.
@@ -649,6 +661,8 @@ async def gmail_reply_to_email(
                     in_reply_to=orig_message_id or None,
                     references=references or None,
                 )
+            except UnicodeEncodeError:
+                return ReplyToEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
             except ValueError:
                 return ReplyToEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
