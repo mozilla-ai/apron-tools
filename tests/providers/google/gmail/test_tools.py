@@ -1162,6 +1162,24 @@ class TestEditDraft:
         assert sent.get_content_type() == "text/plain"
         assert sent.get_content() == "New body\r\n"
 
+    async def test_a_non_ascii_new_body_is_written_as_ascii_bytes(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["alternative-with-attachment"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", body="Caf\u00e9 \u2014 one coffee"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        raw = _put_message(httpx_mock)["raw"]
+        assert base64.urlsafe_b64decode(raw).isascii(), "a message handed to the API must hold no 8-bit bytes"
+        sent = _parse_raw(raw)
+        body = sent.get_body(("plain",))
+        assert body is not None
+        assert body.get_content() == "Caf\u00e9 \u2014 one coffee\r\n"
+
     async def test_new_body_keeps_a_text_file_that_a_draft_holds(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["inline-text-file"]
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))

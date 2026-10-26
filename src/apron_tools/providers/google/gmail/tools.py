@@ -243,7 +243,9 @@ def _replace_body(message: EmailMessage, body: str) -> None:
     in_related = message.get_content_type() == "multipart/related"
     attachments = list(_attached_files(message, in_related=in_related))
     message.clear_content()
-    message.set_content(body)
+    # NOTE: The draft keeps the policy that read it, which allows 8-bit content, so the new body names a 7-bit
+    # encoding of its own. A part that the edit does not write keeps the encoding that it arrived with.
+    message.set_content(body, cte="7bit" if body.isascii() else "quoted-printable")
     if attachments:
         message.make_mixed()
         for attachment in attachments:
