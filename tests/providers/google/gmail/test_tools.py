@@ -370,6 +370,26 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == "Real body"
 
+    async def test_read_email_ignores_the_text_inside_an_attached_email(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "message/rfc822",
+                    "filename": "forwarded.eml",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="forwarded.eml"'}],
+                    "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Text of the attached email")}}],
+                }
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "(No email body found)"
+
     async def test_read_email_keeps_a_body_part_that_declares_a_file_name(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
         message["payload"] = {

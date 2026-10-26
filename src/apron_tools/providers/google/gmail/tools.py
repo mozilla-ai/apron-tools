@@ -138,16 +138,15 @@ def _declared_charset(part: dict) -> str:
     return part_headers.get_content_charset() or "utf-8"
 
 
-def _is_body_part(part: dict) -> bool:
-    """Report whether a Gmail payload part can hold the body text of the message."""
-    disposition = _extract_header(part.get("headers", []), "Content-Disposition")
-    if disposition.lower().startswith("attachment"):
-        return False
-    return part.get("mimeType", "") in ("", "text/html", "text/plain")
+def _declares_attachment(part: dict) -> bool:
+    """Report whether a Gmail payload part declares itself an attachment."""
+    return _extract_header(part.get("headers", []), "Content-Disposition").lower().startswith("attachment")
 
 
 def _walk_parts(payload: dict) -> Iterator[dict]:
-    """Yield the payload and its MIME parts in document order."""
+    """Yield the payload and its MIME parts in document order, entering no part that declares itself an attachment."""
+    if _declares_attachment(payload):
+        return
     yield payload
     for part in payload.get("parts", []):
         yield from _walk_parts(part)
@@ -158,7 +157,7 @@ def _body_candidates(payload: dict) -> Iterator[dict]:
 
     NOTE: Some mail programs name the body part of a message, so a part that names a file is still a candidate.
     """
-    parts = [part for part in _walk_parts(payload) if _is_body_part(part)]
+    parts = [part for part in _walk_parts(payload) if part.get("mimeType", "") in ("", "text/html", "text/plain")]
     yield from (part for part in parts if not part.get("filename"))
     yield from (part for part in parts if part.get("filename"))
 
