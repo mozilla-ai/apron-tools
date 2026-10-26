@@ -317,6 +317,20 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    async def test_read_email_reads_a_header_that_carries_no_value(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"]["headers"] = [
+            {"name": "Subject", "value": None},
+            {"name": "From", "value": "alice@example.com"},
+        ]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.subject == ""
+        assert result.from_address == "alice@example.com"
+
     async def test_read_email_joins_a_folded_header_value(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
         message["payload"]["headers"] = [

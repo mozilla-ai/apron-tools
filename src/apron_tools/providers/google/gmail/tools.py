@@ -139,7 +139,7 @@ def _extract_header(headers: list[dict[str, str]], name: str) -> str:
     """
     for h in headers:
         if h.get("name", "").lower() == name.lower():
-            return _HEADER_FOLD_PATTERN.sub(r"\1", h.get("value", ""))
+            return _HEADER_FOLD_PATTERN.sub(r"\1", h.get("value") or "")
     return ""
 
 
