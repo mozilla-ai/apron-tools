@@ -151,14 +151,19 @@ def _declared_charset(part: dict) -> str:
     return part_headers.get_content_charset() or "utf-8"
 
 
-def _declares_attachment(part: dict) -> bool:
-    """Report whether a Gmail payload part declares itself an attachment."""
-    return _extract_header(part.get("headers", []), "Content-Disposition").lower().startswith("attachment")
+def _is_attached_content(part: dict) -> bool:
+    """Report whether a Gmail payload part holds content of its own rather than a piece of the message body.
+
+    A part that declares itself an attachment holds its own content, and so does a part that holds a whole message.
+    """
+    if _extract_header(part.get("headers", []), "Content-Disposition").lower().startswith("attachment"):
+        return True
+    return part.get("mimeType", "").startswith("message/")
 
 
 def _walk_parts(payload: dict) -> Iterator[dict]:
-    """Yield the payload and its MIME parts in document order, entering no part that declares itself an attachment."""
-    if _declares_attachment(payload):
+    """Yield the payload and its MIME parts in document order, entering no part that holds content of its own."""
+    if _is_attached_content(payload):
         return
     yield payload
     for part in payload.get("parts", []):
