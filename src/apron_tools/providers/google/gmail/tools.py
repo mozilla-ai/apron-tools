@@ -6,7 +6,7 @@ import base64
 import email
 from collections.abc import Iterator
 from email import policy
-from email.message import EmailMessage
+from email.message import EmailMessage, Message
 
 import httpx
 
@@ -94,6 +94,13 @@ def _extract_header(headers: list[dict[str, str]], name: str) -> str:
     return ""
 
 
+def _declared_charset(part: dict) -> str:
+    """Return the character set that a Gmail payload part declares for its body, or UTF-8 if it declares none."""
+    part_headers = Message()
+    part_headers["Content-Type"] = _extract_header(part.get("headers", []), "Content-Type")
+    return part_headers.get_content_charset() or "utf-8"
+
+
 def _walk_parts(payload: dict) -> Iterator[dict]:
     """Yield the payload and its MIME parts in document order."""
     yield payload
@@ -125,8 +132,8 @@ def _extract_body(payload: dict) -> str | None:
         if not part_data:
             continue
         try:
-            text = _decode_base64url(part_data).decode("utf-8")
-        except ValueError:
+            text = _decode_base64url(part_data).decode(_declared_charset(part))
+        except (LookupError, ValueError):
             decode_failed = True
             continue
 

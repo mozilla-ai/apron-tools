@@ -270,6 +270,70 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    @pytest.mark.parametrize(
+        ("charset", "body"),
+        [
+            ("iso-2022-jp", "\u304a\u8336\u3092\u3069\u3046\u305e"),
+            ("iso-8859-1", "Caf\u00e9 au lait"),
+            ("windows-1252", "A \u201cquoted\u201d caf\u00e9"),
+        ],
+        ids=["iso-2022-jp", "latin-1", "windows-1252"],
+    )
+    async def test_read_email_decodes_a_part_with_its_declared_charset(
+        self, httpx_mock: HTTPXMock, charset: str, body: str
+    ) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": f'text/plain; charset="{charset}"'}],
+            "body": {"data": _b64(body.encode(charset))},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == body
+
+    async def test_read_email_prefers_a_plain_part_in_another_charset_over_html(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/alternative",
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Type", "value": "text/plain; charset=iso-8859-1"}],
+                    "body": {"data": _b64("Caf\u00e9".encode("iso-8859-1"))},
+                },
+                {"mimeType": "text/html", "body": {"data": _b64("<p>Cafe</p>")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "Caf\u00e9"
+
+    @pytest.mark.parametrize(
+        "content_type",
+        ["text/plain; charset=x-unknown-charset", "text/plain; charset=utf-8"],
+        ids=["unknown-charset", "bytes-do-not-match-charset"],
+    )
+    async def test_read_email_reports_a_part_it_cannot_decode(self, httpx_mock: HTTPXMock, content_type: str) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": content_type}],
+            "body": {"data": _b64(b"caf\xe9")},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "(Could not decode email body)"
+
     async def test_success_with_unpadded_html_body(self, httpx_mock: HTTPXMock) -> None:
         # Unlike the other unpadded regression tests above, this payload requires
         # two padding characters ('==') rather than just one.
