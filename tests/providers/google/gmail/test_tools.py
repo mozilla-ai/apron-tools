@@ -766,6 +766,20 @@ class TestSendEmail:
         assert [(a.display_name, a.addr_spec) for a in sent["Cc"].addresses] == [("Zoë", "zoe@example.com")]
         assert sent["Subject"] == "Café"
 
+    async def test_an_ascii_recipient_list_that_cannot_be_read_is_sent(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(to="bob@example.com,", subject="Hello", body="Hi Bob"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["bob@example.com"]
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
@@ -793,8 +807,13 @@ class TestSendEmail:
 
     @pytest.mark.parametrize(
         "to",
-        ["jos\u00e9@example.com", "a@ex\u00e4mple.com", "Ana <ana@ex\u00e4mple.com>"],
-        ids=["local-part", "domain", "domain-with-a-name"],
+        [
+            "jos\u00e9@example.com",
+            "a@ex\u00e4mple.com",
+            "Ana <ana@ex\u00e4mple.com>",
+            "a@example.com;jos\u00e9@example.com",
+        ],
+        ids=["local-part", "domain", "domain-with-a-name", "inside-a-list-that-cannot-be-read"],
     )
     async def test_an_address_outside_ascii_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
         result = await gmail_send_email(

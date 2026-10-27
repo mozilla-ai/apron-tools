@@ -346,7 +346,15 @@ def _addresses_are_ascii(*values: str | None) -> bool:
     NOTE: An email carries an address outside ASCII only where both servers support it, and the Gmail API takes no
     such address. The display name of an address is free to hold any character.
     """
-    return all(address.isascii() for value in values if value for _, address in getaddresses([value]))
+    for value in values:
+        if not value:
+            continue
+        # NOTE: getaddresses() reads no address at all from a value it cannot parse. Such a value is measured whole,
+        # because the part of it that is a display name is unknown.
+        addresses = [address for _, address in getaddresses([value]) if address]
+        if not all(part.isascii() for part in addresses or [value]):
+            return False
+    return True
 
 
 def _values_are_one_line(*values: str | None) -> bool:
