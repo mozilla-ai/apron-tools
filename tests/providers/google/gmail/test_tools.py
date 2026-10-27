@@ -1318,6 +1318,23 @@ _DRAFTS = {
         "--mixed--",
         "",
     ),
+    "named-text-and-html": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/alternative; boundary="alt"',
+        "",
+        "--alt",
+        'Content-Type: text/plain; name="body.txt"',
+        'Content-Disposition: inline; filename="body.txt"',
+        "",
+        "Original plain",
+        "--alt",
+        'Content-Type: text/html; name="body.html"',
+        'Content-Disposition: inline; filename="body.html"',
+        "",
+        "<p>Original HTML</p>",
+        "--alt--",
+        "",
+    ),
     "named-body-with-attached-email": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="mixed"',
@@ -2049,6 +2066,19 @@ class TestEditDraft:
         ]
         assert "Original body" not in sent.as_string()
         assert sent.get_body(("plain",)).get_content() == "New body\r\n"
+
+    async def test_new_body_replaces_every_named_part_that_holds_a_body(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["named-text-and-html"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == ["text/plain"]
+        assert "Original HTML" not in sent.as_string()
+        assert sent.get_content().strip() == "New body"
 
     async def test_new_body_replaces_a_named_body_beside_an_attached_email(self, httpx_mock: HTTPXMock) -> None:
         raw = _DRAFTS["named-body-with-attached-email"]
