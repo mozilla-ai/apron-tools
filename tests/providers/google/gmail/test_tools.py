@@ -1164,6 +1164,31 @@ _DRAFTS = {
         "--alt--",
         "",
     ),
+    "related-with-an-inline-file": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel",
+        "Content-Type: application/pdf; name=report.pdf",
+        "Content-ID: <doc1>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--rel--",
+        "",
+    ),
     "related-with-attachment": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/related; boundary="rel"',
@@ -1896,6 +1921,23 @@ class TestEditDraft:
             "application/pdf",
         ]
         assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
+
+    async def test_new_body_keeps_an_inline_file_that_no_html_can_hold(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["related-with-an-inline-file"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        kept = sent.get_payload()[1]
+        assert kept.get_payload(decode=True) == b"%PDF-1.4\n"
 
     async def test_new_body_keeps_an_attachment_of_a_related_draft(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["related-with-attachment"]
