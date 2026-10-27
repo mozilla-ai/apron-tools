@@ -409,7 +409,7 @@ class TestReadEmail:
         ],
         ids=["declared-attachment", "declared-in-mixed-case", "no-disposition"],
     )
-    async def test_read_email_ignores_the_text_inside_an_attached_email(
+    async def test_read_email_prefers_its_own_text_over_the_text_of_an_attached_email(
         self, httpx_mock: HTTPXMock, headers: list[dict[str, str]]
     ) -> None:
         message = _load_json("get_message_full.json")
@@ -421,7 +421,8 @@ class TestReadEmail:
                     "filename": "forwarded.eml",
                     "headers": headers,
                     "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Text of the attached email")}}],
-                }
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("Real body")}},
             ],
         }
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
@@ -429,7 +430,7 @@ class TestReadEmail:
         result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
 
         assert result.success is True
-        assert result.body == "(No email body found)"
+        assert result.body == "Real body"
 
     async def test_read_email_keeps_a_body_part_that_declares_a_file_name(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
@@ -691,6 +692,31 @@ def _parse_raw(raw: str) -> EmailMessage:
 
 
 class TestExtractBody:
+    def test_attached_text_is_the_body_when_a_message_holds_no_other_text(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="note.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+            ],
+        }
+        assert _extract_body(payload) == "Attached note"
+
+    def test_the_text_of_a_forwarded_message_is_the_body_when_nothing_else_holds_text(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "message/rfc822",
+                    "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Forwarded text")}}],
+                },
+            ],
+        }
+        assert _extract_body(payload) == "Forwarded text"
+
     def test_nested_body_precedes_later_footer(self) -> None:
         payload = {
             "mimeType": "multipart/mixed",

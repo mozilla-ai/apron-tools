@@ -6,7 +6,7 @@ import base64
 import copy
 import email
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from email import policy
 from email.message import EmailMessage, Message, MIMEPart
 from email.utils import getaddresses
@@ -179,37 +179,49 @@ def _is_attached_content(part: dict) -> bool:
     return _mime_type(part).startswith("message/")
 
 
-def _walk_parts(payload: dict) -> Iterator[dict]:
-    """Yield a payload and the MIME parts below it in document order, entering no part that holds content of its own.
+def _walk_parts(payload: dict, *, with_attached_content: bool) -> Iterator[dict]:
+    """Yield a payload and the MIME parts below it in document order.
 
-    NOTE: The payload given is always yielded. A message whose whole content is one attached file still holds that
-    file as its body.
+    Args:
+        payload: The Gmail payload or payload part to read.
+        with_attached_content: True to enter a part that holds content of its own, such as an attachment or an
+            embedded message.
+
+    Yields:
+        The payload given and each part below it.
     """
     yield payload
     for part in payload.get("parts", []):
-        if not _is_attached_content(part):
-            yield from _walk_parts(part)
+        if with_attached_content or not _is_attached_content(part):
+            yield from _walk_parts(part, with_attached_content=with_attached_content)
 
 
-def _body_candidates(payload: dict) -> Iterator[dict]:
+def _body_candidates(payload: dict, *, with_attached_content: bool) -> Iterator[dict]:
     """Yield the parts of a Gmail payload that can hold the body text, in document order.
 
     NOTE: Some mail programs name the body part of a message, so a part that names a file is a candidate as well.
-    """
-    return (part for part in _walk_parts(payload) if _mime_type(part) in ("", *_BODY_MEDIA_TYPES))
-
-
-def _extract_body(payload: dict) -> str | None:
-    """Extract body text, preferring plain text over HTML.
-
-    The first readable candidate part of each type wins, including nested parts.
-    An unreadable part does not hide readable children or siblings.
 
     Args:
-        payload: The Gmail message payload to read.
+        payload: The Gmail payload to read.
+        with_attached_content: True to read the text inside an attachment or an embedded message as well.
+
+    Yields:
+        Each part that can hold the body text.
+    """
+    parts = _walk_parts(payload, with_attached_content=with_attached_content)
+    return (part for part in parts if _mime_type(part) in ("", *_BODY_MEDIA_TYPES))
+
+
+def _read_body_text(parts: Iterable[dict]) -> str | None:
+    """Read the body text out of the given candidate parts, preferring plain text over HTML.
+
+    The first readable part of each type wins. An unreadable part does not hide readable children or siblings.
+
+    Args:
+        parts: The candidate parts to read, in document order.
 
     Returns:
-        The decoded body text, or None if there is no body data.
+        The decoded body text, or None if no part holds body data.
 
     Raises:
         ValueError: If body data is present but no part can be decoded.
@@ -218,7 +230,7 @@ def _extract_body(payload: dict) -> str | None:
     html_text: str | None = None
     decode_failed = False
 
-    for part in _body_candidates(payload):
+    for part in parts:
         part_data = part.get("body", {}).get("data", "")
         if not part_data:
             continue
@@ -241,6 +253,27 @@ def _extract_body(payload: dict) -> str | None:
     if decode_failed:
         raise ValueError("Could not decode email body")
     return None
+
+
+def _extract_body(payload: dict) -> str | None:
+    """Extract the body text of a Gmail message payload, preferring plain text over HTML.
+
+    NOTE: Where a message holds no text of its own, the text inside an attachment or an embedded message is read
+    instead, because it is the only text that the message holds.
+
+    Args:
+        payload: The Gmail message payload to read.
+
+    Returns:
+        The decoded body text, or None if there is no body data.
+
+    Raises:
+        ValueError: If body data is present but no part can be decoded.
+    """
+    own_text = _read_body_text(_body_candidates(payload, with_attached_content=False))
+    if own_text is not None:
+        return own_text
+    return _read_body_text(_body_candidates(payload, with_attached_content=True))
 
 
 def _parse_raw_message(raw: str) -> EmailMessage:
