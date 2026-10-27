@@ -179,12 +179,15 @@ def _is_attached_content(part: dict) -> bool:
 
 
 def _walk_parts(payload: dict) -> Iterator[dict]:
-    """Yield the payload and its MIME parts in document order, entering no part that holds content of its own."""
-    if _is_attached_content(payload):
-        return
+    """Yield a payload and the MIME parts below it in document order, entering no part that holds content of its own.
+
+    NOTE: The payload given is always yielded. A message whose whole content is one attached file still holds that
+    file as its body.
+    """
     yield payload
     for part in payload.get("parts", []):
-        yield from _walk_parts(part)
+        if not _is_attached_content(part):
+            yield from _walk_parts(part)
 
 
 def _body_candidates(payload: dict) -> Iterator[dict]:

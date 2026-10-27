@@ -344,6 +344,20 @@ class TestReadEmail:
         assert result.success is True
         assert result.subject == "A very long subject that was folded"
 
+    async def test_read_email_reads_a_body_that_the_message_marks_as_an_attachment(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="message.txt"'}],
+            "body": {"data": _b64("The only text")},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "The only text"
+
     async def test_read_email_ignores_a_text_attachment_that_precedes_the_body(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_full.json")
         message["payload"] = {
