@@ -1071,6 +1071,24 @@ _DRAFTS = {
         f"--{_LONG_BOUNDARY}--",
         "",
     ),
+    "named-body-only": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        'Content-Type: text/plain; name="message.txt"',
+        'Content-Disposition: inline; filename="message.txt"',
+        "",
+        "Original body",
+        "--mixed",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--mixed--",
+        "",
+    ),
     "attached-multipart": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="outer"',
@@ -1395,6 +1413,23 @@ class TestEditDraft:
             "application/pdf",
         ]
         assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
+
+    async def test_new_body_replaces_a_named_part_that_holds_the_only_body(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["named-body-only"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert "Original body" not in sent.as_string()
+        assert sent.get_body(("plain",)).get_content() == "New body\r\n"
 
     async def test_new_body_keeps_an_attached_group_of_parts_whole(self, httpx_mock: HTTPXMock) -> None:
         raw = _DRAFTS["attached-multipart"]

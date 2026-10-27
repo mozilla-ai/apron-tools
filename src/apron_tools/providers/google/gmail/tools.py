@@ -52,6 +52,7 @@ _TIMEOUT = 60.0
 
 # NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
 _BODY_DECODE_FAILED = "(Could not decode email body)"
+_BODY_MEDIA_TYPES = ("text/html", "text/plain")
 _BODY_NOT_FOUND = "(No email body found)"
 # A source header is written back as it was read, so a long MIME boundary keeps the plain form that RFC 2046 needs.
 _DRAFT_POLICY = policy.SMTP.clone(refold_source="none")
@@ -274,8 +275,16 @@ def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
     if in_related and part["Content-ID"]:
         return
     # A text part holds body text unless it names a file, so only those two kinds of part are files here.
-    if part.get_filename() or part.get_content_type() not in ("text/html", "text/plain"):
+    if part.get_filename() or part.get_content_type() not in _BODY_MEDIA_TYPES:
         yield part
+
+
+def _holds_body_text(message: MIMEPart) -> bool:
+    """Report whether a message holds a text part that no file name marks as a file of its own."""
+    return any(
+        part.get_content_type() in _BODY_MEDIA_TYPES and not part.is_attachment() and not part.get_filename()
+        for part in message.walk()
+    )
 
 
 def _content_only(message: EmailMessage) -> MIMEPart:
@@ -297,6 +306,15 @@ def _replace_body(message: EmailMessage, body: str) -> None:
     attachments = [
         _content_only(part) if part is message else part for part in _attached_files(message, in_related=False)
     ]
+    # NOTE: Some mail programs name the body part of a message. Such a part holds the body where the draft holds no
+    # other text, so the new body takes its place instead of standing beside it.
+    if not _holds_body_text(message):
+        named_body = next(
+            (part for part in attachments if not part.is_attachment() and part.get_content_type() in _BODY_MEDIA_TYPES),
+            None,
+        )
+        if named_body is not None:
+            attachments.remove(named_body)
     message.clear_content()
     # NOTE: The draft keeps the policy that read it, which allows 8-bit content and does not wrap a long line, so
     # the new body names an encoding of its own. A part that the edit does not write keeps the encoding it came with.
