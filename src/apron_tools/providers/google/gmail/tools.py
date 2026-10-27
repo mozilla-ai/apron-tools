@@ -10,7 +10,9 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from email import policy
 from email.errors import InvalidHeaderDefect
+from email.headerregistry import BaseHeader, HeaderRegistry, UniqueUnstructuredHeader
 from email.message import EmailMessage, Message, MIMEPart
+from email.policy import Policy
 
 import httpx
 
@@ -581,6 +583,29 @@ def _values_are_one_line(*values: str | None) -> bool:
     return all(value.splitlines() == [value] for value in values if value)
 
 
+class _MessageIdListHeader(UniqueUnstructuredHeader, BaseHeader):
+    """A header that holds the message IDs of a thread, such as References, and never writes one as an encoded word.
+
+    RFC 5322 gives no meaning to an encoded word inside a message ID, so a reader matches no ID that carries one and
+    the thread breaks apart. A line is folded between one ID and the next, and an ID longer than a line stands whole
+    on a line of its own.
+    """
+
+    def fold(self, *, policy: Policy) -> str:
+        limit = policy.max_line_length or _MAX_LINE_OCTETS
+        lines = [f"{self.name}:"]
+        for message_id in str(self).split():
+            if len(lines[-1]) + len(message_id) + 1 > limit:
+                lines.append("")
+            lines[-1] += f" {message_id}"
+        return policy.linesep.join(lines) + policy.linesep
+
+
+_MESSAGE_ID_HEADERS = HeaderRegistry()
+_MESSAGE_ID_HEADERS.map_to_type("in-reply-to", _MessageIdListHeader)
+_MESSAGE_ID_HEADERS.map_to_type("references", _MessageIdListHeader)
+
+
 def _build_raw_message(
     to: str,
     subject: str,
@@ -598,7 +623,7 @@ def _build_raw_message(
     """
     # NOTE: A 7-bit message holds no 8-bit bytes, which every mail server carries. An edited draft keeps the
     # encoding of each part that the edit does not write, so an edit never rewrites content that it did not change.
-    message = EmailMessage(policy=policy.SMTP.clone(cte_type="7bit"))
+    message = EmailMessage(policy=policy.SMTP.clone(cte_type="7bit", header_factory=_MESSAGE_ID_HEADERS))
     message["To"] = _quoted_recipients(to)
     message["Subject"] = subject
     if cc:

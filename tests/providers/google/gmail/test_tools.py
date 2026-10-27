@@ -2310,6 +2310,10 @@ class TestEditDraft:
 # ---------------------------------------------------------------------------
 
 
+# NOTE: A header line holds 78 characters, so a message ID of this length is the case that a writer encodes.
+_LONG_MESSAGE_ID = "<" + "a" * 80 + "@mail.example.com>"
+
+
 class TestReplyToEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
@@ -2425,6 +2429,55 @@ class TestReplyToEmail:
             "<second@example.com>",
             "<third@example.com>",
         ]
+
+    async def test_reply_writes_a_long_message_id_without_an_encoded_word(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "alice@example.com"},
+            {"name": "Subject", "value": "Long thread"},
+            {"name": "Message-ID", "value": _LONG_MESSAGE_ID},
+            {"name": "References", "value": "<first@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        raw = base64.urlsafe_b64decode(json.loads(send.content)["raw"])
+        assert raw.count(_LONG_MESSAGE_ID.encode()) == 2
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent["In-Reply-To"] == _LONG_MESSAGE_ID
+        assert sent["References"].split() == ["<first@example.com>", _LONG_MESSAGE_ID]
+
+    async def test_reply_keeps_every_message_id_of_a_long_thread(self, httpx_mock: HTTPXMock) -> None:
+        chain = [f"<message-{index}-{'x' * 50}@mail.example.com>" for index in range(5)]
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "alice@example.com"},
+            {"name": "Subject", "value": "Long thread"},
+            {"name": "Message-ID", "value": _LONG_MESSAGE_ID},
+            {"name": "References", "value": " ".join(chain)},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        raw = base64.urlsafe_b64decode(json.loads(send.content)["raw"])
+        assert all(message_id.encode() in raw for message_id in chain)
+        assert all(len(line) <= 998 for line in raw.split(b"\r\n"))
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent["References"].split() == [*chain, _LONG_MESSAGE_ID]
 
     async def test_reply_reads_a_sender_whose_name_sits_in_a_comment(self, httpx_mock: HTTPXMock) -> None:
         original = _load_json("get_message_for_reply.json")
