@@ -1318,6 +1318,15 @@ _DRAFTS = {
         "--enc--",
         "",
     ),
+    "smime-encrypted": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
+        'Content-Disposition: attachment; filename="smime.p7m"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        "Y2lwaGVydGV4dAo=",
+        "",
+    ),
     "attached-signed-email": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="mixed"',
@@ -1684,7 +1693,7 @@ class TestEditDraft:
         assert sent.get_payload()[0].get_content().strip() == ""
         assert [part.get_filename() for part in sent.iter_attachments()] == ["a.pdf"]
 
-    @pytest.mark.parametrize("draft", ["signed", "encrypted"])
+    @pytest.mark.parametrize("draft", ["signed", "encrypted", "smime-encrypted"])
     async def test_a_new_body_for_protected_content_is_refused(self, httpx_mock: HTTPXMock, draft: str) -> None:
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
 

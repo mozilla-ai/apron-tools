@@ -68,7 +68,16 @@ _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters.
 _NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
 _NO_SENDER_ADDRESS_ERROR = "The original message holds no sender address to reply to."
 _SIGNED_CONTENT_ERROR = "A draft that holds signed or encrypted content cannot take a new body."
-_SIGNED_MEDIA_TYPES = ("multipart/encrypted", "multipart/signed")
+_PROTECTED_MEDIA_TYPES = (
+    "application/pgp-encrypted",
+    "application/pgp-signature",
+    "application/pkcs7-mime",
+    "application/pkcs7-signature",
+    "application/x-pkcs7-mime",
+    "application/x-pkcs7-signature",
+    "multipart/encrypted",
+    "multipart/signed",
+)
 _UNWRITABLE_DRAFT_ERROR = "The existing draft holds a character that cannot be written to an email."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
@@ -361,9 +370,16 @@ def _holds_protected_content(message: MIMEPart) -> bool:
 
     A signature covers the parts beside it, and a ciphertext holds the content of the parts it replaces. Such a part
     keeps its meaning only inside the part that holds it.
+
+    NOTE: A part inside an attached file is left out, because such a file is kept whole. The message itself is no
+    such file, even where it declares itself an attachment, because a new body takes the place it holds.
     """
-    in_a_file = {id(part) for file in _attached_files(message, in_related=False) for part in file.walk()}
-    return any(part.get_content_type() in _SIGNED_MEDIA_TYPES and id(part) not in in_a_file for part in message.walk())
+    in_a_file = {
+        id(part) for file in _attached_files(message, in_related=False) if file is not message for part in file.walk()
+    }
+    return any(
+        part.get_content_type() in _PROTECTED_MEDIA_TYPES and id(part) not in in_a_file for part in message.walk()
+    )
 
 
 def _content_only(message: EmailMessage) -> MIMEPart:
