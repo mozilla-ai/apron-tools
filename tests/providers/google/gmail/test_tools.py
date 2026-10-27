@@ -1261,8 +1261,12 @@ class TestEditDraft:
         assert sent.get_content_type() == "text/plain"
         assert sent.get_content() == "New body\r\n"
 
-    async def test_a_long_line_of_a_new_body_is_wrapped(self, httpx_mock: HTTPXMock) -> None:
-        body = "A" * 3000
+    @pytest.mark.parametrize(
+        "body",
+        ["A" * 3000, "A" * 600 + "\f" + "B" * 600],
+        ids=["plain-run", "run-split-by-a-page-break"],
+    )
+    async def test_a_long_line_of_a_new_body_is_wrapped(self, httpx_mock: HTTPXMock, body: str) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
         )

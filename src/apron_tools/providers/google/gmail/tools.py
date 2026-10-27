@@ -58,6 +58,8 @@ _DRAFT_POLICY = policy.SMTP.clone(refold_source="none")
 
 _HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
 _HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
+# NOTE: str.splitlines() also splits on a page break and other control characters, which end no line of an email.
+_LINE_BREAK_PATTERN = re.compile(r"\r\n|[\r\n]")
 # NOTE: RFC 5322 allows at most 998 octets in a line, without the line break that ends it.
 _MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
@@ -299,7 +301,8 @@ def _replace_body(message: EmailMessage, body: str) -> None:
     # NOTE: The draft keeps the policy that read it, which allows 8-bit content and does not wrap a long line, so
     # the new body names an encoding of its own. A part that the edit does not write keeps the encoding it came with.
     # An 8-bit part of the draft therefore stays 8-bit, which keeps the content of the draft exactly as it was.
-    plain_ascii = body.isascii() and all(len(line) <= _MAX_LINE_OCTETS for line in body.splitlines())
+    lines = _LINE_BREAK_PATTERN.split(body)
+    plain_ascii = body.isascii() and all(len(line) <= _MAX_LINE_OCTETS for line in lines)
     message.set_content(body, cte="7bit" if plain_ascii else "quoted-printable")
     if attachments:
         message.make_mixed()
