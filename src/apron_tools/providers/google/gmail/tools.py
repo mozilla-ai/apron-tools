@@ -400,11 +400,14 @@ def _addresses_are_ascii(*values: str | None) -> bool:
     return True
 
 
-def _names_are_quoted(*values: str | None) -> bool:
-    """Report whether every recipient value given reads as a list of addresses.
+def _recipients_have_addresses(*values: str | None) -> bool:
+    """Report whether every recipient that the given values name carries an address.
 
-    NOTE: A comma divides one recipient from the next, so a display name that holds an unquoted comma reads as a
-    recipient of its own that carries no address.
+    A comma divides one recipient from the next, so a display name that holds an unquoted comma reads as a recipient
+    of its own that carries no address.
+
+    NOTE: A name that holds an at sign before the comma reads as an address itself, and no rule tells it apart from a
+    recipient that the caller meant.
     """
     for value in values:
         if not value or "," not in value:
@@ -652,7 +655,7 @@ async def gmail_send_email(
     base_url: str = _GMAIL_BASE_URL,
 ) -> SendEmailResult:
     """Send an email via Gmail."""
-    if not _names_are_quoted(params.to, params.cc, params.bcc):
+    if not _recipients_have_addresses(params.to, params.cc, params.bcc):
         return SendEmailResult(success=False, error=_UNQUOTED_NAME_ERROR)
 
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
@@ -709,7 +712,7 @@ async def gmail_create_draft(
     base_url: str = _GMAIL_BASE_URL,
 ) -> CreateDraftResult:
     """Create an email draft in Gmail."""
-    if not _names_are_quoted(params.to, params.cc, params.bcc):
+    if not _recipients_have_addresses(params.to, params.cc, params.bcc):
         return CreateDraftResult(success=False, error=_UNQUOTED_NAME_ERROR)
 
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
@@ -782,7 +785,7 @@ async def gmail_edit_draft(
             except (KeyError, TypeError, ValueError):
                 return EditDraftResult(success=False, error="The existing draft could not be read.")
 
-            if not _names_are_quoted(params.to, params.cc, params.bcc):
+            if not _recipients_have_addresses(params.to, params.cc, params.bcc):
                 return EditDraftResult(success=False, error=_UNQUOTED_NAME_ERROR)
 
             if not _addresses_are_ascii(params.to, params.cc, params.bcc):
@@ -873,13 +876,13 @@ async def gmail_reply_to_email(
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
 
-            if not _names_are_quoted(orig_reply_to or orig_from):
+            if not _recipients_have_addresses(orig_reply_to or orig_from):
                 return ReplyToEmailResult(success=False, error=_UNQUOTED_SENDER_ERROR)
 
             if not _addresses_are_ascii(orig_reply_to or orig_from):
                 return ReplyToEmailResult(success=False, error=_NON_ASCII_SENDER_ERROR)
 
-            if not _names_are_quoted(params.cc, params.bcc):
+            if not _recipients_have_addresses(params.cc, params.bcc):
                 return ReplyToEmailResult(success=False, error=_UNQUOTED_NAME_ERROR)
 
             if not _addresses_are_ascii(params.cc, params.bcc):
