@@ -588,15 +588,17 @@ class _MessageIdListHeader(UniqueUnstructuredHeader, BaseHeader):
     """A header that holds the message IDs of a thread, such as References, and never writes one as an encoded word.
 
     RFC 5322 gives no meaning to an encoded word inside a message ID, so a reader matches no ID that carries one and
-    the thread breaks apart. A line is folded between one ID and the next, and an ID longer than a line stands whole
-    on a line of its own.
+    the thread breaks apart. A line is folded between one ID and the next.
+
+    NOTE: A reader may keep the space of a fold that opens a value, so the first ID stays beside the header name
+    however long that line becomes. RFC 5322 allows up to 998 octets in a line.
     """
 
     def fold(self, *, policy: Policy) -> str:
         limit = policy.max_line_length or _MAX_LINE_OCTETS
         lines = [f"{self.name}:"]
-        for message_id in str(self).split():
-            if len(lines[-1]) + len(message_id) + 1 > limit:
+        for index, message_id in enumerate(str(self).split()):
+            if index and len(lines[-1]) + len(message_id) + 1 > limit:
                 lines.append("")
             lines[-1] += f" {message_id}"
         return policy.linesep.join(lines) + policy.linesep
