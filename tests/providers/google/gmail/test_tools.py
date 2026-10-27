@@ -1384,6 +1384,23 @@ class TestEditDraft:
         assert body is not None
         assert body.get_content() == "Caf\u00e9 \u2014 one coffee\r\n"
 
+    async def test_an_empty_body_clears_the_text_and_keeps_an_attachment(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["alternative-with-attachment"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body=""), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert sent.get_payload()[0].get_content().strip() == ""
+        assert [part.get_filename() for part in sent.iter_attachments()] == ["a.pdf"]
+
     async def test_new_body_keeps_a_text_file_that_a_draft_holds(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["inline-text-file"]
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))

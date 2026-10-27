@@ -79,7 +79,7 @@ class EditDraftParams(BaseModel):
     body: str | None = Field(
         default=None,
         description=(
-            "New plain text body. Omit to keep the content."
+            "New plain text body. Omit to keep the content. An empty string clears it."
             " It replaces the text and the HTML of the draft, and keeps each attached file."
             " An image embedded in the HTML is removed with the HTML."
         ),
