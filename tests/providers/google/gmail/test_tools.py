@@ -838,7 +838,7 @@ class TestSendEmail:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
         result = await gmail_send_email(
-            SendEmailParams(to="bad", subject="Test", body="Body"),
+            SendEmailParams(to="bad@example.com", subject="Test", body="Body"),
             token=_TOKEN,
         )
 
@@ -888,7 +888,17 @@ class TestSendEmail:
         result = await gmail_send_email(SendEmailParams(to=to, subject="Hello", body="Hi"), token=_TOKEN)
 
         assert result.success is False
-        assert result.error == "A recipient name that holds a comma must be in quotes."
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
+        assert httpx_mock.get_requests() == []
+
+    async def test_a_recipient_whose_quotes_swallow_the_address_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        result = await gmail_send_email(
+            SendEmailParams(to='"Unbalanced <quote@example.com>', subject="Hello", body="Hi"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
         assert httpx_mock.get_requests() == []
 
     async def test_a_body_that_cannot_be_written_is_refused(self, httpx_mock: HTTPXMock) -> None:
@@ -987,7 +997,7 @@ class TestCreateDraft:
         )
 
         assert result.success is False
-        assert result.error == "A recipient name that holds a comma must be in quotes."
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
         assert httpx_mock.get_requests() == []
 
     async def test_has_tool_definition(self) -> None:
@@ -1944,7 +1954,7 @@ class TestEditDraft:
         )
 
         assert result.success is False
-        assert result.error == "A recipient name that holds a comma must be in quotes."
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_a_body_that_cannot_be_written_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
@@ -2132,14 +2142,39 @@ class TestReplyToEmail:
         )
 
         assert result.success is False
-        assert result.error == "A recipient name that holds a comma must be in quotes."
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-    async def test_a_sender_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock) -> None:
+    @pytest.mark.parametrize(
+        "sender",
+        ["Smith, John <john@example.com>", "Acme, Inc. <john@example.com>"],
+        ids=["a-person", "a-company"],
+    )
+    async def test_a_reply_to_a_sender_name_with_a_comma_goes_to_the_address(
+        self, httpx_mock: HTTPXMock, sender: str
+    ) -> None:
         message = _load_json("get_message_for_reply.json")
         for header in message["payload"]["headers"]:
             if header["name"] == "From":
-                header["value"] = "Smith, John <john@example.com>"
+                header["value"] = sender
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
+    async def test_a_reply_to_a_sender_that_holds_no_address_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "Nobody, No Address"
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=message,
@@ -2148,7 +2183,7 @@ class TestReplyToEmail:
         result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
 
         assert result.success is False
-        assert result.error == "The name of the original sender holds a comma that is not in quotes."
+        assert result.error == "The original message holds no sender address to reply to."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:

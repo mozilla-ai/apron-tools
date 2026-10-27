@@ -51,6 +51,7 @@ _GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
 _TIMEOUT = 60.0
 
 # NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
+_BAD_RECIPIENT_ERROR = "A recipient must read as an email address, and a name beside it must be in quotes."
 _BODY_DECODE_FAILED = "(Could not decode email body)"
 _BODY_MEDIA_TYPES = ("text/html", "text/plain")
 _BODY_NOT_FOUND = "(No email body found)"
@@ -65,10 +66,9 @@ _LINE_BREAK_PATTERN = re.compile(r"\r\n|[\r\n]")
 _MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
 _NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
+_NO_SENDER_ADDRESS_ERROR = "The original message holds no sender address to reply to."
 _SIGNED_CONTENT_ERROR = "A draft that holds signed or encrypted content cannot take a new body."
 _SIGNED_MEDIA_TYPES = ("multipart/encrypted", "multipart/signed")
-_UNQUOTED_NAME_ERROR = "A recipient name that holds a comma must be in quotes."
-_UNQUOTED_SENDER_ERROR = "The name of the original sender holds a comma that is not in quotes."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
@@ -435,20 +435,25 @@ def _addresses_are_ascii(*values: str | None) -> bool:
     return True
 
 
+def _reads_as_address(value: str) -> bool:
+    """Report whether a value reads as the address of one recipient, such as "bob@example.com"."""
+    local_part, _, domain = value.partition("@")
+    return bool(local_part) and bool(domain) and "@" not in domain and not any(char.isspace() for char in value)
+
+
 def _recipients_have_addresses(*values: str | None) -> bool:
     """Report whether every recipient that the given values name carries an address.
 
     A comma divides one recipient from the next, so a display name that holds an unquoted comma reads as a recipient
-    of its own that carries no address.
+    of its own that carries no address. A quote that is never closed takes the address of a recipient into its name.
 
-    NOTE: A name that holds an at sign before the comma reads as an address itself, and no rule tells it apart from a
-    recipient that the caller meant.
+    NOTE: A name that reads as an address itself cannot be told apart from a recipient that the caller meant.
     """
     for value in values:
-        if not value or "," not in value:
+        if not value:
             continue
         addresses = [address for _, address in getaddresses([value]) if address]
-        if not all("@" in address for address in addresses):
+        if not all(_reads_as_address(address) for address in addresses):
             return False
     return True
 
@@ -690,14 +695,14 @@ async def gmail_send_email(
     base_url: str = _GMAIL_BASE_URL,
 ) -> SendEmailResult:
     """Send an email via Gmail."""
+    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+        return SendEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
     if not _recipients_have_addresses(params.to, params.cc, params.bcc):
-        return SendEmailResult(success=False, error=_UNQUOTED_NAME_ERROR)
+        return SendEmailResult(success=False, error=_BAD_RECIPIENT_ERROR)
 
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
         return SendEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
-
-    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
-        return SendEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
     try:
         raw = _build_raw_message(
@@ -747,14 +752,14 @@ async def gmail_create_draft(
     base_url: str = _GMAIL_BASE_URL,
 ) -> CreateDraftResult:
     """Create an email draft in Gmail."""
+    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+        return CreateDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
     if not _recipients_have_addresses(params.to, params.cc, params.bcc):
-        return CreateDraftResult(success=False, error=_UNQUOTED_NAME_ERROR)
+        return CreateDraftResult(success=False, error=_BAD_RECIPIENT_ERROR)
 
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
         return CreateDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
-
-    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
-        return CreateDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
     try:
         raw = _build_raw_message(
@@ -820,14 +825,14 @@ async def gmail_edit_draft(
             except (KeyError, TypeError, ValueError):
                 return EditDraftResult(success=False, error="The existing draft could not be read.")
 
+            if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+                return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
             if not _recipients_have_addresses(params.to, params.cc, params.bcc):
-                return EditDraftResult(success=False, error=_UNQUOTED_NAME_ERROR)
+                return EditDraftResult(success=False, error=_BAD_RECIPIENT_ERROR)
 
             if not _addresses_are_ascii(params.to, params.cc, params.bcc):
                 return EditDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
-
-            if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
-                return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
             if params.body is not None and _holds_protected_content(message):
                 return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
@@ -914,24 +919,28 @@ async def gmail_reply_to_email(
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
 
-            if not _recipients_have_addresses(orig_reply_to or orig_from):
-                return ReplyToEmailResult(success=False, error=_UNQUOTED_SENDER_ERROR)
+            sender = orig_reply_to or orig_from
+            if not _recipients_have_addresses(sender):
+                # The sender of a message is no value of the call, so only the addresses that it holds are kept.
+                sender = ", ".join(address for _, address in getaddresses([sender]) if _reads_as_address(address))
+            if not sender:
+                return ReplyToEmailResult(success=False, error=_NO_SENDER_ADDRESS_ERROR)
 
-            if not _addresses_are_ascii(orig_reply_to or orig_from):
+            if not _addresses_are_ascii(sender):
                 return ReplyToEmailResult(success=False, error=_NON_ASCII_SENDER_ERROR)
-
-            if not _recipients_have_addresses(params.cc, params.bcc):
-                return ReplyToEmailResult(success=False, error=_UNQUOTED_NAME_ERROR)
-
-            if not _addresses_are_ascii(params.cc, params.bcc):
-                return ReplyToEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
             if not _values_are_one_line(params.cc, params.bcc):
                 return ReplyToEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
+            if not _recipients_have_addresses(params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_BAD_RECIPIENT_ERROR)
+
+            if not _addresses_are_ascii(params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
+
             try:
                 raw = _build_raw_message(
-                    orig_reply_to or orig_from,
+                    sender,
                     reply_subject,
                     params.body,
                     cc=params.cc,
