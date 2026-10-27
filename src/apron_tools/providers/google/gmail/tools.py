@@ -252,7 +252,7 @@ def _parse_raw_message(raw: str) -> EmailMessage:
 def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
     """Yield the parts of a message that hold an attached file, from any depth of its MIME tree.
 
-    A part that is not itself multipart is yielded whole, so an attached email keeps its own parts.
+    A part is yielded whole, so an attached email or an attached group of parts keeps the parts it holds.
 
     Args:
         part: The message or the message part to read.
@@ -262,13 +262,13 @@ def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
     Yields:
         Each part that holds an attached file.
     """
+    if part.is_attachment():
+        yield part
+        return
     if part.get_content_maintype() == "multipart":
         holds_inline_parts = part.get_content_type() == "multipart/related"
         for child in part.iter_parts():
             yield from _attached_files(child, in_related=holds_inline_parts)
-        return
-    if part.is_attachment():
-        yield part
         return
     # The HTML of a multipart/related message names each inline part of it by content ID, so such a part is no file.
     if in_related and part["Content-ID"]:
