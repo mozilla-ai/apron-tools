@@ -979,13 +979,18 @@ async def gmail_edit_draft(
             if params.body is not None and _holds_protected_content(message):
                 return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
 
-            # A signature covers the bytes of the parts beside it, so an edit writes back only the bytes it read.
-            if any(block not in _decode_base64url(draft_message["raw"]) for block in _protected_blocks(message)):
-                return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
+            try:
+                protected_blocks = _protected_blocks(message)
+                # NOTE: The envelope headers belong to the block of the message itself, and an edit writes those, so
+                # only the blocks below the message are measured again once the edit is written.
+                inner_blocks = [block for part in message.iter_parts() for block in _protected_blocks(part)]
+            except ValueError:
+                return EditDraftResult(success=False, error=_UNWRITABLE_DRAFT_ERROR)
 
-            # NOTE: The envelope headers belong to the block of the message itself, and an edit writes those, so only
-            # the blocks below the message are measured again once the edit is written.
-            inner_blocks = [block for part in message.iter_parts() for block in _protected_blocks(part)]
+            # A signature covers the bytes of the parts beside it, so an edit writes back only the bytes it read.
+            draft_bytes = _decode_base64url(draft_message["raw"])
+            if any(block not in draft_bytes for block in protected_blocks):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
 
             original_subject = message.get("Subject", "")
             try:

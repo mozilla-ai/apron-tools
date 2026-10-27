@@ -1625,6 +1625,30 @@ class TestEditDraft:
         assert result.error == "The existing draft holds a character that cannot be written to an email."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
+    async def test_a_signed_draft_that_cannot_be_written_is_reported_as_the_cause(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            b'Content-Type: multipart/signed; protocol="application/pgp-signature"; boundary="B\xe9"',
+            "",
+            b"--B\xe9",
+            "Content-Type: text/plain",
+            "",
+            "Body",
+            b"--B\xe9",
+            "Content-Type: application/pgp-signature",
+            "",
+            "signature",
+            b"--B\xe9--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The existing draft holds a character that cannot be written to an email."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
     async def test_an_edit_moves_the_headers_it_rewrites_to_the_end(self, httpx_mock: HTTPXMock) -> None:
         raw = _mime(
             b"From: An\xc3\xa1 <alias@example.com>",
