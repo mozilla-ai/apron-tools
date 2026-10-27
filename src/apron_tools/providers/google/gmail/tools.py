@@ -58,12 +58,13 @@ _BODY_NOT_FOUND = "(No email body found)"
 _DRAFT_POLICY = policy.SMTP.clone(refold_source="none")
 
 _HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
-_HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
+_HEADER_LINE_BREAK_ERROR = "A recipient or subject must hold a single line."
 # NOTE: str.splitlines() also splits on a page break and other control characters, which end no line of an email.
 _LINE_BREAK_PATTERN = re.compile(r"\r\n|[\r\n]")
 # NOTE: RFC 5322 allows at most 998 octets in a line, without the line break that ends it.
 _MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
+_NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
@@ -348,6 +349,14 @@ def _addresses_are_ascii(*values: str | None) -> bool:
     return all(address.isascii() for value in values if value for _, address in getaddresses([value]))
 
 
+def _values_are_one_line(*values: str | None) -> bool:
+    """Report whether every given header value holds a single line.
+
+    NOTE: A header store refuses every character that str.splitlines() divides on, not a line break alone.
+    """
+    return all(len(value.splitlines()) <= 1 for value in values if value)
+
+
 def _build_raw_message(
     to: str,
     subject: str,
@@ -579,6 +588,9 @@ async def gmail_send_email(
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
         return SendEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
+    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+        return SendEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
     try:
         raw = _build_raw_message(
             params.to,
@@ -587,10 +599,8 @@ async def gmail_send_email(
             cc=params.cc,
             bcc=params.bcc,
         )
-    except UnicodeEncodeError:
-        return SendEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
     except ValueError:
-        return SendEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+        return SendEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -632,6 +642,9 @@ async def gmail_create_draft(
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
         return CreateDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
+    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+        return CreateDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
     try:
         raw = _build_raw_message(
             params.to,
@@ -640,10 +653,8 @@ async def gmail_create_draft(
             cc=params.cc,
             bcc=params.bcc,
         )
-    except UnicodeEncodeError:
-        return CreateDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
     except ValueError:
-        return CreateDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+        return CreateDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -701,16 +712,17 @@ async def gmail_edit_draft(
             if not _addresses_are_ascii(params.to, params.cc, params.bcc):
                 return EditDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
+            if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+                return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
             original_subject = message.get("Subject", "")
             try:
                 _replace_headers(message, params)
                 if params.body is not None:
                     _replace_body(message, params.body)
                 edited_raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
-            except UnicodeEncodeError:
-                return EditDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
             except ValueError:
-                return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+                return EditDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
             update: dict[str, str] = {"raw": edited_raw}
             thread_id = draft_message.get("threadId")
@@ -785,8 +797,14 @@ async def gmail_reply_to_email(
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
 
-            if not _addresses_are_ascii(orig_reply_to or orig_from, params.cc, params.bcc):
+            if not _addresses_are_ascii(orig_reply_to or orig_from):
+                return ReplyToEmailResult(success=False, error=_NON_ASCII_SENDER_ERROR)
+
+            if not _addresses_are_ascii(params.cc, params.bcc):
                 return ReplyToEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
+
+            if not _values_are_one_line(params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
             try:
                 raw = _build_raw_message(
@@ -798,10 +816,8 @@ async def gmail_reply_to_email(
                     in_reply_to=orig_message_id or None,
                     references=references or None,
                 )
-            except UnicodeEncodeError:
-                return ReplyToEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
             except ValueError:
-                return ReplyToEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+                return ReplyToEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
             send_resp = await client.post(
                 f"{base_url}/messages/send",

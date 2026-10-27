@@ -823,8 +823,9 @@ class TestSendEmail:
             ("bob@example.com", "one\ntwo: injected", None, None),
             ("bob@example.com", "Hello", "one\ntwo: injected", None),
             ("bob@example.com", "Hello", None, "one\ntwo: injected"),
+            ("bob@example.com", "one\x0ctwo: injected", None, None),
         ],
-        ids=["to", "subject", "cc", "bcc"],
+        ids=["to", "subject", "cc", "bcc", "subject-with-a-page-break"],
     )
     async def test_a_header_value_with_a_line_break_is_refused(
         self, httpx_mock: HTTPXMock, to: str, subject: str, cc: str | None, bcc: str | None
@@ -835,7 +836,7 @@ class TestSendEmail:
         )
 
         assert result.success is False
-        assert result.error == "A recipient or subject must not contain a line break."
+        assert result.error == "A recipient or subject must hold a single line."
         assert httpx_mock.get_requests() == []
 
     async def test_has_tool_definition(self) -> None:
@@ -890,7 +891,7 @@ class TestCreateDraft:
         )
 
         assert result.success is False
-        assert result.error == "A recipient or subject must not contain a line break."
+        assert result.error == "A recipient or subject must hold a single line."
         assert httpx_mock.get_requests() == []
 
     async def test_has_tool_definition(self) -> None:
@@ -1682,7 +1683,7 @@ class TestEditDraft:
         )
 
         assert result.success is False
-        assert result.error == "A recipient or subject must not contain a line break."
+        assert result.error == "A recipient or subject must hold a single line."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_has_tool_definition(self) -> None:
@@ -1814,6 +1815,22 @@ class TestReplyToEmail:
             "<third@example.com>",
         ]
 
+    async def test_a_sender_address_outside_ascii_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "Jos\u00e9 <jos\u00e9@example.com>"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The address of the original sender must hold only ASCII characters."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
     async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
@@ -1826,7 +1843,7 @@ class TestReplyToEmail:
         )
 
         assert result.success is False
-        assert result.error == "A recipient or subject must not contain a line break."
+        assert result.error == "A recipient or subject must hold a single line."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_has_tool_definition(self) -> None:
