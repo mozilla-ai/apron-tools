@@ -276,11 +276,24 @@ def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
         yield part
 
 
+def _content_only(message: EmailMessage) -> MIMEPart:
+    """Copy a message into a part that carries only its content headers and its content.
+
+    An envelope header inside a part reads as body text, and a copy of a Bcc address there would reach every
+    recipient of the message.
+    """
+    part = copy.deepcopy(message)
+    for name, _ in message.items():
+        if not name.lower().startswith("content-"):
+            del part[name]
+    return part
+
+
 def _replace_body(message: EmailMessage, body: str) -> None:
     """Replace the text and HTML of a message with a plain-text body, keeping its attached files."""
     # A message that is itself one attached file is copied, because the clearing below would empty it.
     attachments = [
-        copy.deepcopy(part) if part is message else part for part in _attached_files(message, in_related=False)
+        _content_only(part) if part is message else part for part in _attached_files(message, in_related=False)
     ]
     message.clear_content()
     # NOTE: The draft keeps the policy that read it, which allows 8-bit content and does not wrap a long line, so

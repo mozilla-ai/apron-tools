@@ -1046,6 +1046,7 @@ _DRAFTS = {
     ),
     "attachment-only": _mime(
         *_DRAFT_HEADERS,
+        "Bcc: hidden@example.com",
         "Content-Type: application/pdf; name=a.pdf",
         "Content-Disposition: attachment; filename=a.pdf",
         "Content-Transfer-Encoding: base64",
@@ -1326,7 +1327,8 @@ class TestEditDraft:
             "text/plain",
             "application/pdf",
         ]
-        assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
+        kept = next(part for part in sent.iter_attachments() if part.get_filename() == "a.pdf")
+        assert kept.get_payload(decode=True) == original_pdf.get_payload(decode=True)
 
     async def test_new_body_keeps_an_attachment_inside_a_nested_part(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["nested-attachment"]
@@ -1363,6 +1365,20 @@ class TestEditDraft:
             "application/pdf",
         ]
         assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
+
+    async def test_new_body_keeps_no_envelope_header_on_a_part(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["attachment-only"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        kept = next(part for part in sent.iter_attachments() if part.get_filename() == "a.pdf")
+        assert [name for name, _ in kept.items() if not name.lower().startswith("content-")] == []
+        assert "hidden@example.com" not in kept.as_string()
+        assert sent["Bcc"] == "hidden@example.com"
 
     async def test_edit_keeps_a_long_mime_boundary_as_it_was_written(self, httpx_mock: HTTPXMock) -> None:
         raw = _DRAFTS["long-boundary"]
