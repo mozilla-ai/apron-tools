@@ -392,6 +392,14 @@ def _holds_protected_content(message: MIMEPart) -> bool:
     )
 
 
+def _protected_blocks(message: MIMEPart) -> list[bytes]:
+    """Return the bytes of each part of a message that holds a signature or a ciphertext.
+
+    NOTE: A part inside an attached file holds such bytes as well, so every part of the message is measured.
+    """
+    return [part.as_bytes() for part in message.walk() if part.get_content_type() in _PROTECTED_MEDIA_TYPES]
+
+
 def _content_only(message: EmailMessage) -> MIMEPart:
     """Copy a message into a part that carries only its content headers and its content.
 
@@ -900,12 +908,12 @@ async def gmail_edit_draft(
             if not _addresses_are_ascii(params.to, params.cc, params.bcc):
                 return EditDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
-            if _holds_protected_content(message):
-                if params.body is not None:
-                    return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
-                # A signature covers the bytes of the parts beside it, so an edit must write them back as they were.
-                if message.as_bytes() != _decode_base64url(draft_message["raw"]):
-                    return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
+            if params.body is not None and _holds_protected_content(message):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
+
+            # A signature covers the bytes of the parts beside it, so an edit writes back only the bytes it read.
+            if any(block not in _decode_base64url(draft_message["raw"]) for block in _protected_blocks(message)):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
 
             original_subject = message.get("Subject", "")
             try:

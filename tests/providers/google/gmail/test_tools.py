@@ -1580,7 +1580,7 @@ class TestEditDraft:
         assert result.error == "The existing draft holds a character that cannot be written to an email."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-    async def test_an_edit_keeps_the_order_of_the_headers_it_rewrites(self, httpx_mock: HTTPXMock) -> None:
+    async def test_an_edit_moves_the_headers_it_rewrites_to_the_end(self, httpx_mock: HTTPXMock) -> None:
         raw = _mime(
             b"From: An\xc3\xa1 <alias@example.com>",
             "To: bob@example.com",
@@ -1819,6 +1819,49 @@ class TestEditDraft:
             "",
             "c2lnbmF0dXJlCg==",
             "--sig--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The signed or encrypted content of this draft cannot be written back as it was read."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_header_edit_stops_where_an_attached_signed_email_would_change(self, httpx_mock: HTTPXMock) -> None:
+        inner = _mime(
+            "From: Zoe <zoe@example.com>",
+            b"Subject: Caf\xc3\xa9",
+            "MIME-Version: 1.0",
+            'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+            "",
+            "--sig",
+            "Content-Type: text/plain",
+            "",
+            "Signed body",
+            "--sig",
+            "Content-Type: application/pgp-signature",
+            "Content-Transfer-Encoding: base64",
+            "",
+            "c2lnbmF0dXJlCg==",
+            "--sig--",
+            "",
+        )
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            'Content-Type: multipart/mixed; boundary="mix"',
+            "",
+            "--mix",
+            "Content-Type: text/plain",
+            "",
+            "See the signed email.",
+            "--mix",
+            "Content-Type: message/rfc822",
+            'Content-Disposition: attachment; filename="m.eml"',
+            "",
+            inner,
+            "--mix--",
             "",
         )
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
