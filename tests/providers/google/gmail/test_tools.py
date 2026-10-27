@@ -1267,6 +1267,63 @@ _DRAFTS = {
         "--mixed--",
         "",
     ),
+    "signed": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+        "",
+        "--sig",
+        "Content-Type: text/plain",
+        "",
+        "Signed body",
+        "--sig",
+        "Content-Type: application/pgp-signature",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "c2lnbmF0dXJlCg==",
+        "--sig--",
+        "",
+    ),
+    "encrypted": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="enc"',
+        "",
+        "--enc",
+        "Content-Type: application/pgp-encrypted",
+        "",
+        "Version: 1",
+        "--enc",
+        "Content-Type: application/octet-stream",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "Y2lwaGVydGV4dAo=",
+        "--enc--",
+        "",
+    ),
+    "attached-signed-email": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "See the signed email.",
+        "--mixed",
+        'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+        'Content-Disposition: attachment; filename="signed.eml"',
+        "",
+        "--sig",
+        "Content-Type: text/plain",
+        "",
+        "Signed body",
+        "--sig",
+        "Content-Type: application/pgp-signature",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "c2lnbmF0dXJlCg==",
+        "--sig--",
+        "--mixed--",
+        "",
+    ),
     "inline-text-file": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="mixed"',
@@ -1493,6 +1550,50 @@ class TestEditDraft:
         ]
         assert sent.get_payload()[0].get_content().strip() == ""
         assert [part.get_filename() for part in sent.iter_attachments()] == ["a.pdf"]
+
+    @pytest.mark.parametrize("draft", ["signed", "encrypted"])
+    async def test_a_new_body_for_protected_content_is_refused(self, httpx_mock: HTTPXMock, draft: str) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "A draft that holds signed or encrypted content cannot take a new body."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_header_edit_keeps_signed_content_whole(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["signed"]))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent.get_content_type() == "multipart/signed"
+        assert sent.get_param("protocol") == "application/pgp-signature"
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/signed",
+            "text/plain",
+            "application/pgp-signature",
+        ]
+
+    async def test_a_new_body_keeps_an_attached_signed_email_whole(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["attached-signed-email"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "multipart/signed",
+            "text/plain",
+            "application/pgp-signature",
+        ]
 
     async def test_new_body_keeps_a_text_file_that_a_draft_holds(self, httpx_mock: HTTPXMock) -> None:
         draft = _DRAFTS["inline-text-file"]

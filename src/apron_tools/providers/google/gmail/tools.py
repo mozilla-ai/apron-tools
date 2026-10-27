@@ -65,6 +65,8 @@ _LINE_BREAK_PATTERN = re.compile(r"\r\n|[\r\n]")
 _MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
 _NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
+_SIGNED_CONTENT_ERROR = "A draft that holds signed or encrypted content cannot take a new body."
+_SIGNED_MEDIA_TYPES = ("multipart/encrypted", "multipart/signed")
 _UNQUOTED_NAME_ERROR = "A recipient name that holds a comma must be in quotes."
 _UNQUOTED_SENDER_ERROR = "The name of the original sender holds a comma that is not in quotes."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
@@ -327,6 +329,16 @@ def _holds_body_text(message: MIMEPart) -> bool:
     """Report whether a message holds a text part of its own, which an edit of the body replaces."""
     in_a_file = {id(part) for file in _attached_files(message, in_related=False) for part in file.walk()}
     return any(part.get_content_type() in _BODY_MEDIA_TYPES and id(part) not in in_a_file for part in message.walk())
+
+
+def _holds_protected_content(message: MIMEPart) -> bool:
+    """Report whether a message holds a signature or a ciphertext that a new body would leave behind.
+
+    A signature covers the parts beside it, and a ciphertext holds the content of the parts it replaces. Such a part
+    keeps its meaning only inside the part that holds it.
+    """
+    in_a_file = {id(part) for file in _attached_files(message, in_related=False) for part in file.walk()}
+    return any(part.get_content_type() in _SIGNED_MEDIA_TYPES and id(part) not in in_a_file for part in message.walk())
 
 
 def _content_only(message: EmailMessage) -> MIMEPart:
@@ -793,6 +805,9 @@ async def gmail_edit_draft(
 
             if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
                 return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
+            if params.body is not None and _holds_protected_content(message):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
 
             original_subject = message.get("Subject", "")
             try:
