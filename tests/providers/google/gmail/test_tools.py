@@ -719,6 +719,20 @@ class TestExtractBody:
         assert _extract_body(payload) == "Real body"
         assert _extract_body({"mimeType": "multipart/mixed", "parts": [attached]}) == "Attached note"
 
+    def test_an_empty_body_part_is_not_replaced_by_attached_text(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"size": 0}},
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="note.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+            ],
+        }
+        assert _extract_body(payload) is None
+
     def test_a_body_that_cannot_be_decoded_is_not_replaced_by_attached_text(self) -> None:
         payload = {
             "mimeType": "multipart/mixed",

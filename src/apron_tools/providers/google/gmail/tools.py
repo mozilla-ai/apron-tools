@@ -279,9 +279,10 @@ def _read_body_text(parts: Iterable[dict]) -> str | None:
 def _extract_body(payload: dict) -> str | None:
     """Extract the body text of a Gmail message payload, preferring plain text over HTML.
 
-    NOTE: Where a message holds no text of its own, the text inside an attachment or an embedded message is read
-    instead, because it is the only text that the message holds. A text part that cannot be decoded is text of the
-    message, so the failure to decode it is reported rather than the text of an attachment.
+    NOTE: Where a message holds no text part of its own, the text inside an attachment or an embedded message is
+    read instead, because it is the only text that the message holds. A text part that cannot be decoded is text of
+    the message, so the failure to decode it is reported rather than the text of an attachment. A text part that
+    holds nothing is text of the message as well, so the message reads as empty.
 
     Args:
         payload: The Gmail message payload to read.
@@ -292,9 +293,12 @@ def _extract_body(payload: dict) -> str | None:
     Raises:
         ValueError: If body data is present but no part can be decoded.
     """
-    own_text = _read_body_text(_body_candidates(payload, with_attached_content=False))
+    own_candidates = list(_body_candidates(payload, with_attached_content=False))
+    own_text = _read_body_text(own_candidates)
     if own_text is not None:
         return own_text
+    if own_candidates:
+        return None
     return _read_body_text(_body_candidates(payload, with_attached_content=True))
 
 
