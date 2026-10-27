@@ -870,6 +870,24 @@ class TestSendEmail:
         sent = _parse_raw(json.loads(request.content)["raw"])
         assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
 
+    async def test_a_group_of_recipients_keeps_its_name(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(
+                to="Managers: =?utf-8?Q?Doe=2C_John?= <john@example.com>, jane@example.com;",
+                subject="Hello",
+                body="Hi",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent_raw = base64.urlsafe_b64decode(json.loads(request.content)["raw"]).decode()
+        assert 'To: Managers: "Doe, John" <john@example.com>, jane@example.com;' in sent_raw
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 

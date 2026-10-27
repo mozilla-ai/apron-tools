@@ -9,7 +9,7 @@ import re
 from collections.abc import Iterable, Iterator
 from email import policy
 from email.message import EmailMessage, Message, MIMEPart
-from email.utils import formataddr, getaddresses
+from email.utils import getaddresses
 
 import httpx
 
@@ -472,14 +472,14 @@ def _quoted_recipients(value: str) -> str:
 
     A mail program may write a display name as an encoded word, which hides a comma or another character that
     divides one recipient from the next. A writer decodes such a name without quoting it, so the name would read as
-    a recipient that carries no address.
+    a recipient that carries no address. A value that names a group of recipients keeps that name.
     """
     probe = EmailMessage(policy=policy.SMTP)
     probe["To"] = value
-    pairs = [(address.display_name, address.addr_spec) for address in probe["To"].addresses]
-    if not any(char in name for name, _ in pairs for char in _ADDRESS_SPECIALS):
+    names = [address.display_name for address in probe["To"].addresses]
+    if not any(char in name for name in names for char in _ADDRESS_SPECIALS):
         return value
-    return ", ".join(formataddr(pair) for pair in pairs)
+    return ", ".join(str(group) for group in probe["To"].groups)
 
 
 def _reads_as_address(value: str) -> bool:
