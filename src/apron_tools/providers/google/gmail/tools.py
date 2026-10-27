@@ -280,11 +280,9 @@ def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
 
 
 def _holds_body_text(message: MIMEPart) -> bool:
-    """Report whether a message holds a text part that no file name marks as a file of its own."""
-    return any(
-        part.get_content_type() in _BODY_MEDIA_TYPES and not part.is_attachment() and not part.get_filename()
-        for part in message.walk()
-    )
+    """Report whether a message holds a text part of its own, which an edit of the body replaces."""
+    in_a_file = {id(part) for file in _attached_files(message, in_related=False) for part in file.walk()}
+    return any(part.get_content_type() in _BODY_MEDIA_TYPES and id(part) not in in_a_file for part in message.walk())
 
 
 def _content_only(message: EmailMessage) -> MIMEPart:
