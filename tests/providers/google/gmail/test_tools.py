@@ -834,6 +834,22 @@ class TestSendEmail:
         sent = _parse_raw(json.loads(request.content)["raw"])
         assert [address.addr_spec for address in sent["To"].addresses] == ["bob@example.com"]
 
+    @pytest.mark.parametrize(
+        "to",
+        ["=?utf-8?Q?Doe=2C_John?= <john@example.com>", "=?utf-8?Q?Doe=3B_John?= <john@example.com>"],
+        ids=["a-comma", "a-semicolon"],
+    )
+    async def test_a_name_written_as_an_encoded_word_keeps_one_recipient(self, httpx_mock: HTTPXMock, to: str) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(SendEmailParams(to=to, subject="Hello", body="Hi"), token=_TOKEN)
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
@@ -1707,6 +1723,23 @@ class TestEditDraft:
         assert sent.get_payload()[0].get_content().strip() == ""
         assert [part.get_filename() for part in sent.iter_attachments()] == ["a.pdf"]
 
+    async def test_an_edit_keeps_one_recipient_from_a_name_written_as_an_encoded_word(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to="=?utf-8?Q?Doe=2C_John?= <john@example.com>"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
     async def test_an_edit_keeps_a_boundary_that_names_a_charset(self, httpx_mock: HTTPXMock) -> None:
         raw = _DRAFTS["boundary-that-names-a-charset"]
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
@@ -1735,6 +1768,7 @@ class TestEditDraft:
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
 
         assert result.success is True
+        sent_raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
         sent = _parse_raw(_put_message(httpx_mock)["raw"])
         assert sent.get_content_type() == "multipart/signed"
         assert sent.get_param("protocol") == "application/pgp-signature"
@@ -1743,6 +1777,8 @@ class TestEditDraft:
             "text/plain",
             "application/pgp-signature",
         ]
+        signed_part = b"Content-Type: text/plain\r\n\r\nSigned body\r\n"
+        assert signed_part in sent_raw, "the bytes that a signature covers must be written back as they were read"
 
     async def test_a_new_body_keeps_an_attached_signed_email_whole(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
@@ -2300,6 +2336,27 @@ class TestReplyToEmail:
         send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
         sent = _parse_raw(json.loads(send.content)["raw"])
         assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
+    async def test_a_reply_keeps_one_recipient_from_a_sender_name_of_an_encoded_word(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "=?utf-8?Q?Doe=2C_John?= <john@example.com>"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+        assert [address.display_name for address in sent["To"].addresses] == ["Doe, John"]
 
     async def test_a_reply_falls_back_to_the_from_where_the_reply_to_holds_no_address(
         self, httpx_mock: HTTPXMock

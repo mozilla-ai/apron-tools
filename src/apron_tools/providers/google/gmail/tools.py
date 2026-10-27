@@ -9,7 +9,7 @@ import re
 from collections.abc import Iterable, Iterator
 from email import policy
 from email.message import EmailMessage, Message, MIMEPart
-from email.utils import getaddresses
+from email.utils import formataddr, getaddresses
 
 import httpx
 
@@ -50,8 +50,9 @@ from .scopes import SCOPES
 _GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
 _TIMEOUT = 60.0
 
-# NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
+_ADDRESS_SPECIALS = ',;:<>@"'
 _BAD_RECIPIENT_ERROR = "A recipient must read as an email address, and a name beside it must be in quotes."
+# NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
 _BODY_DECODE_FAILED = "(Could not decode email body)"
 _BODY_MEDIA_TYPES = ("text/html", "text/plain")
 _BODY_NOT_FOUND = "(No email body found)"
@@ -304,10 +305,13 @@ def _carries_raw_utf8(name: str, value: str) -> bool:
 
 
 def _rewrite_utf8_headers(message: EmailMessage) -> None:
-    """Write each header of a message and of its parts that carries raw UTF-8 bytes back as that character set.
+    """Write each header that carries raw UTF-8 bytes back as that character set, for a message and its parts.
 
     A header that carries raw 8-bit bytes names no character set, so a writer marks it as an unknown one and a mail
     program shows it as broken text.
+
+    NOTE: The writer gives a new form to every header of bytes outside ASCII, inside signed content as well. A
+    signature over a part that holds such a header therefore covers bytes that an edit does not keep.
 
     NOTE: A header whose bytes are not UTF-8 is left as it is. Its text is already lost, while the bytes themselves
     survive inside the encoded word of an unknown character set.
@@ -435,11 +439,15 @@ def _replace_headers(message: EmailMessage, params: EditDraftParams) -> None:
     Raises:
         ValueError: If a value contains a line break.
     """
-    for name, value in (("To", params.to), ("Subject", params.subject), ("Cc", params.cc), ("Bcc", params.bcc)):
+    for name, value in (("To", params.to), ("Cc", params.cc), ("Bcc", params.bcc)):
         if value is not None:
             del message[name]
             if value:
-                message[name] = value
+                message[name] = _quoted_recipients(value)
+    if params.subject is not None:
+        del message["Subject"]
+        if params.subject:
+            message["Subject"] = params.subject
 
 
 def _addresses_are_ascii(*values: str | None) -> bool:
@@ -457,6 +465,21 @@ def _addresses_are_ascii(*values: str | None) -> bool:
         if not all(part.isascii() for part in addresses or [value]):
             return False
     return True
+
+
+def _quoted_recipients(value: str) -> str:
+    """Return a recipient value whose display names are quoted where a name holds a special character.
+
+    A mail program may write a display name as an encoded word, which hides a comma or another character that
+    divides one recipient from the next. A writer decodes such a name without quoting it, so the name would read as
+    a recipient that carries no address.
+    """
+    probe = EmailMessage(policy=policy.SMTP)
+    probe["To"] = value
+    pairs = [(address.display_name, address.addr_spec) for address in probe["To"].addresses]
+    if not any(char in name for name, _ in pairs for char in _ADDRESS_SPECIALS):
+        return value
+    return ", ".join(formataddr(pair) for pair in pairs)
 
 
 def _reads_as_address(value: str) -> bool:
@@ -528,12 +551,12 @@ def _build_raw_message(
     # NOTE: A 7-bit message holds no 8-bit bytes, which every mail server carries. An edited draft keeps the
     # encoding of each part that the edit does not write, so an edit never rewrites content that it did not change.
     message = EmailMessage(policy=policy.SMTP.clone(cte_type="7bit"))
-    message["To"] = to
+    message["To"] = _quoted_recipients(to)
     message["Subject"] = subject
     if cc:
-        message["Cc"] = cc
+        message["Cc"] = _quoted_recipients(cc)
     if bcc:
-        message["Bcc"] = bcc
+        message["Bcc"] = _quoted_recipients(bcc)
     if in_reply_to:
         message["In-Reply-To"] = in_reply_to
     if references:
