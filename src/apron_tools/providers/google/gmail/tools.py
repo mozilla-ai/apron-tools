@@ -192,7 +192,7 @@ def _body_candidates(payload: dict) -> Iterator[dict]:
 
     NOTE: Some mail programs name the body part of a message, so a part that names a file is a candidate as well.
     """
-    return (part for part in _walk_parts(payload) if _mime_type(part) in ("", "text/html", "text/plain"))
+    return (part for part in _walk_parts(payload) if _mime_type(part) in ("", *_BODY_MEDIA_TYPES))
 
 
 def _extract_body(payload: dict) -> str | None:
