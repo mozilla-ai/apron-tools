@@ -964,6 +964,20 @@ class TestSendEmail:
         assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
         assert httpx_mock.get_requests() == []
 
+    async def test_a_recipient_whose_name_sits_in_a_comment_is_sent(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(to="bob@example.com (Smith, Bob)", subject="Hello", body="Hi"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["bob@example.com"]
+
     async def test_a_body_that_cannot_be_written_is_refused(self, httpx_mock: HTTPXMock) -> None:
         result = await gmail_send_email(
             SendEmailParams(to="bob@example.com", subject="Hello", body="lone surrogate: \ud800"),
@@ -2411,6 +2425,26 @@ class TestReplyToEmail:
             "<second@example.com>",
             "<third@example.com>",
         ]
+
+    async def test_reply_reads_a_sender_whose_name_sits_in_a_comment(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "bob@example.com (Smith, Bob)"},
+            {"name": "Subject", "value": "Ticket 7"},
+            {"name": "Message-ID", "value": "<ticket-7@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["bob@example.com"]
 
     async def test_a_sender_address_outside_ascii_is_refused(self, httpx_mock: HTTPXMock) -> None:
         message = _load_json("get_message_for_reply.json")

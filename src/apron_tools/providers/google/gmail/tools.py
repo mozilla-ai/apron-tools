@@ -7,9 +7,10 @@ import copy
 import email
 import re
 from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from email import policy
+from email.errors import InvalidHeaderDefect
 from email.message import EmailMessage, Message, MIMEPart
-from email.utils import getaddresses
 
 import httpx
 
@@ -460,6 +461,39 @@ def _replace_headers(message: EmailMessage, params: EditDraftParams) -> None:
             message["Subject"] = params.subject
 
 
+@dataclass(frozen=True)
+class _Recipients:
+    """The recipients that one header value names, as a reader of a header takes them.
+
+    A recipient that carries no address of its own is left out of the addresses. The value reads whole where the
+    reader found no defect in it, and a defect means that a recipient the value names is lost.
+    """
+
+    addresses: tuple[str, ...]
+    display_names: tuple[str, ...]
+    groups: tuple[str, ...]
+    reads_whole: bool
+
+
+def _read_recipients(value: str) -> _Recipients:
+    """Return the recipients that a header value names.
+
+    A reader takes an address in each form that RFC 5322 allows, such as one whose display name sits in a comment.
+
+    Raises:
+        ValueError: If the value holds a line break, which no header carries.
+    """
+    probe = EmailMessage(policy=policy.SMTP)
+    probe["To"] = value
+    header = probe["To"]
+    return _Recipients(
+        addresses=tuple(address.addr_spec for address in header.addresses if address.addr_spec),
+        display_names=tuple(address.display_name for address in header.addresses),
+        groups=tuple(str(group) for group in header.groups),
+        reads_whole=not any(isinstance(defect, InvalidHeaderDefect) for defect in header.defects),
+    )
+
+
 def _addresses_are_ascii(*values: str | None) -> bool:
     """Report whether every address in the given recipient values holds only ASCII characters.
 
@@ -469,10 +503,10 @@ def _addresses_are_ascii(*values: str | None) -> bool:
     for value in values:
         if not value:
             continue
-        # NOTE: getaddresses() reads no address at all from a value it cannot parse. Such a value is measured whole,
-        # because the part of it that is a display name is unknown.
-        addresses = [address for _, address in getaddresses([value]) if address]
-        if not all(part.isascii() for part in addresses or [value]):
+        # NOTE: A value that names no recipient at all is measured whole, because the part of it that is a display
+        # name is unknown.
+        addresses = _read_recipients(value).addresses
+        if not all(part.isascii() for part in addresses or (value,)):
             return False
     return True
 
@@ -484,12 +518,10 @@ def _quoted_recipients(value: str) -> str:
     divides one recipient from the next. A writer decodes such a name without quoting it, so the name would read as
     a recipient that carries no address. A value that names a group of recipients keeps that name.
     """
-    probe = EmailMessage(policy=policy.SMTP)
-    probe["To"] = value
-    names = [address.display_name for address in probe["To"].addresses]
-    if not any(char in name for name in names for char in _ADDRESS_SPECIALS):
+    recipients = _read_recipients(value)
+    if not any(char in name for name in recipients.display_names for char in _ADDRESS_SPECIALS):
         return value
-    return ", ".join(str(group) for group in probe["To"].groups)
+    return ", ".join(recipients.groups)
 
 
 def _reads_as_address(value: str) -> bool:
@@ -508,9 +540,12 @@ def _reply_address(sender: str) -> str:
         sender: The From or Reply-To value of the message that the reply answers.
 
     Returns:
-        The value to write, or an empty string where the sender holds no address at all.
+        The value to write, or an empty string where the sender holds no address, or holds a line break that no
+        header carries.
     """
-    addresses = [address for _, address in getaddresses([sender]) if _reads_as_address(address)]
+    if not _values_are_one_line(sender):
+        return ""
+    addresses = [address for address in _read_recipients(sender).addresses if _reads_as_address(address)]
     if addresses:
         return sender if _recipients_have_addresses(sender) else ", ".join(addresses)
     return sender if _reads_as_address(sender) else ""
@@ -521,15 +556,18 @@ def _recipients_have_addresses(*values: str | None) -> bool:
 
     A comma divides one recipient from the next, so a display name that holds an unquoted comma reads as a recipient
     of its own that carries no address. A quote that is never closed takes the address of a recipient into its name.
-    A value that no recipient can be read from at all is measured whole.
+    A value that a reader cannot take whole loses a recipient, and a value that no recipient can be read from at all
+    is measured whole.
 
     NOTE: A name that reads as an address itself cannot be told apart from a recipient that the caller meant.
     """
     for value in values:
         if not value:
             continue
-        addresses = [address for _, address in getaddresses([value]) if address]
-        if not all(_reads_as_address(address) for address in addresses or [value]):
+        recipients = _read_recipients(value)
+        if not recipients.reads_whole:
+            return False
+        if not all(_reads_as_address(address) for address in recipients.addresses or (value,)):
             return False
     return True
 
