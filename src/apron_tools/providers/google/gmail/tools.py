@@ -442,6 +442,24 @@ def _reads_as_address(value: str) -> bool:
     return bool(local_part) and bool(domain) and "@" not in domain and not any(char.isspace() for char in value)
 
 
+def _reply_address(sender: str) -> str:
+    """Return the value that a reply writes as its recipient, out of the From or the Reply-To of a message.
+
+    The value is kept as it is where every recipient it names carries an address. Only the addresses of it are kept
+    otherwise, because a display name that holds an unquoted comma reads as a recipient without one.
+
+    Args:
+        sender: The From or Reply-To value of the message that the reply answers.
+
+    Returns:
+        The value to write, or an empty string where the sender holds no address at all.
+    """
+    addresses = [address for _, address in getaddresses([sender]) if _reads_as_address(address)]
+    if addresses:
+        return sender if _recipients_have_addresses(sender) else ", ".join(addresses)
+    return sender if _reads_as_address(sender) else ""
+
+
 def _recipients_have_addresses(*values: str | None) -> bool:
     """Report whether every recipient that the given values name carries an address.
 
@@ -924,10 +942,7 @@ async def gmail_reply_to_email(
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
 
-            sender = orig_reply_to or orig_from
-            if not _recipients_have_addresses(sender):
-                # The sender of a message is no value of the call, so only the addresses that it holds are kept.
-                sender = ", ".join(address for _, address in getaddresses([sender]) if _reads_as_address(address))
+            sender = _reply_address(orig_reply_to or orig_from)
             if not sender:
                 return ReplyToEmailResult(success=False, error=_NO_SENDER_ADDRESS_ERROR)
 
