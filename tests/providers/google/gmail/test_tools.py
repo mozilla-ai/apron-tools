@@ -719,7 +719,7 @@ class TestExtractBody:
         assert _extract_body(payload) == "Real body"
         assert _extract_body({"mimeType": "multipart/mixed", "parts": [attached]}) == "Attached note"
 
-    def test_attached_text_is_the_body_when_the_text_of_a_message_cannot_be_decoded(self) -> None:
+    def test_a_body_that_cannot_be_decoded_is_not_replaced_by_attached_text(self) -> None:
         payload = {
             "mimeType": "multipart/mixed",
             "parts": [
@@ -731,7 +731,8 @@ class TestExtractBody:
                 },
             ],
         }
-        assert _extract_body(payload) == "Attached note"
+        with pytest.raises(ValueError, match="Could not decode email body"):
+            _extract_body(payload)
 
     def test_the_text_of_a_forwarded_message_is_the_body_when_nothing_else_holds_text(self) -> None:
         payload = {
