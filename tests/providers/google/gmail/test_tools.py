@@ -705,6 +705,20 @@ class TestExtractBody:
         }
         assert _extract_body(payload) == "Attached note"
 
+    def test_attached_text_is_the_body_when_the_text_of_a_message_cannot_be_decoded(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": "!!!invalid!!!"}},
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="real.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+            ],
+        }
+        assert _extract_body(payload) == "Attached note"
+
     def test_the_text_of_a_forwarded_message_is_the_body_when_nothing_else_holds_text(self) -> None:
         payload = {
             "mimeType": "multipart/mixed",

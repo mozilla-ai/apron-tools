@@ -271,7 +271,11 @@ def _extract_body(payload: dict) -> str | None:
     Raises:
         ValueError: If body data is present but no part can be decoded.
     """
-    own_text = _read_body_text(_body_candidates(payload, with_attached_content=False))
+    try:
+        own_text = _read_body_text(_body_candidates(payload, with_attached_content=False))
+    except ValueError:
+        # An attachment may still hold text that can be decoded.
+        own_text = None
     if own_text is not None:
         return own_text
     return _read_body_text(_body_candidates(payload, with_attached_content=True))
