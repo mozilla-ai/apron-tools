@@ -185,7 +185,10 @@ def _is_attached_content(part: dict) -> bool:
     """Report whether a Gmail payload part holds content of its own rather than a piece of the message body.
 
     A part that declares itself an attachment holds its own content, and so does a part that holds a whole message.
+    The API gives an attachment an ID of its own as well, whatever the part declares.
     """
+    if part.get("body", {}).get("attachmentId"):
+        return True
     part_headers = Message()
     part_headers["Content-Disposition"] = _extract_header(part.get("headers", []), "Content-Disposition")
     if part_headers.get_content_disposition() == "attachment":
