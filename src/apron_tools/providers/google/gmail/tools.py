@@ -395,6 +395,8 @@ def _holds_protected_content(message: MIMEPart) -> bool:
 def _protected_blocks(message: MIMEPart) -> list[bytes]:
     """Return the bytes of each part of a message that holds a signature or a ciphertext.
 
+    A part of that kind covers the parts it holds, so the bytes of the whole part are returned.
+
     NOTE: A part inside an attached file holds such bytes as well, so every part of the message is measured.
     """
     return [part.as_bytes() for part in message.walk() if part.get_content_type() in _PROTECTED_MEDIA_TYPES]
@@ -915,6 +917,10 @@ async def gmail_edit_draft(
             if any(block not in _decode_base64url(draft_message["raw"]) for block in _protected_blocks(message)):
                 return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
 
+            # NOTE: The envelope headers belong to the block of the message itself, and an edit writes those, so only
+            # the blocks below the message are measured again once the edit is written.
+            inner_blocks = [block for part in message.iter_parts() for block in _protected_blocks(part)]
+
             original_subject = message.get("Subject", "")
             try:
                 _replace_headers(message, params)
@@ -924,9 +930,13 @@ async def gmail_edit_draft(
                 return EditDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
             try:
-                edited_raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+                edited = message.as_bytes()
             except ValueError:
                 return EditDraftResult(success=False, error=_UNWRITABLE_DRAFT_ERROR)
+
+            if any(block not in edited for block in inner_blocks):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
+            edited_raw = base64.urlsafe_b64encode(edited).decode("utf-8")
 
             update: dict[str, str] = {"raw": edited_raw}
             thread_id = draft_message.get("threadId")
