@@ -1976,6 +1976,22 @@ class TestReplyToEmail:
         assert result.error == "A recipient name that holds a comma must be in quotes."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
+    async def test_a_sender_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "Smith, John <john@example.com>"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The name of the original sender holds a comma that is not in quotes."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
     async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",

@@ -66,6 +66,7 @@ _MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
 _NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
 _UNQUOTED_NAME_ERROR = "A recipient name that holds a comma must be in quotes."
+_UNQUOTED_SENDER_ERROR = "The name of the original sender holds a comma that is not in quotes."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
@@ -867,6 +868,9 @@ async def gmail_reply_to_email(
             references = orig_references
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
+
+            if not _names_are_quoted(orig_reply_to or orig_from):
+                return ReplyToEmailResult(success=False, error=_UNQUOTED_SENDER_ERROR)
 
             if not _addresses_are_ascii(orig_reply_to or orig_from):
                 return ReplyToEmailResult(success=False, error=_NON_ASCII_SENDER_ERROR)
