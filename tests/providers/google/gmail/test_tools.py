@@ -1324,6 +1324,24 @@ _DRAFTS = {
         "--mixed--",
         "",
     ),
+    "utf8-header-bytes": _mime(
+        "From: Ana <alias@example.com>",
+        "To: bob@example.com",
+        b"Subject: Caf\xc3\xa9 \xe2\x80\x94 r\xc3\xa9union",
+        "MIME-Version: 1.0",
+        "",
+        "Original body",
+        "",
+    ),
+    "latin1-header-bytes": _mime(
+        "From: Ana <alias@example.com>",
+        "To: bob@example.com",
+        b"Subject: Caf\xe9 latin",
+        "MIME-Version: 1.0",
+        "",
+        "Original body",
+        "",
+    ),
     "inline-text-file": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/mixed; boundary="mixed"',
@@ -1394,6 +1412,32 @@ class TestEditDraft:
             original[name] for name in ("From", "Reply-To", "To")
         ]
         assert _leaf_parts(sent) == _leaf_parts(original)
+
+    async def test_an_edit_writes_a_utf8_header_as_a_readable_encoded_word(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["utf8-header-bytes"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        assert raw.isascii()
+        assert b"unknown-8bit" not in raw
+        assert _parse_raw(_put_message(httpx_mock)["raw"])["Subject"] == "Caf\u00e9 \u2014 r\u00e9union"
+
+    async def test_an_edit_keeps_the_bytes_of_a_header_it_cannot_read(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["latin1-header-bytes"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        assert b"=?unknown-8bit?q?Caf=E9?=" in raw
 
     async def test_edit_replaces_only_the_given_headers(self, httpx_mock: HTTPXMock) -> None:
         raw = _mime(*_DRAFT_HEADERS, "Cc: old@example.com", "Bcc: dave@example.com", "", "Body", "")

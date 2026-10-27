@@ -283,16 +283,39 @@ def _extract_body(payload: dict) -> str | None:
     return _read_body_text(_body_candidates(payload, with_attached_content=True))
 
 
+def _rewrite_utf8_headers(message: EmailMessage) -> None:
+    """Write each header that carries raw UTF-8 bytes back as an encoded word of that character set.
+
+    A header that carries raw 8-bit bytes names no character set, so a writer marks it as an unknown one and a mail
+    program shows it as broken text.
+
+    NOTE: A header whose bytes are not UTF-8 is left as it is. Its text is already lost, while the bytes themselves
+    survive inside the encoded word of an unknown character set.
+    """
+    names = {
+        name
+        for name, value in message.items()
+        if "unknown-8bit" in _DRAFT_POLICY.fold(name, value) and "\ufffd" not in str(value)
+    }
+    for name in names:
+        values = [str(value) for value in message.get_all(name, [])]
+        del message[name]
+        for value in values:
+            message[name] = value
+
+
 def _parse_raw_message(raw: str) -> EmailMessage:
     """Parse a base64url-encoded email message from the Gmail API, writing each header it holds back as it was read.
 
-    NOTE: A header that carries raw 8-bit bytes is written back as an encoded word of an unknown character set,
-    because the bytes themselves name no character set.
+    NOTE: A header that carries raw 8-bit bytes which are not UTF-8 is written back as an encoded word of an
+    unknown character set, because the bytes themselves name no character set.
 
     Raises:
         ValueError: If ``raw`` cannot be decoded.
     """
-    return email.message_from_bytes(_decode_base64url(raw), policy=_DRAFT_POLICY)
+    message = email.message_from_bytes(_decode_base64url(raw), policy=_DRAFT_POLICY)
+    _rewrite_utf8_headers(message)
+    return message
 
 
 def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
