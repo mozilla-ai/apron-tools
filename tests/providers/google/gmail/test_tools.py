@@ -989,6 +989,23 @@ _DRAFTS = {
         "--rel--",
         "",
     ),
+    "located-image": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="logo.png"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-Location: logo.png",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel--",
+        "",
+    ),
     "nested-attachment": _mime(
         *_DRAFT_HEADERS,
         'Content-Type: multipart/alternative; boundary="alt"',
@@ -1296,7 +1313,7 @@ class TestEditDraft:
         assert sent[header] is None
         assert sent.get_content() == "Original body\r\n"
 
-    @pytest.mark.parametrize("draft", ["html-only", "inline-image"])
+    @pytest.mark.parametrize("draft", ["html-only", "inline-image", "located-image"])
     async def test_new_body_replaces_the_text_and_html(self, httpx_mock: HTTPXMock, draft: str) -> None:
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))

@@ -272,8 +272,9 @@ def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
         for child in part.iter_parts():
             yield from _attached_files(child, in_related=holds_inline_parts)
         return
-    # The HTML of a multipart/related message names each inline part of it by content ID, so such a part is no file.
-    if in_related and part["Content-ID"]:
+    # The HTML of a multipart/related message names each inline part of it by content ID or by content location, so
+    # such a part is no file.
+    if in_related and (part["Content-ID"] or part["Content-Location"]):
         return
     # A text part holds body text unless it names a file, so only those two kinds of part are files here.
     if part.get_filename() or part.get_content_type() not in _BODY_MEDIA_TYPES:
