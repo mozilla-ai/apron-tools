@@ -352,9 +352,10 @@ def _addresses_are_ascii(*values: str | None) -> bool:
 def _values_are_one_line(*values: str | None) -> bool:
     """Report whether every given header value holds a single line.
 
-    NOTE: A header store refuses every character that str.splitlines() divides on, not a line break alone.
+    NOTE: A header store divides a value on every character that str.splitlines() divides on, so a page break counts
+    here as well. A break at the end of a value is written as an encoded word, which hides a broken address.
     """
-    return all(len(value.splitlines()) <= 1 for value in values if value)
+    return all(value.splitlines() == [value] for value in values if value)
 
 
 def _build_raw_message(

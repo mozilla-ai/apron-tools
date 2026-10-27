@@ -824,8 +824,9 @@ class TestSendEmail:
             ("bob@example.com", "Hello", "one\ntwo: injected", None),
             ("bob@example.com", "Hello", None, "one\ntwo: injected"),
             ("bob@example.com", "one\x0ctwo: injected", None, None),
+            ("bob@example.com\n", "Hello", None, None),
         ],
-        ids=["to", "subject", "cc", "bcc", "subject-with-a-page-break"],
+        ids=["to", "subject", "cc", "bcc", "subject-with-a-page-break", "to-that-ends-with-a-line-break"],
     )
     async def test_a_header_value_with_a_line_break_is_refused(
         self, httpx_mock: HTTPXMock, to: str, subject: str, cc: str | None, bcc: str | None
