@@ -2267,6 +2267,27 @@ class TestReplyToEmail:
         sent = _parse_raw(json.loads(send.content)["raw"])
         assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
 
+    async def test_a_reply_falls_back_to_the_from_where_the_reply_to_holds_no_address(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "John <john@example.com>"
+        message["payload"]["headers"].append({"name": "Reply-To", "value": "Marketing Team"})
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
     @pytest.mark.parametrize(
         "sender",
         ["Nobody, No Address", "<>", "@", "(comment only)"],

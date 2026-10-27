@@ -944,7 +944,7 @@ async def gmail_reply_to_email(
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
 
-            sender = _reply_address(orig_reply_to or orig_from)
+            sender = _reply_address(orig_reply_to) or _reply_address(orig_from)
             if not sender:
                 return ReplyToEmailResult(success=False, error=_NO_SENDER_ADDRESS_ERROR)
 
