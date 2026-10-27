@@ -910,6 +910,9 @@ def _mime(*lines: str | bytes) -> bytes:
     return b"\r\n".join(line if isinstance(line, bytes) else line.encode() for line in lines)
 
 
+# RFC 2046 allows a boundary of up to 70 characters, which is longer than a header line holds.
+_LONG_BOUNDARY = "----=_Part_of_a_draft_whose_boundary_fills_seventy_characters_in_total"
+
 _DRAFT_HEADERS = (
     "From: Ana <alias@example.com>",
     "Reply-To: team@example.com",
@@ -1048,6 +1051,23 @@ _DRAFTS = {
         "Content-Transfer-Encoding: base64",
         "",
         "JVBERi0xLjQK",
+        "",
+    ),
+    "long-boundary": _mime(
+        *_DRAFT_HEADERS,
+        f'Content-Type: multipart/mixed; boundary="{_LONG_BOUNDARY}"',
+        "",
+        f"--{_LONG_BOUNDARY}",
+        "Content-Type: text/plain",
+        "",
+        "Original body",
+        f"--{_LONG_BOUNDARY}",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        f"--{_LONG_BOUNDARY}--",
         "",
     ),
     "attached-email": _mime(
@@ -1343,6 +1363,26 @@ class TestEditDraft:
             "application/pdf",
         ]
         assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
+
+    async def test_edit_keeps_a_long_mime_boundary_as_it_was_written(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["long-boundary"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="New subject"), token=_TOKEN)
+
+        assert result.success is True
+        sent_raw = _put_message(httpx_mock)["raw"]
+        sent_bytes = base64.urlsafe_b64decode(sent_raw + "=" * (-len(sent_raw) % 4))
+        assert f'boundary="{_LONG_BOUNDARY}"'.encode() in sent_bytes
+        assert b"boundary*0*=" not in sent_bytes
+        sent = _parse_raw(sent_raw)
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert sent["Subject"] == "New subject"
 
     async def test_edit_keeps_reply_draft_in_its_thread(self, httpx_mock: HTTPXMock) -> None:
         raw = _mime(*_DRAFT_HEADERS, "In-Reply-To: <orig@example.com>", "", "Body", "")

@@ -53,6 +53,8 @@ _TIMEOUT = 60.0
 # NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
 _BODY_DECODE_FAILED = "(Could not decode email body)"
 _BODY_NOT_FOUND = "(No email body found)"
+# A source header is written back as it was read, so a long MIME boundary keeps the plain form that RFC 2046 needs.
+_DRAFT_POLICY = policy.SMTP.clone(refold_source="none")
 
 _HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
 _HEADER_LINE_BREAK_ERROR = "A recipient or subject must not contain a line break."
@@ -234,12 +236,15 @@ def _extract_body(payload: dict) -> str | None:
 
 
 def _parse_raw_message(raw: str) -> EmailMessage:
-    """Parse a base64url-encoded email message from the Gmail API, keeping its CRLF line endings when written out.
+    """Parse a base64url-encoded email message from the Gmail API, writing each header it holds back as it was read.
+
+    NOTE: A header that carries raw 8-bit bytes is written back as an encoded word of an unknown character set,
+    because the bytes themselves name no character set.
 
     Raises:
         ValueError: If ``raw`` cannot be decoded.
     """
-    return email.message_from_bytes(_decode_base64url(raw), policy=policy.SMTP)
+    return email.message_from_bytes(_decode_base64url(raw), policy=_DRAFT_POLICY)
 
 
 def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
