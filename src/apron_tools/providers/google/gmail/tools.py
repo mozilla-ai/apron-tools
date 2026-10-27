@@ -69,6 +69,7 @@ _NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASC
 _NO_SENDER_ADDRESS_ERROR = "The original message holds no sender address to reply to."
 _SIGNED_CONTENT_ERROR = "A draft that holds signed or encrypted content cannot take a new body."
 _SIGNED_MEDIA_TYPES = ("multipart/encrypted", "multipart/signed")
+_UNWRITABLE_DRAFT_ERROR = "The existing draft holds a character that cannot be written to an email."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
@@ -842,9 +843,13 @@ async def gmail_edit_draft(
                 _replace_headers(message, params)
                 if params.body is not None:
                     _replace_body(message, params.body)
-                edited_raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
             except ValueError:
                 return EditDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
+
+            try:
+                edited_raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+            except ValueError:
+                return EditDraftResult(success=False, error=_UNWRITABLE_DRAFT_ERROR)
 
             update: dict[str, str] = {"raw": edited_raw}
             thread_id = draft_message.get("threadId")
