@@ -65,6 +65,7 @@ _LINE_BREAK_PATTERN = re.compile(r"\r\n|[\r\n]")
 _MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
 _NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
+_UNQUOTED_NAME_ERROR = "A recipient name that holds a comma must be in quotes."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
@@ -361,6 +362,21 @@ def _addresses_are_ascii(*values: str | None) -> bool:
     return True
 
 
+def _names_are_quoted(*values: str | None) -> bool:
+    """Report whether every recipient value given reads as a list of addresses.
+
+    NOTE: A comma divides one recipient from the next, so a display name that holds an unquoted comma reads as a
+    recipient of its own that carries no address.
+    """
+    for value in values:
+        if not value or "," not in value:
+            continue
+        addresses = [address for _, address in getaddresses([value]) if address]
+        if not all("@" in address for address in addresses):
+            return False
+    return True
+
+
 def _values_are_one_line(*values: str | None) -> bool:
     """Report whether every given header value holds a single line.
 
@@ -598,6 +614,9 @@ async def gmail_send_email(
     base_url: str = _GMAIL_BASE_URL,
 ) -> SendEmailResult:
     """Send an email via Gmail."""
+    if not _names_are_quoted(params.to, params.cc, params.bcc):
+        return SendEmailResult(success=False, error=_UNQUOTED_NAME_ERROR)
+
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
         return SendEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
@@ -652,6 +671,9 @@ async def gmail_create_draft(
     base_url: str = _GMAIL_BASE_URL,
 ) -> CreateDraftResult:
     """Create an email draft in Gmail."""
+    if not _names_are_quoted(params.to, params.cc, params.bcc):
+        return CreateDraftResult(success=False, error=_UNQUOTED_NAME_ERROR)
+
     if not _addresses_are_ascii(params.to, params.cc, params.bcc):
         return CreateDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
@@ -721,6 +743,9 @@ async def gmail_edit_draft(
                 message = _parse_raw_message(draft_message["raw"])
             except (KeyError, TypeError, ValueError):
                 return EditDraftResult(success=False, error="The existing draft could not be read.")
+
+            if not _names_are_quoted(params.to, params.cc, params.bcc):
+                return EditDraftResult(success=False, error=_UNQUOTED_NAME_ERROR)
 
             if not _addresses_are_ascii(params.to, params.cc, params.bcc):
                 return EditDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
@@ -812,6 +837,9 @@ async def gmail_reply_to_email(
 
             if not _addresses_are_ascii(orig_reply_to or orig_from):
                 return ReplyToEmailResult(success=False, error=_NON_ASCII_SENDER_ERROR)
+
+            if not _names_are_quoted(params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_UNQUOTED_NAME_ERROR)
 
             if not _addresses_are_ascii(params.cc, params.bcc):
                 return ReplyToEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)

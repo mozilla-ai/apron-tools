@@ -839,6 +839,18 @@ class TestSendEmail:
         assert result.error == "A recipient address must hold only ASCII characters."
         assert httpx_mock.get_requests() == []
 
+    @pytest.mark.parametrize(
+        "to",
+        ["Smith, John <john@example.com>", "M\u00fcller, Hans <hans@example.com>"],
+        ids=["ascii-name", "name-outside-ascii"],
+    )
+    async def test_a_recipient_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
+        result = await gmail_send_email(SendEmailParams(to=to, subject="Hello", body="Hi"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "A recipient name that holds a comma must be in quotes."
+        assert httpx_mock.get_requests() == []
+
     async def test_a_body_that_cannot_be_written_is_refused(self, httpx_mock: HTTPXMock) -> None:
         result = await gmail_send_email(
             SendEmailParams(to="bob@example.com", subject="Hello", body="lone surrogate: \ud800"),
@@ -926,6 +938,16 @@ class TestCreateDraft:
 
         assert result.success is False
         assert result.error == "A recipient or subject must hold a single line."
+        assert httpx_mock.get_requests() == []
+
+    async def test_a_recipient_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        result = await gmail_create_draft(
+            CreateDraftParams(to="Smith, John <john@example.com>", subject="Hello", body="Hi Bob"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient name that holds a comma must be in quotes."
         assert httpx_mock.get_requests() == []
 
     async def test_has_tool_definition(self) -> None:
@@ -1726,6 +1748,20 @@ class TestEditDraft:
         assert result.error == "A recipient address must hold only ASCII characters."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
+    async def test_a_recipient_name_with_an_unquoted_comma_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to="Smith, John <john@example.com>"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient name that holds a comma must be in quotes."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
     async def test_a_body_that_cannot_be_written_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
@@ -1897,6 +1933,21 @@ class TestReplyToEmail:
 
         assert result.success is False
         assert result.error == "The address of the original sender must hold only ASCII characters."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_recipient_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=_load_json("get_message_for_reply.json"),
+        )
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!", cc="Smith, John <john@example.com>"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient name that holds a comma must be in quotes."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
