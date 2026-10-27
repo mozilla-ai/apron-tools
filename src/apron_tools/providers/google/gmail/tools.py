@@ -466,6 +466,7 @@ def _recipients_have_addresses(*values: str | None) -> bool:
 
     A comma divides one recipient from the next, so a display name that holds an unquoted comma reads as a recipient
     of its own that carries no address. A quote that is never closed takes the address of a recipient into its name.
+    A value that no recipient can be read from at all is measured whole.
 
     NOTE: A name that reads as an address itself cannot be told apart from a recipient that the caller meant.
     """
@@ -473,7 +474,7 @@ def _recipients_have_addresses(*values: str | None) -> bool:
         if not value:
             continue
         addresses = [address for _, address in getaddresses([value]) if address]
-        if not all(_reads_as_address(address) for address in addresses):
+        if not all(_reads_as_address(address) for address in addresses or [value]):
             return False
     return True
 

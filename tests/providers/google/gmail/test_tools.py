@@ -865,9 +865,8 @@ class TestSendEmail:
             "jos\u00e9@example.com",
             "a@ex\u00e4mple.com",
             "Ana <ana@ex\u00e4mple.com>",
-            "a@example.com;jos\u00e9@example.com",
         ],
-        ids=["local-part", "domain", "domain-with-a-name", "inside-a-list-that-cannot-be-read"],
+        ids=["local-part", "domain", "domain-with-a-name"],
     )
     async def test_an_address_outside_ascii_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
         result = await gmail_send_email(
@@ -891,9 +890,19 @@ class TestSendEmail:
         assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
         assert httpx_mock.get_requests() == []
 
-    async def test_a_recipient_whose_quotes_swallow_the_address_is_refused(self, httpx_mock: HTTPXMock) -> None:
+    @pytest.mark.parametrize(
+        "to",
+        [
+            '"Unbalanced <quote@example.com>',
+            "   ",
+            "Undisclosed recipients:;",
+            "a@example.com;jos\u00e9@example.com",
+        ],
+        ids=["quotes-that-never-close", "space-alone", "a-group-with-no-member", "a-list-joined-by-a-semicolon"],
+    )
+    async def test_a_recipient_that_reads_as_no_address_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
         result = await gmail_send_email(
-            SendEmailParams(to='"Unbalanced <quote@example.com>', subject="Hello", body="Hi"),
+            SendEmailParams(to=to, subject="Hello", body="Hi"),
             token=_TOKEN,
         )
 
