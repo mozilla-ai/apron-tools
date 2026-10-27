@@ -293,6 +293,16 @@ def _extract_body(payload: dict) -> str | None:
     return _read_body_text(_body_candidates(payload, with_attached_content=True))
 
 
+def _carries_raw_utf8(name: str, value: str) -> bool:
+    """Report whether a header holds UTF-8 bytes that name no character set.
+
+    NOTE: The writer gives such bytes the name of an unknown character set. A header whose own text holds that name
+    is no such header, so the text outside ASCII is measured as well.
+    """
+    text = str(value)
+    return not text.isascii() and "\ufffd" not in text and "unknown-8bit" in _DRAFT_POLICY.fold(name, value)
+
+
 def _rewrite_utf8_headers(message: EmailMessage) -> None:
     """Write each header of a message and of its parts that carries raw UTF-8 bytes back as that character set.
 
@@ -303,11 +313,7 @@ def _rewrite_utf8_headers(message: EmailMessage) -> None:
     survive inside the encoded word of an unknown character set.
     """
     for part in message.walk():
-        names = dict.fromkeys(
-            name
-            for name, value in part.items()
-            if "unknown-8bit" in _DRAFT_POLICY.fold(name, value) and "\ufffd" not in str(value)
-        )
+        names = dict.fromkeys(name for name, value in part.items() if _carries_raw_utf8(name, value))
         for name in names:
             values = [str(value) for value in part.get_all(name, [])]
             del part[name]

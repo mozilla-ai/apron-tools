@@ -1029,6 +1029,9 @@ def _mime(*lines: str | bytes) -> bytes:
 # RFC 2046 allows a boundary of up to 70 characters, which is longer than a header line holds.
 _LONG_BOUNDARY = "----=_Part_of_a_draft_whose_boundary_fills_seventy_characters_in_total"
 
+# A boundary that holds the name of the character set that the writer gives to bytes of an unknown set.
+_CHARSET_BOUNDARY = "----=_NextPart_unknown-8bit_boundary_of_a_draft_from_another_client"
+
 _DRAFT_HEADERS = (
     "From: Ana <alias@example.com>",
     "Reply-To: team@example.com",
@@ -1325,6 +1328,17 @@ _DRAFTS = {
         "Content-Transfer-Encoding: base64",
         "",
         "Y2lwaGVydGV4dAo=",
+        "",
+    ),
+    "boundary-that-names-a-charset": _mime(
+        *_DRAFT_HEADERS,
+        f'Content-Type: multipart/mixed; boundary="{_CHARSET_BOUNDARY}"',
+        "",
+        f"--{_CHARSET_BOUNDARY}",
+        "Content-Type: text/plain",
+        "",
+        "Original body",
+        f"--{_CHARSET_BOUNDARY}--",
         "",
     ),
     "attached-signed-email": _mime(
@@ -1692,6 +1706,17 @@ class TestEditDraft:
         ]
         assert sent.get_payload()[0].get_content().strip() == ""
         assert [part.get_filename() for part in sent.iter_attachments()] == ["a.pdf"]
+
+    async def test_an_edit_keeps_a_boundary_that_names_a_charset(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["boundary-that-names-a-charset"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        sent_raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"]).decode()
+        assert f'boundary="{_CHARSET_BOUNDARY}"' in sent_raw
 
     @pytest.mark.parametrize("draft", ["signed", "encrypted", "smime-encrypted"])
     async def test_a_new_body_for_protected_content_is_refused(self, httpx_mock: HTTPXMock, draft: str) -> None:
