@@ -836,8 +836,13 @@ class TestSendEmail:
 
     @pytest.mark.parametrize(
         "to",
-        ["=?utf-8?Q?Doe=2C_John?= <john@example.com>", "=?utf-8?Q?Doe=3B_John?= <john@example.com>"],
-        ids=["a-comma", "a-semicolon"],
+        [
+            "=?utf-8?Q?Doe=2C_John?= <john@example.com>",
+            "=?utf-8?Q?Doe=3B_John?= <john@example.com>",
+            "=?utf-8?Q?Doe_=5BContractor=5D?= <john@example.com>",
+            "=?utf-8?Q?Doe_=28Sales?= <john@example.com>",
+        ],
+        ids=["a-comma", "a-semicolon", "a-square-bracket", "a-round-bracket"],
     )
     async def test_a_name_written_as_an_encoded_word_keeps_one_recipient(self, httpx_mock: HTTPXMock, to: str) -> None:
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))

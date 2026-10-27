@@ -50,7 +50,7 @@ from .scopes import SCOPES
 _GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
 _TIMEOUT = 60.0
 
-_ADDRESS_SPECIALS = ',;:<>@"'
+_ADDRESS_SPECIALS = '"().,:;<>@[]\\'
 _BAD_RECIPIENT_ERROR = "A recipient must read as an email address, and a name beside it must be in quotes."
 # NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
 _BODY_DECODE_FAILED = "(Could not decode email body)"
