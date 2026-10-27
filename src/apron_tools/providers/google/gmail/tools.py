@@ -285,7 +285,7 @@ def _extract_body(payload: dict) -> str | None:
 
 
 def _rewrite_utf8_headers(message: EmailMessage) -> None:
-    """Write each header that carries raw UTF-8 bytes back as an encoded word of that character set.
+    """Write each header of a message and of its parts that carries raw UTF-8 bytes back as that character set.
 
     A header that carries raw 8-bit bytes names no character set, so a writer marks it as an unknown one and a mail
     program shows it as broken text.
@@ -293,16 +293,17 @@ def _rewrite_utf8_headers(message: EmailMessage) -> None:
     NOTE: A header whose bytes are not UTF-8 is left as it is. Its text is already lost, while the bytes themselves
     survive inside the encoded word of an unknown character set.
     """
-    names = dict.fromkeys(
-        name
-        for name, value in message.items()
-        if "unknown-8bit" in _DRAFT_POLICY.fold(name, value) and "\ufffd" not in str(value)
-    )
-    for name in names:
-        values = [str(value) for value in message.get_all(name, [])]
-        del message[name]
-        for value in values:
-            message[name] = value
+    for part in message.walk():
+        names = dict.fromkeys(
+            name
+            for name, value in part.items()
+            if "unknown-8bit" in _DRAFT_POLICY.fold(name, value) and "\ufffd" not in str(value)
+        )
+        for name in names:
+            values = [str(value) for value in part.get_all(name, [])]
+            del part[name]
+            for value in values:
+                part[name] = value
 
 
 def _parse_raw_message(raw: str) -> EmailMessage:

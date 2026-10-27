@@ -1490,6 +1490,35 @@ class TestEditDraft:
         assert sent["From"] == "An\u00e1 <alias@example.com>"
         assert sent["Subject"] == "Caf\u00e9"
 
+    async def test_an_edit_keeps_the_name_of_an_attached_file_readable(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            'Content-Type: multipart/mixed; boundary="mixed"',
+            "",
+            "--mixed",
+            "Content-Type: text/plain",
+            "",
+            "Original body",
+            "--mixed",
+            b'Content-Type: application/pdf; name="Caf\xc3\xa9.pdf"',
+            b'Content-Disposition: attachment; filename="Caf\xc3\xa9.pdf"',
+            "Content-Transfer-Encoding: base64",
+            "",
+            "JVBERi0xLjQK",
+            "--mixed--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        sent_raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        assert b"unknown-8bit" not in sent_raw
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_filename() for part in sent.iter_attachments()] == ["Caf\u00e9.pdf"]
+
     async def test_edit_replaces_only_the_given_headers(self, httpx_mock: HTTPXMock) -> None:
         raw = _mime(*_DRAFT_HEADERS, "Cc: old@example.com", "Bcc: dave@example.com", "", "Body", "")
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
