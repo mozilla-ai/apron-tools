@@ -68,7 +68,6 @@ _MAX_LINE_OCTETS = 998
 _NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
 _NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
 _NO_SENDER_ADDRESS_ERROR = "The original message holds no sender address to reply to."
-_SIGNED_CONTENT_ERROR = "A draft that holds signed or encrypted content cannot take a new body."
 _PROTECTED_MEDIA_TYPES = (
     "application/pgp-encrypted",
     "application/pgp-signature",
@@ -79,6 +78,8 @@ _PROTECTED_MEDIA_TYPES = (
     "multipart/encrypted",
     "multipart/signed",
 )
+_SIGNED_CONTENT_CHANGED_ERROR = "The signed or encrypted content of this draft cannot be written back as it was read."
+_SIGNED_CONTENT_ERROR = "A draft that holds signed or encrypted content cannot take a new body."
 _UNWRITABLE_DRAFT_ERROR = "The existing draft holds a character that cannot be written to an email."
 _UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
@@ -903,8 +904,12 @@ async def gmail_edit_draft(
             if not _addresses_are_ascii(params.to, params.cc, params.bcc):
                 return EditDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
-            if params.body is not None and _holds_protected_content(message):
-                return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
+            if _holds_protected_content(message):
+                if params.body is not None:
+                    return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
+                # A signature covers the bytes of the parts beside it, so an edit must write them back as they were.
+                if message.as_bytes() != _decode_base64url(draft_message["raw"]):
+                    return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
 
             original_subject = message.get("Subject", "")
             try:

@@ -1759,6 +1759,32 @@ class TestEditDraft:
         sent = _parse_raw(_put_message(httpx_mock)["raw"])
         assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
 
+    async def test_a_header_edit_stops_where_signed_content_cannot_be_written_back(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+            "",
+            "--sig",
+            "Content-Type: text/plain",
+            b"Content-Description: caf\xc3\xa9",
+            "",
+            "Signed body",
+            "--sig",
+            "Content-Type: application/pgp-signature",
+            "Content-Transfer-Encoding: base64",
+            "",
+            "c2lnbmF0dXJlCg==",
+            "--sig--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The signed or encrypted content of this draft cannot be written back as it was read."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
     async def test_an_edit_keeps_a_boundary_that_names_a_charset(self, httpx_mock: HTTPXMock) -> None:
         raw = _DRAFTS["boundary-that-names-a-charset"]
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
