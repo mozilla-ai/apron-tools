@@ -1469,6 +1469,27 @@ class TestEditDraft:
         assert result.error == "The existing draft holds a character that cannot be written to an email."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
+    async def test_an_edit_keeps_the_order_of_the_headers_it_rewrites(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            b"From: An\xc3\xa1 <alias@example.com>",
+            "To: bob@example.com",
+            b"Subject: Caf\xc3\xa9",
+            "MIME-Version: 1.0",
+            "",
+            "Original body",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [name for name, _ in sent.items()] == ["MIME-Version", "From", "Subject", "To"]
+        assert sent["From"] == "An\u00e1 <alias@example.com>"
+        assert sent["Subject"] == "Caf\u00e9"
+
     async def test_edit_replaces_only_the_given_headers(self, httpx_mock: HTTPXMock) -> None:
         raw = _mime(*_DRAFT_HEADERS, "Cc: old@example.com", "Bcc: dave@example.com", "", "Body", "")
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))

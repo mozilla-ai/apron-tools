@@ -293,11 +293,11 @@ def _rewrite_utf8_headers(message: EmailMessage) -> None:
     NOTE: A header whose bytes are not UTF-8 is left as it is. Its text is already lost, while the bytes themselves
     survive inside the encoded word of an unknown character set.
     """
-    names = {
+    names = dict.fromkeys(
         name
         for name, value in message.items()
         if "unknown-8bit" in _DRAFT_POLICY.fold(name, value) and "\ufffd" not in str(value)
-    }
+    )
     for name in names:
         values = [str(value) for value in message.get_all(name, [])]
         del message[name]
