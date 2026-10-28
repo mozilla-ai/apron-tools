@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import base64
-import codecs
-from collections.abc import Iterator
-from email.message import Message
-from email.mime.text import MIMEText
+import copy
+import email
+import re
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
+from email import policy
+from email.errors import InvalidHeaderDefect
+from email.headerregistry import BaseHeader, HeaderRegistry, UniqueUnstructuredHeader
+from email.message import EmailMessage, Message, MIMEPart
+from email.policy import Policy
 
 import httpx
 
@@ -47,9 +53,38 @@ from .scopes import SCOPES
 _GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
 _TIMEOUT = 60.0
 
+_ADDRESS_SPECIALS = '"().,:;<>@[]\\'
+_BAD_RECIPIENT_ERROR = "A recipient must read as an email address, and a name beside it must be in quotes."
 # NOTE: These are display strings for a missing or unreadable body. Do not write them back to a message.
 _BODY_DECODE_FAILED = "(Could not decode email body)"
+_BODY_MEDIA_TYPES = ("text/html", "text/plain")
 _BODY_NOT_FOUND = "(No email body found)"
+# A source header is written back as it was read, so a long MIME boundary keeps the plain form that RFC 2046 needs.
+_DRAFT_POLICY = policy.SMTP.clone(refold_source="none")
+
+_HEADER_FOLD_PATTERN = re.compile(r"\r?\n([ \t])")
+_HEADER_LINE_BREAK_ERROR = "A recipient or subject must hold a single line."
+# NOTE: str.splitlines() also splits on a page break and other control characters, which end no line of an email.
+_LINE_BREAK_PATTERN = re.compile(r"\r\n|[\r\n]")
+# NOTE: RFC 5322 allows at most 998 octets in a line, without the line break that ends it.
+_MAX_LINE_OCTETS = 998
+_NON_ASCII_ADDRESS_ERROR = "A recipient address must hold only ASCII characters."
+_NON_ASCII_SENDER_ERROR = "The address of the original sender must hold only ASCII characters."
+_NO_SENDER_ADDRESS_ERROR = "The original message holds no sender address to reply to."
+_PROTECTED_MEDIA_TYPES = (
+    "application/pgp-encrypted",
+    "application/pgp-signature",
+    "application/pkcs7-mime",
+    "application/pkcs7-signature",
+    "application/x-pkcs7-mime",
+    "application/x-pkcs7-signature",
+    "multipart/encrypted",
+    "multipart/signed",
+)
+_SIGNED_CONTENT_CHANGED_ERROR = "The signed or encrypted content of this draft cannot be written back as it was read."
+_SIGNED_CONTENT_ERROR = "A draft that holds signed or encrypted content cannot take a new body."
+_UNWRITABLE_DRAFT_ERROR = "The existing draft holds a character that cannot be written to an email."
+_UNWRITABLE_VALUE_ERROR = "A recipient, subject or body contains a character that cannot be written to an email."
 
 
 def _headers(token: str, *, content_type: bool = False) -> dict[str, str]:
@@ -86,32 +121,128 @@ def _decode_base64url(data: str) -> bytes:
     return base64.b64decode(data + "=" * (-len(data) % 4), altchars=b"-_", validate=True)
 
 
+def _reads_any_byte(charset: str) -> bool:
+    """Report whether a character set reads a single byte above ASCII, which no multi-byte character set does.
+
+    A character set that reads any byte cannot report that its bytes hold text of another character set.
+    """
+    try:
+        b"\xe9".decode(charset)
+    except (LookupError, ValueError):
+        return False
+    return True
+
+
+def _decode_body_data(data: str, charset: str) -> str:
+    """Decode base64url body data as text, as UTF-8 where the bytes hold UTF-8, and in the given character set if not.
+
+    NOTE: A message can declare a character set that its own bytes do not fit, most often us-ascii or a single-byte
+    character set for UTF-8 bytes. Where the declared character set cannot report such a mismatch, bytes outside
+    ASCII that read as UTF-8 are taken as UTF-8, because they are almost never single-byte text.
+
+    Args:
+        data: The base64url-encoded body data to decode.
+        charset: The character set that the body declares.
+
+    Returns:
+        The decoded text.
+
+    Raises:
+        ValueError: If the data is not valid base64url, or the bytes fit neither character set.
+    """
+    decoded = _decode_base64url(data)
+    if not decoded.isascii() and _reads_any_byte(charset):
+        try:
+            return decoded.decode("utf-8")
+        except ValueError:
+            pass
+    try:
+        return decoded.decode(charset)
+    except (LookupError, ValueError):
+        return decoded.decode("utf-8")
+
+
 def _extract_header(headers: list[dict[str, str]], name: str) -> str:
-    """Extract a single header value from a Gmail payload headers list, matching the name in any case."""
+    """Extract a single header value from a Gmail payload headers list, matching the name in any case.
+
+    A value that is folded over several lines is joined into one line, which is how a reader of a header must take it.
+    """
     for h in headers:
         if h.get("name", "").lower() == name.lower():
-            return h.get("value", "")
+            return _HEADER_FOLD_PATTERN.sub(r"\1", h.get("value") or "")
     return ""
 
 
-def _walk_parts(payload: dict) -> Iterator[dict]:
-    """Yield the payload and its MIME parts in document order."""
-    yield payload
-    for part in payload.get("parts", []):
-        yield from _walk_parts(part)
+def _declared_charset(part: dict) -> str:
+    """Return the character set that a Gmail payload part declares for its body, or UTF-8 if it declares none."""
+    part_headers = Message()
+    part_headers["Content-Type"] = _extract_header(part.get("headers", []), "Content-Type")
+    return part_headers.get_content_charset() or "utf-8"
 
 
-def _extract_body(payload: dict) -> str | None:
-    """Extract body text, preferring plain text over HTML in document order.
+def _mime_type(part: dict) -> str:
+    """Return the media type that a Gmail payload part declares, in the lower case that a comparison needs."""
+    return part.get("mimeType", "").strip().lower()
 
-    The first readable part of each type wins, including nested parts.
-    An unreadable part does not hide readable children or siblings.
+
+def _is_attached_content(part: dict) -> bool:
+    """Report whether a Gmail payload part holds content of its own rather than a piece of the message body.
+
+    A part that declares itself an attachment holds its own content, and so does a part that holds a whole message.
+    The API gives an attachment an ID of its own as well, whatever the part declares.
+    """
+    if part.get("body", {}).get("attachmentId"):
+        return True
+    part_headers = Message()
+    part_headers["Content-Disposition"] = _extract_header(part.get("headers", []), "Content-Disposition")
+    if part_headers.get_content_disposition() == "attachment":
+        return True
+    return _mime_type(part).startswith("message/")
+
+
+def _walk_parts(payload: dict, *, with_attached_content: bool) -> Iterator[dict]:
+    """Yield a payload and the MIME parts below it in document order.
 
     Args:
-        payload: The Gmail message payload to read.
+        payload: The Gmail payload or payload part to read.
+        with_attached_content: True to enter a part that holds content of its own, such as an attachment or an
+            embedded message.
+
+    Yields:
+        The payload given and each part below it.
+    """
+    yield payload
+    for part in payload.get("parts", []):
+        if with_attached_content or not _is_attached_content(part):
+            yield from _walk_parts(part, with_attached_content=with_attached_content)
+
+
+def _body_candidates(payload: dict, *, with_attached_content: bool) -> Iterator[dict]:
+    """Yield the parts of a Gmail payload that can hold the body text, in document order.
+
+    NOTE: Some mail programs name the body part of a message, so a part that names a file is a candidate as well.
+
+    Args:
+        payload: The Gmail payload to read.
+        with_attached_content: True to read the text inside an attachment or an embedded message as well.
+
+    Yields:
+        Each part that can hold the body text.
+    """
+    parts = _walk_parts(payload, with_attached_content=with_attached_content)
+    return (part for part in parts if _mime_type(part) in ("", *_BODY_MEDIA_TYPES))
+
+
+def _read_body_text(parts: Iterable[dict]) -> str | None:
+    """Read the body text out of the given candidate parts, preferring plain text over HTML.
+
+    The first readable part of each type wins. An unreadable part does not hide readable children or siblings.
+
+    Args:
+        parts: The candidate parts to read, in document order.
 
     Returns:
-        The decoded body text, or None if there is no body data.
+        The decoded body text, or None if no part holds body data.
 
     Raises:
         ValueError: If body data is present but no part can be decoded.
@@ -120,21 +251,20 @@ def _extract_body(payload: dict) -> str | None:
     html_text: str | None = None
     decode_failed = False
 
-    for part in _walk_parts(payload):
+    for part in parts:
         part_data = part.get("body", {}).get("data", "")
         if not part_data:
             continue
         try:
-            text = _decode_base64url(part_data).decode("utf-8")
+            text = _decode_body_data(part_data, _declared_charset(part))
         except ValueError:
             decode_failed = True
             continue
 
-        mime_type = part.get("mimeType", "")
-        if mime_type == "text/html":
+        if _mime_type(part) == "text/html":
             if html_text is None:
                 html_text = text
-        elif mime_type in ("", "text/plain") and plain_text is None:
+        elif plain_text is None:
             plain_text = text
 
     if plain_text is not None:
@@ -146,103 +276,337 @@ def _extract_body(payload: dict) -> str | None:
     return None
 
 
-class _UnpreservableDraftError(ValueError):
-    """A draft cannot be rebuilt as plain text without losing or changing its content."""
+def _extract_body(payload: dict) -> str | None:
+    """Extract the body text of a Gmail message payload, preferring plain text over HTML.
 
+    NOTE: Where a message holds no text part of its own, the text inside an attachment or an embedded message is
+    read instead, because it is the only text that the message holds. A text part that cannot be decoded is text of
+    the message, so the failure to decode it is reported rather than the text of an attachment. A text part that
+    holds nothing is text of the message as well, so the message reads as empty.
 
-def _declared_charset(part: dict) -> str | None:
-    """Return the standard name of the charset that a MIME part declares in its Content-Type header, if any.
+    Args:
+        payload: The Gmail message payload to read.
 
-    NOTE: An unknown charset is returned as declared.
+    Returns:
+        The decoded body text, or None if there is no body data.
+
+    Raises:
+        ValueError: If body data is present but no part can be decoded.
     """
-    for header in part.get("headers", []):
-        if header.get("name", "").lower() == "content-type":
-            message = Message()
-            message["Content-Type"] = header.get("value", "")
-            charset = message.get_content_charset()
-            if charset is None:
-                return None
-            try:
-                return codecs.lookup(charset).name
-            except LookupError:
-                return charset
-    return None
+    own_candidates = list(_body_candidates(payload, with_attached_content=False))
+    own_text = _read_body_text(own_candidates)
+    if own_text is not None:
+        return own_text
+    if own_candidates:
+        return None
+    return _read_body_text(_body_candidates(payload, with_attached_content=True))
 
 
-def _is_attachment_or_inline(part: dict) -> bool:
-    """Report whether a MIME part is an attachment, an attached email, inline content, or non-text data."""
-    body = part.get("body", {})
-    mime_type = part.get("mimeType", "")
-    if part.get("filename") or body.get("attachmentId") or mime_type.startswith("message/"):
-        return True
-    for header in part.get("headers", []):
-        name = header.get("name", "").lower()
-        value = header.get("value", "")
-        if name == "content-id" and value:
-            return True
-        if name == "content-disposition" and value.split(";", 1)[0].strip().lower() in {"attachment", "inline"}:
-            return True
-    return (
-        bool(body.get("data"))
-        and mime_type not in {"text/plain", "text/html"}
-        and not mime_type.startswith("multipart/")
+def _carries_raw_utf8(name: str, value: str) -> bool:
+    """Report whether a header holds UTF-8 bytes that name no character set.
+
+    NOTE: The writer gives such bytes the name of an unknown character set. A header whose own text holds that name
+    is no such header, so the text outside ASCII is measured as well.
+    """
+    text = str(value)
+    return not text.isascii() and "\ufffd" not in text and "unknown-8bit" in _DRAFT_POLICY.fold(name, value)
+
+
+def _rewrite_utf8_headers(message: EmailMessage) -> None:
+    """Write each header that carries raw UTF-8 bytes back as that character set, for a message and its parts.
+
+    A header that carries raw 8-bit bytes names no character set, so a writer marks it as an unknown one and a mail
+    program shows it as broken text.
+
+    NOTE: The writer gives a new form to every header of bytes outside ASCII, inside signed content as well. A
+    signature over a part that holds such a header therefore covers bytes that an edit does not keep.
+
+    NOTE: A header whose bytes are not UTF-8 is left as it is. Its text is already lost, while the bytes themselves
+    survive inside the encoded word of an unknown character set.
+    """
+    for part in message.walk():
+        names = dict.fromkeys(name for name, value in part.items() if _carries_raw_utf8(name, value))
+        for name in names:
+            values = [str(value) for value in part.get_all(name, [])]
+            del part[name]
+            for value in values:
+                part[name] = value
+
+
+def _parse_raw_message(raw: str) -> EmailMessage:
+    """Parse a base64url-encoded email message from the Gmail API, writing each header it holds back as it was read.
+
+    NOTE: A header that carries raw 8-bit bytes which are not UTF-8 is written back as an encoded word of an
+    unknown character set, because the bytes themselves name no character set.
+
+    Raises:
+        ValueError: If ``raw`` cannot be decoded.
+    """
+    message = email.message_from_bytes(_decode_base64url(raw), policy=_DRAFT_POLICY)
+    _rewrite_utf8_headers(message)
+    return message
+
+
+def _attached_files(part: MIMEPart, *, in_related: bool) -> Iterator[MIMEPart]:
+    """Yield the parts of a message that hold an attached file, from any depth of its MIME tree.
+
+    A part is yielded whole, so an attached email or an attached group of parts keeps the parts it holds.
+
+    Args:
+        part: The message or the message part to read.
+        in_related: True when a multipart/related part holds ``part`` directly, which makes an inline ``part`` a
+            piece of the HTML of that message rather than a file of its own.
+
+    Yields:
+        Each part that holds an attached file.
+    """
+    if part.is_attachment():
+        yield part
+        return
+    if part.get_content_maintype() == "multipart":
+        holds_inline_parts = part.get_content_type() == "multipart/related"
+        for child in part.iter_parts():
+            yield from _attached_files(child, in_related=holds_inline_parts)
+        return
+    # The HTML of a multipart/related message shows a picture of it in place, so such a part is no file of its own.
+    if in_related and part.get_content_maintype() == "image" and (part["Content-ID"] or part["Content-Location"]):
+        return
+    # A text part holds body text unless it names a file, so only those two kinds of part are files here.
+    if part.get_filename() or part.get_content_type() not in _BODY_MEDIA_TYPES:
+        yield part
+
+
+def _holds_body_text(message: MIMEPart) -> bool:
+    """Report whether a message holds a text part of its own, which an edit of the body replaces."""
+    in_a_file = {id(part) for file in _attached_files(message, in_related=False) for part in file.walk()}
+    return any(part.get_content_type() in _BODY_MEDIA_TYPES and id(part) not in in_a_file for part in message.walk())
+
+
+def _holds_protected_content(message: MIMEPart) -> bool:
+    """Report whether a message holds a signature or a ciphertext that a new body would leave behind.
+
+    A signature covers the parts beside it, and a ciphertext holds the content of the parts it replaces. Such a part
+    keeps its meaning only inside the part that holds it.
+
+    NOTE: A part inside an attached file is left out, because such a file is kept whole. The message itself is no
+    such file, even where it declares itself an attachment, because a new body takes the place it holds.
+    """
+    in_a_file = {
+        id(part) for file in _attached_files(message, in_related=False) if file is not message for part in file.walk()
+    }
+    return any(
+        part.get_content_type() in _PROTECTED_MEDIA_TYPES and id(part) not in in_a_file for part in message.walk()
     )
 
 
-def _preservable_plain_body(payload: dict) -> str:
-    """Return the draft body when a plain-text rebuild of the draft keeps all of its content.
+def _protected_blocks(message: MIMEPart) -> list[bytes]:
+    """Return the bytes of each part of a message that holds a signature or a ciphertext.
 
-    Args:
-        payload: The Gmail message payload of the draft.
+    A part of that kind covers the parts it holds, so the bytes of the whole part are returned.
 
-    Returns:
-        The plain-text body, or an empty string if the draft body is empty.
+    NOTE: A part inside an attached file holds such bytes as well, so every part of the message is measured.
+    """
+    return [part.as_bytes() for part in message.walk() if part.get_content_type() in _PROTECTED_MEDIA_TYPES]
+
+
+def _content_only(message: EmailMessage) -> MIMEPart:
+    """Copy a message into a part that carries only its content headers and its content.
+
+    An envelope header inside a part reads as body text, and a copy of a Bcc address there would reach every
+    recipient of the message.
+    """
+    part = copy.deepcopy(message)
+    for name, _ in message.items():
+        if not name.lower().startswith("content-"):
+            del part[name]
+    return part
+
+
+def _replace_body(message: EmailMessage, body: str) -> None:
+    """Replace the text and HTML of a message with a plain-text body, keeping its attached files."""
+    # A message that is itself one attached file is copied, because the clearing below would empty it.
+    attachments = [
+        _content_only(part) if part is message else part for part in _attached_files(message, in_related=False)
+    ]
+    # NOTE: Some mail programs name the body part of a message. Such a part holds the body where the draft holds no
+    # other text, so the new body takes the place of each one instead of standing beside it.
+    if not _holds_body_text(message):
+        attachments = [
+            part for part in attachments if part.is_attachment() or part.get_content_type() not in _BODY_MEDIA_TYPES
+        ]
+    message.clear_content()
+    # NOTE: The draft keeps the policy that read it, which allows 8-bit content and does not wrap a long line, so
+    # the new body names an encoding of its own. A part that the edit does not write keeps the encoding it came with.
+    # An 8-bit part of the draft therefore stays 8-bit, which keeps the content of the draft exactly as it was.
+    lines = _LINE_BREAK_PATTERN.split(body)
+    plain_ascii = body.isascii() and all(len(line) <= _MAX_LINE_OCTETS for line in lines)
+    message.set_content(body, cte="7bit" if plain_ascii else "quoted-printable")
+    if attachments:
+        message.make_mixed()
+        for attachment in attachments:
+            message.attach(attachment)
+
+
+def _replace_headers(message: EmailMessage, params: EditDraftParams) -> None:
+    """Replace each header that ``params`` gives a value for, and remove a header whose value is empty.
 
     Raises:
-        _UnpreservableDraftError: If rebuilding the draft as plain text would lose or change content.
-            The message states the reason.
+        ValueError: If a value contains a line break.
     """
-    parts = list(_walk_parts(payload))
-    if any(_is_attachment_or_inline(part) for part in parts):
-        raise _UnpreservableDraftError("The existing draft has attachments or inline parts.")
-    if not any(part.get("mimeType") == "text/plain" for part in parts):
-        raise _UnpreservableDraftError("The existing draft has no plain-text content.")
+    for name, value in (("To", params.to), ("Cc", params.cc), ("Bcc", params.bcc)):
+        if value is not None:
+            del message[name]
+            if value:
+                message[name] = _quoted_recipients(value)
+    if params.subject is not None:
+        del message["Subject"]
+        if params.subject:
+            message["Subject"] = params.subject
 
-    plain_texts: list[str] = []
-    for part in parts:
-        body = part.get("body", {})
-        data = body.get("data")
-        if not data:
-            if body.get("size", 0) > 0 and not part.get("mimeType", "").startswith("multipart/"):
-                raise _UnpreservableDraftError("The existing draft body could not be read.")
+
+@dataclass(frozen=True)
+class _Recipients:
+    """The recipients that one header value names, as a reader of a header takes them.
+
+    A recipient that carries no address of its own is left out of the addresses. The value reads whole where the
+    reader found no defect in it, and a defect means that a recipient the value names is lost.
+    """
+
+    addresses: tuple[str, ...]
+    display_names: tuple[str, ...]
+    groups: tuple[str, ...]
+    reads_whole: bool
+
+
+def _read_recipients(value: str) -> _Recipients:
+    """Return the recipients that a header value names.
+
+    A reader takes an address in each form that RFC 5322 allows, such as one whose display name sits in a comment.
+
+    Raises:
+        ValueError: If the value holds a line break, which no header carries.
+    """
+    probe = EmailMessage(policy=policy.SMTP)
+    probe["To"] = value
+    header = probe["To"]
+    return _Recipients(
+        addresses=tuple(address.addr_spec for address in header.addresses if address.addr_spec),
+        display_names=tuple(address.display_name for address in header.addresses),
+        groups=tuple(str(group) for group in header.groups),
+        reads_whole=not any(isinstance(defect, InvalidHeaderDefect) for defect in header.defects),
+    )
+
+
+def _addresses_are_ascii(*values: str | None) -> bool:
+    """Report whether every address in the given recipient values holds only ASCII characters.
+
+    NOTE: An email carries an address outside ASCII only where both servers support it, and the Gmail API takes no
+    such address. The display name of an address is free to hold any character.
+    """
+    for value in values:
+        if not value:
             continue
-        if _declared_charset(part) not in {None, "ascii", "utf-8"}:
-            raise _UnpreservableDraftError("The existing draft body could not be read.")
-        try:
-            text = _decode_base64url(data).decode("utf-8")
-        except ValueError as exc:
-            raise _UnpreservableDraftError("The existing draft body could not be read.") from exc
-        if part.get("mimeType", "").startswith("multipart/"):
-            raise _UnpreservableDraftError("The existing draft has content outside its text parts.")
-        if part.get("mimeType") == "text/plain":
-            plain_texts.append(text)
+        # NOTE: A value that names no recipient at all is measured whole, because the part of it that is a display
+        # name is unknown.
+        addresses = _read_recipients(value).addresses
+        if not all(part.isascii() for part in addresses or (value,)):
+            return False
+    return True
 
-    parents = {id(child): part for part in parts for child in part.get("parts", [])}
-    for part in parts:
-        if part.get("mimeType") != "text/html" or not part.get("body", {}).get("data"):
+
+def _quoted_recipients(value: str) -> str:
+    """Return a recipient value whose display names are quoted where a name holds a special character.
+
+    A mail program may write a display name as an encoded word, which hides a comma or another character that
+    divides one recipient from the next. A writer decodes such a name without quoting it, so the name would read as
+    a recipient that carries no address. A value that names a group of recipients keeps that name.
+    """
+    recipients = _read_recipients(value)
+    if not any(char in name for name in recipients.display_names for char in _ADDRESS_SPECIALS):
+        return value
+    return ", ".join(recipients.groups)
+
+
+def _reads_as_address(value: str) -> bool:
+    """Report whether a value reads as the address of one recipient, such as "bob@example.com"."""
+    local_part, _, domain = value.partition("@")
+    return bool(local_part) and bool(domain) and "@" not in domain and not any(char.isspace() for char in value)
+
+
+def _reply_address(sender: str) -> str:
+    """Return the value that a reply writes as its recipient, out of the From or the Reply-To of a message.
+
+    The value is kept as it is where every recipient it names carries an address. Only the addresses of it are kept
+    otherwise, because a display name that holds an unquoted comma reads as a recipient without one.
+
+    Args:
+        sender: The From or Reply-To value of the message that the reply answers.
+
+    Returns:
+        The value to write, or an empty string where the sender holds no address, or holds a line break that no
+        header carries.
+    """
+    if not _values_are_one_line(sender):
+        return ""
+    addresses = [address for address in _read_recipients(sender).addresses if _reads_as_address(address)]
+    if addresses:
+        return sender if _recipients_have_addresses(sender) else ", ".join(addresses)
+    return sender if _reads_as_address(sender) else ""
+
+
+def _recipients_have_addresses(*values: str | None) -> bool:
+    """Report whether every recipient that the given values name carries an address.
+
+    A comma divides one recipient from the next, so a display name that holds an unquoted comma reads as a recipient
+    of its own that carries no address. A quote that is never closed takes the address of a recipient into its name.
+    A value that a reader cannot take whole loses a recipient, and a value that no recipient can be read from at all
+    is measured whole.
+
+    NOTE: A name that reads as an address itself cannot be told apart from a recipient that the caller meant.
+    """
+    for value in values:
+        if not value:
             continue
-        parent = parents.get(id(part), {})
-        if parent.get("mimeType") != "multipart/alternative" or not any(
-            sibling.get("mimeType") == "text/plain" and sibling.get("body", {}).get("data")
-            for sibling in parent.get("parts", [])
-        ):
-            raise _UnpreservableDraftError(
-                "The existing draft has HTML content that is not an alternative of its plain text."
-            )
+        recipients = _read_recipients(value)
+        if not recipients.reads_whole:
+            return False
+        if not all(_reads_as_address(address) for address in recipients.addresses or (value,)):
+            return False
+    return True
 
-    if len(plain_texts) > 1:
-        raise _UnpreservableDraftError("The existing draft has more than one plain-text part.")
-    return plain_texts[0] if plain_texts else ""
+
+def _values_are_one_line(*values: str | None) -> bool:
+    """Report whether every given header value holds a single line.
+
+    NOTE: A header store divides a value on every character that str.splitlines() divides on, so a page break counts
+    here as well. A break at the end of a value is written as an encoded word, which hides a broken address.
+    """
+    return all(value.splitlines() == [value] for value in values if value)
+
+
+class _MessageIdListHeader(UniqueUnstructuredHeader, BaseHeader):
+    """A header that holds the message IDs of a thread, such as References, and never writes one as an encoded word.
+
+    RFC 5322 gives no meaning to an encoded word inside a message ID, so a reader matches no ID that carries one and
+    the thread breaks apart. A line is folded between one ID and the next.
+
+    NOTE: A reader may keep the space of a fold that opens a value, so the first ID stays beside the header name
+    however long that line becomes. RFC 5322 allows up to 998 octets in a line.
+    """
+
+    def fold(self, *, policy: Policy) -> str:
+        limit = policy.max_line_length or _MAX_LINE_OCTETS
+        lines = [f"{self.name}:"]
+        for index, message_id in enumerate(str(self).split()):
+            if index and len(lines[-1]) + len(message_id) + 1 > limit:
+                lines.append("")
+            lines[-1] += f" {message_id}"
+        return policy.linesep.join(lines) + policy.linesep
+
+
+_MESSAGE_ID_HEADERS = HeaderRegistry()
+_MESSAGE_ID_HEADERS.map_to_type("in-reply-to", _MessageIdListHeader)
+_MESSAGE_ID_HEADERS.map_to_type("references", _MessageIdListHeader)
 
 
 def _build_raw_message(
@@ -255,18 +619,25 @@ def _build_raw_message(
     in_reply_to: str | None = None,
     references: str | None = None,
 ) -> str:
-    """Construct a base64url-encoded MIME message for the Gmail send API."""
-    message = MIMEText(body)
-    message["to"] = to
-    message["subject"] = subject
+    """Construct a base64url-encoded MIME message for the Gmail send API.
+
+    Raises:
+        ValueError: If a header value contains a line break, or a value cannot be written to an email.
+    """
+    # NOTE: A 7-bit message holds no 8-bit bytes, which every mail server carries. An edited draft keeps the
+    # encoding of each part that the edit does not write, so an edit never rewrites content that it did not change.
+    message = EmailMessage(policy=policy.SMTP.clone(cte_type="7bit", header_factory=_MESSAGE_ID_HEADERS))
+    message["To"] = _quoted_recipients(to)
+    message["Subject"] = subject
     if cc:
-        message["cc"] = cc
+        message["Cc"] = _quoted_recipients(cc)
     if bcc:
-        message["bcc"] = bcc
+        message["Bcc"] = _quoted_recipients(bcc)
     if in_reply_to:
         message["In-Reply-To"] = in_reply_to
     if references:
         message["References"] = references
+    message.set_content(body)
     return base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
 
 
@@ -466,13 +837,25 @@ async def gmail_send_email(
     base_url: str = _GMAIL_BASE_URL,
 ) -> SendEmailResult:
     """Send an email via Gmail."""
-    raw = _build_raw_message(
-        params.to,
-        params.subject,
-        params.body,
-        cc=params.cc,
-        bcc=params.bcc,
-    )
+    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+        return SendEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
+    if not _recipients_have_addresses(params.to, params.cc, params.bcc):
+        return SendEmailResult(success=False, error=_BAD_RECIPIENT_ERROR)
+
+    if not _addresses_are_ascii(params.to, params.cc, params.bcc):
+        return SendEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
+
+    try:
+        raw = _build_raw_message(
+            params.to,
+            params.subject,
+            params.body,
+            cc=params.cc,
+            bcc=params.bcc,
+        )
+    except ValueError:
+        return SendEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -511,13 +894,25 @@ async def gmail_create_draft(
     base_url: str = _GMAIL_BASE_URL,
 ) -> CreateDraftResult:
     """Create an email draft in Gmail."""
-    raw = _build_raw_message(
-        params.to,
-        params.subject,
-        params.body,
-        cc=params.cc,
-        bcc=params.bcc,
-    )
+    if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+        return CreateDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
+    if not _recipients_have_addresses(params.to, params.cc, params.bcc):
+        return CreateDraftResult(success=False, error=_BAD_RECIPIENT_ERROR)
+
+    if not _addresses_are_ascii(params.to, params.cc, params.bcc):
+        return CreateDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
+
+    try:
+        raw = _build_raw_message(
+            params.to,
+            params.subject,
+            params.body,
+            cc=params.cc,
+            bcc=params.bcc,
+        )
+    except ValueError:
+        return CreateDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
@@ -550,15 +945,14 @@ async def gmail_edit_draft(
     token: str,
     base_url: str = _GMAIL_BASE_URL,
 ) -> EditDraftResult:
-    """Edit a Gmail draft as plain text, which drops HTML formatting and needs a new body if the text cannot be kept."""
+    """Edit the To, Subject, Cc, Bcc or body of a Gmail draft. Everything the call does not give stays as it is."""
     draft_url = f"{base_url}/drafts/{quote_path_segment(params.draft_id)}"
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            # Fetch existing draft to merge fields.
             get_resp = await client.get(
                 draft_url,
                 headers=_headers(token),
-                params={"format": "full"},
+                params={"format": "raw"},
             )
 
             if not get_resp.is_success:
@@ -567,53 +961,65 @@ async def gmail_edit_draft(
                     error=f"Gmail API error {get_resp.status_code}: {get_resp.text}",
                 )
 
-            draft_data = get_resp.json()
-            payload = draft_data.get("message", {}).get("payload", {})
-            hdrs = payload.get("headers", [])
+            try:
+                draft_message = get_resp.json()["message"]
+                message = _parse_raw_message(draft_message["raw"])
+            except (KeyError, TypeError, ValueError):
+                return EditDraftResult(success=False, error="The existing draft could not be read.")
 
-            final_to = params.to if params.to is not None else _extract_header(hdrs, "To")
-            final_subject = params.subject if params.subject is not None else _extract_header(hdrs, "Subject")
+            if not _values_are_one_line(params.to, params.subject, params.cc, params.bcc):
+                return EditDraftResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
 
-            if params.body is not None:
-                final_body = params.body
-            else:
-                try:
-                    final_body = _preservable_plain_body(payload)
-                except _UnpreservableDraftError as exc:
-                    return EditDraftResult(
-                        success=False,
-                        error=(
-                            f"{exc} Provide a new body to continue. The draft is then saved as plain text, "
-                            "and its attachments, inline images, and HTML formatting are removed."
-                        ),
-                    )
+            if not _recipients_have_addresses(params.to, params.cc, params.bcc):
+                return EditDraftResult(success=False, error=_BAD_RECIPIENT_ERROR)
 
-            final_cc = params.cc if params.cc is not None else _extract_header(hdrs, "Cc") or None
-            final_bcc = params.bcc if params.bcc is not None else _extract_header(hdrs, "Bcc") or None
+            if not _addresses_are_ascii(params.to, params.cc, params.bcc):
+                return EditDraftResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
 
-            in_reply_to = _extract_header(hdrs, "In-Reply-To") or None
-            references = _extract_header(hdrs, "References") or None
+            if params.body is not None and _holds_protected_content(message):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_ERROR)
 
-            raw = _build_raw_message(
-                final_to,
-                final_subject,
-                final_body,
-                cc=final_cc,
-                bcc=final_bcc,
-                in_reply_to=in_reply_to,
-                references=references,
-            )
+            try:
+                protected_blocks = _protected_blocks(message)
+                # NOTE: The envelope headers belong to the block of the message itself, and an edit writes those, so
+                # only the blocks below the message are measured again once the edit is written.
+                inner_blocks = [block for part in message.iter_parts() for block in _protected_blocks(part)]
+            except ValueError:
+                return EditDraftResult(success=False, error=_UNWRITABLE_DRAFT_ERROR)
 
-            message: dict[str, str] = {"raw": raw}
-            thread_id = draft_data.get("message", {}).get("threadId")
+            # A signature covers the bytes of the parts beside it, so an edit writes back only the bytes it read.
+            draft_bytes = _decode_base64url(draft_message["raw"])
+            if any(block not in draft_bytes for block in protected_blocks):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
+
+            original_subject = message.get("Subject", "")
+            try:
+                _replace_headers(message, params)
+                if params.body is not None:
+                    _replace_body(message, params.body)
+            except ValueError:
+                return EditDraftResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
+
+            try:
+                edited = message.as_bytes()
+            except ValueError:
+                return EditDraftResult(success=False, error=_UNWRITABLE_DRAFT_ERROR)
+
+            if any(block not in edited for block in inner_blocks):
+                return EditDraftResult(success=False, error=_SIGNED_CONTENT_CHANGED_ERROR)
+            edited_raw = base64.urlsafe_b64encode(edited).decode("utf-8")
+
+            update: dict[str, str] = {"raw": edited_raw}
+            thread_id = draft_message.get("threadId")
+            is_reply = "In-Reply-To" in message or "References" in message
             # Gmail keeps a message in a thread only when it has reply headers and the same subject.
-            if thread_id and (in_reply_to or references) and final_subject == _extract_header(hdrs, "Subject"):
-                message["threadId"] = thread_id
+            if thread_id and is_reply and message.get("Subject", "") == original_subject:
+                update["threadId"] = thread_id
 
             put_resp = await client.put(
                 draft_url,
                 headers=_headers(token, content_type=True),
-                json={"message": message},
+                json={"message": update},
             )
     except httpx.HTTPError as exc:
         return EditDraftResult(success=False, error=str(exc))
@@ -648,7 +1054,7 @@ async def gmail_reply_to_email(
                 headers=_headers(token),
                 params={
                     "format": "metadata",
-                    "metadataHeaders": ["From", "To", "Subject", "Message-ID", "References"],
+                    "metadataHeaders": ["From", "Reply-To", "To", "Subject", "Message-ID", "References"],
                 },
             )
 
@@ -663,6 +1069,7 @@ async def gmail_reply_to_email(
             hdrs = orig_data.get("payload", {}).get("headers", [])
 
             orig_from = _extract_header(hdrs, "From")
+            orig_reply_to = _extract_header(hdrs, "Reply-To")
             orig_subject = _extract_header(hdrs, "Subject")
             orig_message_id = _extract_header(hdrs, "Message-ID")
             orig_references = _extract_header(hdrs, "References")
@@ -675,15 +1082,34 @@ async def gmail_reply_to_email(
             if orig_message_id:
                 references = f"{references} {orig_message_id}" if references else orig_message_id
 
-            raw = _build_raw_message(
-                orig_from,
-                reply_subject,
-                params.body,
-                cc=params.cc,
-                bcc=params.bcc,
-                in_reply_to=orig_message_id or None,
-                references=references or None,
-            )
+            sender = _reply_address(orig_reply_to) or _reply_address(orig_from)
+            if not sender:
+                return ReplyToEmailResult(success=False, error=_NO_SENDER_ADDRESS_ERROR)
+
+            if not _addresses_are_ascii(sender):
+                return ReplyToEmailResult(success=False, error=_NON_ASCII_SENDER_ERROR)
+
+            if not _values_are_one_line(params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_HEADER_LINE_BREAK_ERROR)
+
+            if not _recipients_have_addresses(params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_BAD_RECIPIENT_ERROR)
+
+            if not _addresses_are_ascii(params.cc, params.bcc):
+                return ReplyToEmailResult(success=False, error=_NON_ASCII_ADDRESS_ERROR)
+
+            try:
+                raw = _build_raw_message(
+                    sender,
+                    reply_subject,
+                    params.body,
+                    cc=params.cc,
+                    bcc=params.bcc,
+                    in_reply_to=orig_message_id or None,
+                    references=references or None,
+                )
+            except ValueError:
+                return ReplyToEmailResult(success=False, error=_UNWRITABLE_VALUE_ERROR)
 
             send_resp = await client.post(
                 f"{base_url}/messages/send",

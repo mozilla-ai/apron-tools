@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import email
 import json
+from email import policy
+from email.message import EmailMessage
 from pathlib import Path
 
 import pytest
@@ -12,8 +14,6 @@ from pytest_httpx import HTTPXMock
 
 from apron_tools.providers.google.gmail.tools import (
     _extract_body,
-    _preservable_plain_body,
-    _UnpreservableDraftError,
     gmail_add_labels_to_emails,
     gmail_create_draft,
     gmail_create_label,
@@ -270,6 +270,235 @@ class TestReadEmail:
         assert result.success is True
         assert result.body == body
 
+    @pytest.mark.parametrize(
+        ("charset", "body"),
+        [
+            ("iso-2022-jp", "\u304a\u8336\u3092\u3069\u3046\u305e"),
+            ("iso-8859-1", "Caf\u00e9 au lait"),
+            ("windows-1252", "A \u201cquoted\u201d caf\u00e9"),
+            ("gbk", "\u4e00\u4e0c\u4e10"),
+            ("big5", "\u4e33\u4e83\u4e84"),
+        ],
+        ids=["iso-2022-jp", "latin-1", "windows-1252", "gbk", "big5"],
+    )
+    async def test_read_email_decodes_a_part_with_its_declared_charset(
+        self, httpx_mock: HTTPXMock, charset: str, body: str
+    ) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": f'text/plain; charset="{charset}"'}],
+            "body": {"data": _b64(body.encode(charset))},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == body
+
+    @pytest.mark.parametrize(
+        "charset",
+        ["us-ascii", "x-unknown-charset", "iso-8859-1", "windows-1252"],
+        ids=["us-ascii", "unknown-charset", "latin-1", "windows-1252"],
+    )
+    async def test_read_email_reads_utf8_bytes_that_a_part_mislabels(self, httpx_mock: HTTPXMock, charset: str) -> None:
+        body = "Caf\u00e9 \u2014 one coffee"
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
+            "body": {"data": _b64(body.encode())},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == body
+
+    async def test_read_email_reads_a_header_that_carries_no_value(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"]["headers"] = [
+            {"name": "Subject", "value": None},
+            {"name": "From", "value": "alice@example.com"},
+        ]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.subject == ""
+        assert result.from_address == "alice@example.com"
+
+    async def test_read_email_joins_a_folded_header_value(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"]["headers"] = [
+            {"name": "Subject", "value": "A very long subject\r\n that was folded"},
+            {"name": "From", "value": "alice@example.com"},
+        ]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.subject == "A very long subject that was folded"
+
+    async def test_read_email_reads_a_body_that_the_message_marks_as_an_attachment(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="message.txt"'}],
+            "body": {"data": _b64("The only text")},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "The only text"
+
+    async def test_read_email_ignores_a_text_attachment_that_precedes_the_body(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "filename": "notes.txt",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="notes.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("Real body")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "Real body"
+
+    async def test_read_email_reads_the_first_body_part_in_document_order(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "filename": "message.txt",
+                    "headers": [{"name": "Content-Disposition", "value": 'inline; filename="message.txt"'}],
+                    "body": {"data": _b64("The body")},
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "The body"
+
+    @pytest.mark.parametrize(
+        "headers",
+        [
+            [{"name": "Content-Disposition", "value": 'attachment; filename="forwarded.eml"'}],
+            [{"name": "Content-Disposition", "value": " Attachment "}],
+            [],
+        ],
+        ids=["declared-attachment", "declared-in-mixed-case", "no-disposition"],
+    )
+    async def test_read_email_prefers_its_own_text_over_the_text_of_an_attached_email(
+        self, httpx_mock: HTTPXMock, headers: list[dict[str, str]]
+    ) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "Message/RFC822",
+                    "filename": "forwarded.eml",
+                    "headers": headers,
+                    "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Text of the attached email")}}],
+                },
+                {"mimeType": "text/plain", "body": {"data": _b64("Real body")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "Real body"
+
+    async def test_read_email_keeps_a_body_part_that_declares_a_file_name(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "filename": "message.txt",
+            "headers": [{"name": "Content-Disposition", "value": 'inline; filename="message.txt"'}],
+            "body": {"data": _b64("Inline body")},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "Inline body"
+
+    async def test_read_email_reports_no_body_when_only_a_non_text_part_has_data(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/mixed",
+            "parts": [{"mimeType": "image/png", "body": {"data": _b64(b"\x89PNG\r\n\x1a\n")}}],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "(No email body found)"
+
+    async def test_read_email_prefers_a_plain_part_in_another_charset_over_html(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "multipart/alternative",
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Type", "value": "text/plain; charset=iso-8859-1"}],
+                    "body": {"data": _b64("Caf\u00e9".encode("iso-8859-1"))},
+                },
+                {"mimeType": "text/html", "body": {"data": _b64("<p>Cafe</p>")}},
+            ],
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "Caf\u00e9"
+
+    @pytest.mark.parametrize(
+        "content_type",
+        ["text/plain; charset=x-unknown-charset", "text/plain; charset=utf-8"],
+        ids=["unknown-charset", "bytes-do-not-match-charset"],
+    )
+    async def test_read_email_reports_a_part_it_cannot_decode(self, httpx_mock: HTTPXMock, content_type: str) -> None:
+        message = _load_json("get_message_full.json")
+        message["payload"] = {
+            "mimeType": "text/plain",
+            "headers": [{"name": "Content-Type", "value": content_type}],
+            "body": {"data": _b64(b"caf\xe9")},
+        }
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/msg-001?format=full", json=message)
+
+        result = await gmail_read_email(ReadEmailParams(message_id="msg-001"), token=_TOKEN)
+
+        assert result.success is True
+        assert result.body == "(Could not decode email body)"
+
     async def test_success_with_unpadded_html_body(self, httpx_mock: HTTPXMock) -> None:
         # Unlike the other unpadded regression tests above, this payload requires
         # two padding characters ('==') rather than just one.
@@ -456,7 +685,81 @@ def _b64(value: str | bytes) -> str:
     return base64.urlsafe_b64encode(value if isinstance(value, bytes) else value.encode()).decode()
 
 
+def _parse_raw(raw: str) -> EmailMessage:
+    message = email.message_from_bytes(base64.urlsafe_b64decode(raw), policy=policy.default)
+    assert isinstance(message, EmailMessage)
+    return message
+
+
 class TestExtractBody:
+    def test_attached_text_is_the_body_when_a_message_holds_no_other_text(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="note.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+            ],
+        }
+        assert _extract_body(payload) == "Attached note"
+
+    def test_a_part_that_the_api_holds_as_an_attachment_loses_to_the_body(self) -> None:
+        attached = {
+            "mimeType": "text/plain",
+            "filename": "notes.txt",
+            "headers": [{"name": "Content-Type", "value": 'text/plain; charset=utf-8; name="notes.txt"'}],
+            "body": {"attachmentId": "att-1", "data": _b64("Attached note")},
+        }
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [attached, {"mimeType": "text/plain", "body": {"data": _b64("Real body")}}],
+        }
+        assert _extract_body(payload) == "Real body"
+        assert _extract_body({"mimeType": "multipart/mixed", "parts": [attached]}) == "Attached note"
+
+    def test_an_empty_body_part_is_not_replaced_by_attached_text(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"size": 0}},
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="note.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+            ],
+        }
+        assert _extract_body(payload) is None
+
+    def test_a_body_that_cannot_be_decoded_is_not_replaced_by_attached_text(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {"mimeType": "text/plain", "body": {"data": "!!!invalid!!!"}},
+                {
+                    "mimeType": "text/plain",
+                    "headers": [{"name": "Content-Disposition", "value": 'attachment; filename="real.txt"'}],
+                    "body": {"data": _b64("Attached note")},
+                },
+            ],
+        }
+        with pytest.raises(ValueError, match="Could not decode email body"):
+            _extract_body(payload)
+
+    def test_the_text_of_a_forwarded_message_is_the_body_when_nothing_else_holds_text(self) -> None:
+        payload = {
+            "mimeType": "multipart/mixed",
+            "parts": [
+                {
+                    "mimeType": "message/rfc822",
+                    "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Forwarded text")}}],
+                },
+            ],
+        }
+        assert _extract_body(payload) == "Forwarded text"
+
     def test_nested_body_precedes_later_footer(self) -> None:
         payload = {
             "mimeType": "multipart/mixed",
@@ -510,165 +813,6 @@ class TestExtractBody:
         assert _extract_body(payload) == "Plain text"
 
 
-class TestPreservablePlainBody:
-    def test_undecodable_part_before_readable_part_is_refused(self) -> None:
-        payload = {
-            "mimeType": "multipart/mixed",
-            "parts": [
-                {"mimeType": "text/plain", "body": {"data": _b64(b"MAIN caf\xe9")}},
-                {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
-            ],
-        }
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/alternative",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                        ],
-                    },
-                ],
-            },
-        ],
-        ids=["alternative", "nested-alternative"],
-    )
-    def test_html_alternative_of_plain_text_is_dropped(self, payload: dict) -> None:
-        assert _preservable_plain_body(payload) == "MAIN BODY"
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>-- footer</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                        ],
-                    },
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>-- footer</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [{"mimeType": "text/html", "body": {"data": _b64("<p>Other</p>")}}],
-                    },
-                ],
-            },
-            {
-                "mimeType": "multipart/alternative",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"size": 0}},
-                    {"mimeType": "text/html", "body": {"data": _b64("<p>Hi</p>")}},
-                ],
-            },
-        ],
-        ids=["html-sibling", "html-footer-after-alternative", "alternative-without-plain-text", "empty-plain-text"],
-    )
-    def test_html_that_is_not_an_alternative_of_plain_text_is_refused(self, payload: dict) -> None:
-        with pytest.raises(_UnpreservableDraftError, match="HTML content that is not an alternative"):
-            _preservable_plain_body(payload)
-
-    def test_data_on_a_multipart_container_is_refused(self) -> None:
-        payload = {
-            "mimeType": "multipart/mixed",
-            "body": {"data": _b64("Container text")},
-            "parts": [{"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}}],
-        }
-        with pytest.raises(_UnpreservableDraftError, match="content outside its text parts"):
-            _preservable_plain_body(payload)
-
-    def test_part_with_a_size_but_no_data_is_refused(self) -> None:
-        payload = {"mimeType": "text/plain", "body": {"size": 100}}
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    def test_multipart_container_with_a_size_but_no_data_is_kept(self) -> None:
-        payload = {
-            "mimeType": "multipart/alternative",
-            "body": {"size": 120},
-            "parts": [
-                {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-            ],
-        }
-        assert _preservable_plain_body(payload) == "MAIN BODY"
-
-    def test_attached_email_without_a_filename_is_refused(self) -> None:
-        payload = {
-            "mimeType": "multipart/mixed",
-            "parts": [
-                {
-                    "mimeType": "message/rfc822",
-                    "body": {"size": 0},
-                    "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Forwarded text")}}],
-                },
-            ],
-        }
-        with pytest.raises(_UnpreservableDraftError, match="attachments or inline parts"):
-            _preservable_plain_body(payload)
-
-    @pytest.mark.parametrize(
-        ("charset", "text"),
-        [("ISO-2022-JP", "日本語"), ("UTF-7", "café")],
-        ids=["iso-2022-jp", "utf-7"],
-    )
-    def test_part_with_a_charset_that_is_not_utf8_is_refused(self, charset: str, text: str) -> None:
-        payload = {
-            "mimeType": "text/plain",
-            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
-            "body": {"data": _b64(text.encode(charset))},
-        }
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    def test_part_with_an_unknown_charset_is_refused(self) -> None:
-        payload = {
-            "mimeType": "text/plain",
-            "headers": [{"name": "Content-Type", "value": "text/plain; charset=x-unknown"}],
-            "body": {"data": _b64("MAIN BODY")},
-        }
-        with pytest.raises(_UnpreservableDraftError, match="could not be read"):
-            _preservable_plain_body(payload)
-
-    @pytest.mark.parametrize("charset", ['"UTF-8"', "utf8", "us-ascii", "ascii"])
-    def test_part_with_a_utf8_compatible_charset_is_kept(self, charset: str) -> None:
-        payload = {
-            "mimeType": "text/plain",
-            "headers": [{"name": "Content-Type", "value": f"text/plain; charset={charset}"}],
-            "body": {"data": _b64("MAIN BODY")},
-        }
-        assert _preservable_plain_body(payload) == "MAIN BODY"
-
-
 class TestSendEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
@@ -690,16 +834,197 @@ class TestSendEmail:
         assert result.id == "msg-003"
         assert result.thread_id == "thread-002"
 
+    async def test_recipients_with_non_ascii_names_keep_their_addresses(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        await gmail_send_email(
+            SendEmailParams(to="José <jose@example.com>", cc="Zoë <zoe@example.com>", subject="Café", body="Hi"),
+            token=_TOKEN,
+        )
+
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [(a.display_name, a.addr_spec) for a in sent["To"].addresses] == [("José", "jose@example.com")]
+        assert [(a.display_name, a.addr_spec) for a in sent["Cc"].addresses] == [("Zoë", "zoe@example.com")]
+        assert sent["Subject"] == "Café"
+
+    async def test_an_ascii_recipient_list_that_cannot_be_read_is_sent(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(to="bob@example.com,", subject="Hello", body="Hi Bob"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["bob@example.com"]
+
+    @pytest.mark.parametrize(
+        "to",
+        [
+            "=?utf-8?Q?Doe=2C_John?= <john@example.com>",
+            "=?utf-8?Q?Doe=3B_John?= <john@example.com>",
+            "=?utf-8?Q?Doe_=5BContractor=5D?= <john@example.com>",
+            "=?utf-8?Q?Doe_=28Sales?= <john@example.com>",
+        ],
+        ids=["a-comma", "a-semicolon", "a-square-bracket", "a-round-bracket"],
+    )
+    async def test_a_name_written_as_an_encoded_word_keeps_one_recipient(self, httpx_mock: HTTPXMock, to: str) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(SendEmailParams(to=to, subject="Hello", body="Hi"), token=_TOKEN)
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
+    async def test_a_group_of_recipients_keeps_its_name(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(
+                to="Managers: =?utf-8?Q?Doe=2C_John?= <john@example.com>, jane@example.com;",
+                subject="Hello",
+                body="Hi",
+            ),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent_raw = base64.urlsafe_b64decode(json.loads(request.content)["raw"]).decode()
+        assert 'To: Managers: "Doe, John" <john@example.com>, jane@example.com;' in sent_raw
+
     async def test_api_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=400, text="Bad Request")
 
         result = await gmail_send_email(
-            SendEmailParams(to="bad", subject="Test", body="Body"),
+            SendEmailParams(to="bad@example.com", subject="Test", body="Body"),
             token=_TOKEN,
         )
 
         assert result.success is False
         assert "400" in result.error
+
+    async def test_a_non_ascii_body_is_sent_as_ascii_bytes(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(to="bob@example.com", subject="Caf\u00e9", body="Caf\u00e9 \u2014 one coffee"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        raw = base64.urlsafe_b64decode(json.loads(send.content)["raw"])
+        assert raw.isascii(), "a message that the tool builds must hold no 8-bit bytes"
+        assert _parse_raw(json.loads(send.content)["raw"]).get_content() == "Caf\u00e9 \u2014 one coffee\r\n"
+
+    @pytest.mark.parametrize(
+        "to",
+        [
+            "jos\u00e9@example.com",
+            "a@ex\u00e4mple.com",
+            "Ana <ana@ex\u00e4mple.com>",
+        ],
+        ids=["local-part", "domain", "domain-with-a-name"],
+    )
+    async def test_an_address_outside_ascii_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
+        result = await gmail_send_email(
+            SendEmailParams(to=to, subject="Hello", body="Hi"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient address must hold only ASCII characters."
+        assert httpx_mock.get_requests() == []
+
+    @pytest.mark.parametrize(
+        "to",
+        ["Smith, John <john@example.com>", "M\u00fcller, Hans <hans@example.com>"],
+        ids=["ascii-name", "name-outside-ascii"],
+    )
+    async def test_a_recipient_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
+        result = await gmail_send_email(SendEmailParams(to=to, subject="Hello", body="Hi"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
+        assert httpx_mock.get_requests() == []
+
+    @pytest.mark.parametrize(
+        "to",
+        [
+            '"Unbalanced <quote@example.com>',
+            "   ",
+            "Undisclosed recipients:;",
+            "a@example.com;jos\u00e9@example.com",
+        ],
+        ids=["quotes-that-never-close", "space-alone", "a-group-with-no-member", "a-list-joined-by-a-semicolon"],
+    )
+    async def test_a_recipient_that_reads_as_no_address_is_refused(self, httpx_mock: HTTPXMock, to: str) -> None:
+        result = await gmail_send_email(
+            SendEmailParams(to=to, subject="Hello", body="Hi"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
+        assert httpx_mock.get_requests() == []
+
+    async def test_a_recipient_whose_name_sits_in_a_comment_is_sent(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_message.json"))
+
+        result = await gmail_send_email(
+            SendEmailParams(to="bob@example.com (Smith, Bob)", subject="Hello", body="Hi"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        request = httpx_mock.get_request()
+        assert request is not None
+        sent = _parse_raw(json.loads(request.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["bob@example.com"]
+
+    async def test_a_body_that_cannot_be_written_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        result = await gmail_send_email(
+            SendEmailParams(to="bob@example.com", subject="Hello", body="lone surrogate: \ud800"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient, subject or body contains a character that cannot be written to an email."
+        assert httpx_mock.get_requests() == []
+
+    @pytest.mark.parametrize(
+        ("to", "subject", "cc", "bcc"),
+        [
+            ("one\ntwo: injected", "Hello", None, None),
+            ("bob@example.com", "one\ntwo: injected", None, None),
+            ("bob@example.com", "Hello", "one\ntwo: injected", None),
+            ("bob@example.com", "Hello", None, "one\ntwo: injected"),
+            ("bob@example.com", "one\x0ctwo: injected", None, None),
+            ("bob@example.com\n", "Hello", None, None),
+        ],
+        ids=["to", "subject", "cc", "bcc", "subject-with-a-page-break", "to-that-ends-with-a-line-break"],
+    )
+    async def test_a_header_value_with_a_line_break_is_refused(
+        self, httpx_mock: HTTPXMock, to: str, subject: str, cc: str | None, bcc: str | None
+    ) -> None:
+        result = await gmail_send_email(
+            SendEmailParams(to=to, subject=subject, body="Hi Bob", cc=cc, bcc=bcc),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must hold a single line."
+        assert httpx_mock.get_requests() == []
 
     async def test_has_tool_definition(self) -> None:
         defn = gmail_send_email._tool_definition
@@ -746,6 +1071,26 @@ class TestCreateDraft:
         assert result.success is False
         assert "500" in result.error
 
+    async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        result = await gmail_create_draft(
+            CreateDraftParams(to="bob@example.com", subject="one\ntwo: injected", body="Hi Bob"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must hold a single line."
+        assert httpx_mock.get_requests() == []
+
+    async def test_a_recipient_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        result = await gmail_create_draft(
+            CreateDraftParams(to="Smith, John <john@example.com>", subject="Hello", body="Hi Bob"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
+        assert httpx_mock.get_requests() == []
+
     async def test_has_tool_definition(self) -> None:
         defn = gmail_create_draft._tool_definition
         assert defn.name == "gmail_create_draft"
@@ -759,329 +1104,1155 @@ class TestCreateDraft:
 # ---------------------------------------------------------------------------
 
 
+def _mime(*lines: str | bytes) -> bytes:
+    return b"\r\n".join(line if isinstance(line, bytes) else line.encode() for line in lines)
+
+
+# RFC 2046 allows a boundary of up to 70 characters, which is longer than a header line holds.
+_LONG_BOUNDARY = "----=_Part_of_a_draft_whose_boundary_fills_seventy_characters_in_total"
+
+# A boundary that holds the name of the character set that the writer gives to bytes of an unknown set.
+_CHARSET_BOUNDARY = "----=_NextPart_unknown-8bit_boundary_of_a_draft_from_another_client"
+
+_DRAFT_HEADERS = (
+    "From: Ana <alias@example.com>",
+    "Reply-To: team@example.com",
+    "To: bob@example.com",
+    "Subject: Draft Subject",
+    "MIME-Version: 1.0",
+)
+
+_DRAFTS = {
+    "plain-text": _mime("To: bob@example.com", "Subject: Draft Subject", "", "Original body", ""),
+    "html-only": _mime(*_DRAFT_HEADERS, 'Content-Type: text/html; charset="utf-8"', "", "<p>HTML only</p>", ""),
+    "alternative-with-attachment": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        'Content-Type: multipart/alternative; boundary="alt"',
+        "",
+        "--alt",
+        "Content-Type: text/plain; charset=iso-8859-1",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        b"caf\xe9 body",
+        "--alt",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        "<p>café body</p>",
+        "--alt--",
+        "--mixed",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--mixed--",
+        "",
+    ),
+    "inline-image": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel--",
+        "",
+    ),
+    "located-image": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="logo.png"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-Location: logo.png",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel--",
+        "",
+    ),
+    "nested-attachment": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/alternative; boundary="alt"',
+        "",
+        "--alt",
+        "Content-Type: text/plain",
+        "",
+        "plain text",
+        "--alt",
+        'Content-Type: multipart/mixed; boundary="mix"',
+        "",
+        "--mix",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        "<p>html</p>",
+        "--mix",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--mix--",
+        "--alt--",
+        "",
+    ),
+    "related-with-an-inline-file": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel",
+        "Content-Type: application/pdf; name=report.pdf",
+        "Content-ID: <doc1>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--rel--",
+        "",
+    ),
+    "related-with-attachment": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--rel--",
+        "",
+    ),
+    "related-holding-a-mixed-part": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/related; boundary="rel"',
+        "",
+        "--rel",
+        'Content-Type: multipart/mixed; boundary="mix"',
+        "",
+        "--mix",
+        'Content-Type: text/html; charset="utf-8"',
+        "",
+        '<p><img src="cid:logo"></p>',
+        "--mix",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--mix--",
+        "--rel",
+        "Content-Type: image/png",
+        "Content-ID: <logo>",
+        "Content-Disposition: inline",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "iVBORw0KGgo=",
+        "--rel--",
+        "",
+    ),
+    "attachment-only": _mime(
+        *_DRAFT_HEADERS,
+        "Bcc: hidden@example.com",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "",
+    ),
+    "long-boundary": _mime(
+        *_DRAFT_HEADERS,
+        f'Content-Type: multipart/mixed; boundary="{_LONG_BOUNDARY}"',
+        "",
+        f"--{_LONG_BOUNDARY}",
+        "Content-Type: text/plain",
+        "",
+        "Original body",
+        f"--{_LONG_BOUNDARY}",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        f"--{_LONG_BOUNDARY}--",
+        "",
+    ),
+    "named-body-only": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        'Content-Type: text/plain; name="message.txt"',
+        'Content-Disposition: inline; filename="message.txt"',
+        "",
+        "Original body",
+        "--mixed",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--mixed--",
+        "",
+    ),
+    "named-text-and-html": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/alternative; boundary="alt"',
+        "",
+        "--alt",
+        'Content-Type: text/plain; name="body.txt"',
+        'Content-Disposition: inline; filename="body.txt"',
+        "",
+        "Original plain",
+        "--alt",
+        'Content-Type: text/html; name="body.html"',
+        'Content-Disposition: inline; filename="body.html"',
+        "",
+        "<p>Original HTML</p>",
+        "--alt--",
+        "",
+    ),
+    "named-body-with-attached-email": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        'Content-Type: text/plain; name="message.txt"',
+        'Content-Disposition: inline; filename="message.txt"',
+        "",
+        "Original body",
+        "--mixed",
+        "Content-Type: message/rfc822",
+        "Content-Disposition: attachment; filename=forwarded.eml",
+        "",
+        "From: Cara <cara@example.com>",
+        "Subject: Forwarded",
+        "Content-Type: text/plain",
+        "",
+        "inner text",
+        "--mixed--",
+        "",
+    ),
+    "attached-multipart": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="outer"',
+        "",
+        "--outer",
+        "Content-Type: text/plain",
+        "",
+        "Original body",
+        "--outer",
+        'Content-Type: multipart/mixed; boundary="inner"',
+        "Content-Disposition: attachment; filename=bundle.eml",
+        "",
+        "--inner",
+        "Content-Type: text/plain",
+        "",
+        "note inside the bundle",
+        "--inner",
+        "Content-Type: application/pdf; name=a.pdf",
+        "Content-Disposition: attachment; filename=a.pdf",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "JVBERi0xLjQK",
+        "--inner--",
+        "--outer--",
+        "",
+    ),
+    "attached-email": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "See the forwarded email.",
+        "--mixed",
+        "Content-Type: message/rfc822",
+        "",
+        "Subject: Forwarded",
+        "",
+        "Forwarded text",
+        "--mixed--",
+        "",
+    ),
+    "signed": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+        "",
+        "--sig",
+        "Content-Type: text/plain",
+        "",
+        "Signed body",
+        "--sig",
+        "Content-Type: application/pgp-signature",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "c2lnbmF0dXJlCg==",
+        "--sig--",
+        "",
+    ),
+    "encrypted": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="enc"',
+        "",
+        "--enc",
+        "Content-Type: application/pgp-encrypted",
+        "",
+        "Version: 1",
+        "--enc",
+        "Content-Type: application/octet-stream",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "Y2lwaGVydGV4dAo=",
+        "--enc--",
+        "",
+    ),
+    "smime-encrypted": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: application/pkcs7-mime; smime-type=enveloped-data; name="smime.p7m"',
+        'Content-Disposition: attachment; filename="smime.p7m"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        "Y2lwaGVydGV4dAo=",
+        "",
+    ),
+    "boundary-that-names-a-charset": _mime(
+        *_DRAFT_HEADERS,
+        f'Content-Type: multipart/mixed; boundary="{_CHARSET_BOUNDARY}"',
+        "",
+        f"--{_CHARSET_BOUNDARY}",
+        "Content-Type: text/plain",
+        "",
+        "Original body",
+        f"--{_CHARSET_BOUNDARY}--",
+        "",
+    ),
+    "attached-signed-email": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "See the signed email.",
+        "--mixed",
+        'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+        'Content-Disposition: attachment; filename="signed.eml"',
+        "",
+        "--sig",
+        "Content-Type: text/plain",
+        "",
+        "Signed body",
+        "--sig",
+        "Content-Type: application/pgp-signature",
+        "Content-Transfer-Encoding: base64",
+        "",
+        "c2lnbmF0dXJlCg==",
+        "--sig--",
+        "--mixed--",
+        "",
+    ),
+    "utf8-header-bytes": _mime(
+        "From: Ana <alias@example.com>",
+        "To: bob@example.com",
+        b"Subject: Caf\xc3\xa9 \xe2\x80\x94 r\xc3\xa9union",
+        "MIME-Version: 1.0",
+        "",
+        "Original body",
+        "",
+    ),
+    "latin1-header-bytes": _mime(
+        "From: Ana <alias@example.com>",
+        "To: bob@example.com",
+        b"Subject: Caf\xe9 latin",
+        "MIME-Version: 1.0",
+        "",
+        "Original body",
+        "",
+    ),
+    "inline-text-file": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "Body text",
+        "--mixed",
+        'Content-Type: text/plain; name="notes.txt"',
+        'Content-Disposition: inline; filename="notes.txt"',
+        "",
+        "note content",
+        "--mixed--",
+        "",
+    ),
+    "two-plain-text-parts": _mime(
+        *_DRAFT_HEADERS,
+        'Content-Type: multipart/mixed; boundary="mixed"',
+        "",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "part A",
+        "--mixed",
+        "Content-Type: text/plain",
+        "",
+        "-- list footer",
+        "--mixed--",
+        "",
+    ),
+    "iso-2022-jp": _mime(
+        *_DRAFT_HEADERS, "Content-Type: text/plain; charset=ISO-2022-JP", "", "日本語".encode("iso-2022-jp"), ""
+    ),
+    "undecodable-part": _mime(
+        *_DRAFT_HEADERS, "Content-Type: text/plain", "Content-Transfer-Encoding: base64", "", "!!!invalid!!!", ""
+    ),
+    "inline-body": _mime(*_DRAFT_HEADERS, "Content-Type: text/plain", "Content-Disposition: inline", "", "Body", ""),
+}
+
+
+def _raw_draft(raw: bytes) -> dict:
+    return {"id": "draft-001", "message": {"id": "msg-004", "threadId": "thread-003", "raw": _b64(raw)}}
+
+
+def _leaf_parts(message: EmailMessage) -> list[tuple[str, object]]:
+    return [(part.get_content_type(), part.get_payload()) for part in message.walk() if not part.is_multipart()]
+
+
+def _put_message(httpx_mock: HTTPXMock) -> dict:
+    put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
+    return json.loads(put.content)["message"]
+
+
 class TestEditDraft:
-    @pytest.mark.parametrize(
-        ("plain_body", "reason"),
-        [
-            ({"size": 0}, "HTML content that is not an alternative"),
-            ({"data": base64.urlsafe_b64encode(b"caf\xe9").decode("ascii")}, "could not be read"),
-        ],
-        ids=["missing-plain-data", "invalid-plain-utf8"],
-    )
-    async def test_subject_only_edit_refuses_html_fallback(
-        self, httpx_mock: HTTPXMock, plain_body: dict, reason: str
-    ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {
-            "mimeType": "multipart/alternative",
-            "parts": [
-                {"mimeType": "text/plain", "body": plain_body},
-                {"mimeType": "text/html", "body": {"data": _b64("<p>Keep this HTML body</p>")}},
-            ],
-        }
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+    @pytest.mark.parametrize("raw", list(_DRAFTS.values()), ids=list(_DRAFTS))
+    async def test_header_edit_keeps_the_rest_of_the_draft(self, httpx_mock: HTTPXMock, raw: bytes) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated ☕"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(raw, policy=policy.default)
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent["Subject"] == "Updated ☕"
+        assert [sent[name] for name in ("From", "Reply-To", "To")] == [
+            original[name] for name in ("From", "Reply-To", "To")
+        ]
+        assert _leaf_parts(sent) == _leaf_parts(original)
+
+    async def test_an_edit_writes_a_utf8_header_as_a_readable_encoded_word(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"), is_optional=True
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["utf8-header-bytes"])
         )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        assert raw.isascii()
+        assert b"unknown-8bit" not in raw
+        assert _parse_raw(_put_message(httpx_mock)["raw"])["Subject"] == "Caf\u00e9 \u2014 r\u00e9union"
+
+    async def test_an_edit_keeps_the_bytes_of_a_header_it_cannot_read(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["latin1-header-bytes"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        assert b"=?unknown-8bit?q?Caf=E9?=" in raw
+
+    async def test_a_draft_that_cannot_be_written_is_reported_as_the_cause(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            b'Content-Type: multipart/mixed; boundary="B\xe9"',
+            "",
+            b"--B\xe9",
+            "Content-Type: text/plain",
+            "",
+            "Body",
+            b"--B\xe9--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
 
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
 
         assert result.success is False
-        assert reason in result.error
+        assert result.error == "The existing draft holds a character that cannot be written to an email."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-    async def test_subject_only_edit_preserves_empty_plain_body(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["body"] = {"size": 0}
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+    async def test_a_signed_draft_that_cannot_be_written_is_reported_as_the_cause(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            b'Content-Type: multipart/signed; protocol="application/pgp-signature"; boundary="B\xe9"',
+            "",
+            b"--B\xe9",
+            "Content-Type: text/plain",
+            "",
+            "Body",
+            b"--B\xe9",
+            "Content-Type: application/pgp-signature",
+            "",
+            "signature",
+            b"--B\xe9--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
 
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
 
-        assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        raw = json.loads(put.content)["message"]["raw"]
-        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == ""
+        assert result.success is False
+        assert result.error == "The existing draft holds a character that cannot be written to an email."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-    async def test_subject_only_edit_keeps_plain_body_of_html_alternative(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {
-            "mimeType": "multipart/alternative",
-            "parts": [
-                {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-            ],
-        }
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+    async def test_an_edit_moves_the_headers_it_rewrites_to_the_end(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            b"From: An\xc3\xa1 <alias@example.com>",
+            "To: bob@example.com",
+            b"Subject: Caf\xc3\xa9",
+            "MIME-Version: 1.0",
+            "",
+            "Original body",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
 
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
 
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        raw = json.loads(put.content)["message"]["raw"]
-        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "MAIN BODY"
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [name for name, _ in sent.items()] == ["MIME-Version", "From", "Subject", "To"]
+        assert sent["From"] == "An\u00e1 <alias@example.com>"
+        assert sent["Subject"] == "Caf\u00e9"
 
-    async def test_edit_keeps_reply_draft_in_its_thread(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["headers"] += [
-            {"name": "In-Reply-To", "value": "<orig@example.com>"},
-            {"name": "References", "value": "<root@example.com> <orig@example.com>"},
-        ]
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+    async def test_an_edit_keeps_the_name_of_an_attached_file_readable(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            'Content-Type: multipart/mixed; boundary="mixed"',
+            "",
+            "--mixed",
+            "Content-Type: text/plain",
+            "",
+            "Original body",
+            "--mixed",
+            b'Content-Type: application/pdf; name="Caf\xc3\xa9.pdf"',
+            b'Content-Disposition: attachment; filename="Caf\xc3\xa9.pdf"',
+            "Content-Transfer-Encoding: base64",
+            "",
+            "JVBERi0xLjQK",
+            "--mixed--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        sent_raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        assert b"unknown-8bit" not in sent_raw
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_filename() for part in sent.iter_attachments()] == ["Caf\u00e9.pdf"]
+
+    async def test_edit_replaces_only_the_given_headers(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(*_DRAFT_HEADERS, "Cc: old@example.com", "Bcc: dave@example.com", "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to="José <jose@example.com>", cc="carol@example.com", bcc=""),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [(a.display_name, a.addr_spec) for a in sent["To"].addresses] == [("José", "jose@example.com")]
+        assert sent.get_all("Cc") == ["carol@example.com"]
+        assert "Bcc" not in sent
+        assert sent["Subject"] == "Draft Subject"
+        assert sent["From"] == "Ana <alias@example.com>"
+
+    @pytest.mark.parametrize(
+        ("header", "to", "subject", "cc", "bcc"),
+        [
+            ("To", "", None, None, None),
+            ("Subject", None, "", None, None),
+            ("Cc", None, None, "", None),
+            ("Bcc", None, None, None, ""),
+        ],
+        ids=["to", "subject", "cc", "bcc"],
+    )
+    async def test_an_empty_value_clears_a_header(
+        self,
+        httpx_mock: HTTPXMock,
+        header: str,
+        to: str | None,
+        subject: str | None,
+        cc: str | None,
+        bcc: str | None,
+    ) -> None:
+        raw = _mime(*_DRAFT_HEADERS, "Cc: carol@example.com", "Bcc: dan@example.com", "", "Original body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to=to, subject=subject, cc=cc, bcc=bcc),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent[header] is None
+        assert sent.get_content() == "Original body\r\n"
+
+    @pytest.mark.parametrize("draft", ["html-only", "inline-image", "located-image"])
+    async def test_new_body_replaces_the_text_and_html(self, httpx_mock: HTTPXMock, draft: str) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
 
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
 
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        message = json.loads(put.content)["message"]
-        assert message["threadId"] == "thread-003"
-        sent = email.message_from_bytes(base64.urlsafe_b64decode(message["raw"]))
-        assert sent["In-Reply-To"] == "<orig@example.com>"
-        assert sent["References"] == "<root@example.com> <orig@example.com>"
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent.get_content_type() == "text/plain"
+        assert sent.get_content() == "New body\r\n"
+        assert sent["From"] == "Ana <alias@example.com>"
+        assert sent.get_all("MIME-Version") == ["1.0"]
 
     @pytest.mark.parametrize(
-        ("reply_headers", "params"),
+        ("draft", "parts"),
         [
-            ([], {"body": "New body"}),
-            ([{"name": "In-Reply-To", "value": "<orig@example.com>"}], {"subject": "New subject"}),
+            ("alternative-with-attachment", ["multipart/mixed", "text/plain", "application/pdf"]),
+            ("attached-email", ["multipart/mixed", "text/plain", "message/rfc822", "text/plain"]),
+        ],
+    )
+    async def test_new_body_keeps_attachments(self, httpx_mock: HTTPXMock, draft: str, parts: list[str]) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(_DRAFTS[draft], policy=policy.default)
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == parts
+        body = sent.get_body(("plain",))
+        assert body is not None
+        assert body.get_content() == "New body\r\n"
+        assert [part.as_string() for part in sent.iter_attachments()] == [
+            part.as_string() for part in original.iter_attachments()
+        ]
+        assert sent.get_all("MIME-Version") == ["1.0"]
+
+    async def test_new_body_replaces_every_text_part(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["two-plain-text-parts"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent.get_content_type() == "text/plain"
+        assert sent.get_content() == "New body\r\n"
+
+    @pytest.mark.parametrize(
+        "body",
+        ["A" * 3000, "A" * 600 + "\f" + "B" * 600],
+        ids=["plain-run", "run-split-by-a-page-break"],
+    )
+    async def test_a_long_line_of_a_new_body_is_wrapped(self, httpx_mock: HTTPXMock, body: str) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body=body), token=_TOKEN)
+
+        assert result.success is True
+        raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        longest = max(len(line) for line in raw.split(b"\r\n"))
+        assert longest <= 998, "a line of an email must hold at most 998 octets"
+        assert _parse_raw(_put_message(httpx_mock)["raw"]).get_content() == f"{body}\r\n"
+
+    async def test_a_non_ascii_new_body_is_written_as_ascii_bytes(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["alternative-with-attachment"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", body="Caf\u00e9 \u2014 one coffee"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        raw = _put_message(httpx_mock)["raw"]
+        assert base64.urlsafe_b64decode(raw).isascii(), "a body that the tool writes must hold no 8-bit bytes"
+        sent = _parse_raw(raw)
+        body = sent.get_body(("plain",))
+        assert body is not None
+        assert body.get_content() == "Caf\u00e9 \u2014 one coffee\r\n"
+
+    async def test_an_empty_body_clears_the_text_and_keeps_an_attachment(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["alternative-with-attachment"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body=""), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert sent.get_payload()[0].get_content().strip() == ""
+        assert [part.get_filename() for part in sent.iter_attachments()] == ["a.pdf"]
+
+    async def test_an_edit_keeps_one_recipient_from_a_name_written_as_an_encoded_word(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to="=?utf-8?Q?Doe=2C_John?= <john@example.com>"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
+    async def test_a_header_edit_stops_where_signed_content_cannot_be_written_back(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+            "",
+            "--sig",
+            "Content-Type: text/plain",
+            b"Content-Description: caf\xc3\xa9",
+            "",
+            "Signed body",
+            "--sig",
+            "Content-Type: application/pgp-signature",
+            "Content-Transfer-Encoding: base64",
+            "",
+            "c2lnbmF0dXJlCg==",
+            "--sig--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The signed or encrypted content of this draft cannot be written back as it was read."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_header_edit_stops_where_an_attached_signed_email_would_change(self, httpx_mock: HTTPXMock) -> None:
+        inner = _mime(
+            "From: Zoe <zoe@example.com>",
+            b"Subject: Caf\xc3\xa9",
+            "MIME-Version: 1.0",
+            'Content-Type: multipart/signed; micalg=pgp-sha256; protocol="application/pgp-signature"; boundary="sig"',
+            "",
+            "--sig",
+            "Content-Type: text/plain",
+            "",
+            "Signed body",
+            "--sig",
+            "Content-Type: application/pgp-signature",
+            "Content-Transfer-Encoding: base64",
+            "",
+            "c2lnbmF0dXJlCg==",
+            "--sig--",
+            "",
+        )
+        raw = _mime(
+            *_DRAFT_HEADERS,
+            'Content-Type: multipart/mixed; boundary="mix"',
+            "",
+            "--mix",
+            "Content-Type: text/plain",
+            "",
+            "See the signed email.",
+            "--mix",
+            "Content-Type: message/rfc822",
+            'Content-Disposition: attachment; filename="m.eml"',
+            "",
+            inner,
+            "--mix--",
+            "",
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The signed or encrypted content of this draft cannot be written back as it was read."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_an_edit_keeps_a_boundary_that_names_a_charset(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["boundary-that-names-a-charset"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", cc="carol@example.com"), token=_TOKEN)
+
+        assert result.success is True
+        sent_raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"]).decode()
+        assert f'boundary="{_CHARSET_BOUNDARY}"' in sent_raw
+
+    @pytest.mark.parametrize("draft", ["signed", "encrypted", "smime-encrypted"])
+    async def test_a_new_body_for_protected_content_is_refused(self, httpx_mock: HTTPXMock, draft: str) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS[draft]))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "A draft that holds signed or encrypted content cannot take a new body."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_header_edit_keeps_signed_content_whole(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["signed"]))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is True
+        sent_raw = base64.urlsafe_b64decode(_put_message(httpx_mock)["raw"])
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent.get_content_type() == "multipart/signed"
+        assert sent.get_param("protocol") == "application/pgp-signature"
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/signed",
+            "text/plain",
+            "application/pgp-signature",
+        ]
+        signed_part = b"Content-Type: text/plain\r\n\r\nSigned body\r\n"
+        assert signed_part in sent_raw, "the bytes that a signature covers must be written back as they were read"
+
+    async def test_a_new_body_keeps_an_attached_signed_email_whole(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["attached-signed-email"])
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "multipart/signed",
+            "text/plain",
+            "application/pgp-signature",
+        ]
+
+    async def test_new_body_keeps_a_text_file_that_a_draft_holds(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["inline-text-file"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == ["multipart/mixed", "text/plain", "text/plain"]
+        kept = sent.get_payload()[1]
+        assert kept.get_filename() == "notes.txt"
+        assert kept.get_content() == "note content"
+
+    @pytest.mark.parametrize("draft", ["related-holding-a-mixed-part", "attachment-only"], ids=["related", "bare"])
+    async def test_new_body_keeps_a_file_that_no_part_marks_as_an_attachment(
+        self, httpx_mock: HTTPXMock, draft: str
+    ) -> None:
+        raw = _DRAFTS[draft]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(raw, policy=policy.default)
+        original_pdf = next(part for part in original.walk() if part.get_filename() == "a.pdf")
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        kept = next(part for part in sent.iter_attachments() if part.get_filename() == "a.pdf")
+        assert kept.get_payload(decode=True) == original_pdf.get_payload(decode=True)
+
+    async def test_new_body_keeps_an_attachment_inside_a_nested_part(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["nested-attachment"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(draft, policy=policy.default)
+        original_pdf = next(part for part in original.walk() if part.get_filename() == "a.pdf")
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
+
+    async def test_new_body_keeps_an_inline_file_that_no_html_can_hold(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["related-with-an-inline-file"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        kept = sent.get_payload()[1]
+        assert kept.get_payload(decode=True) == b"%PDF-1.4\n"
+
+    async def test_new_body_keeps_an_attachment_of_a_related_draft(self, httpx_mock: HTTPXMock) -> None:
+        draft = _DRAFTS["related-with-attachment"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(draft))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        original = email.message_from_bytes(draft, policy=policy.default)
+        original_pdf = next(part for part in original.iter_attachments() if part.get_filename() == "a.pdf")
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert [part.as_string() for part in sent.iter_attachments()] == [original_pdf.as_string()]
+
+    async def test_new_body_replaces_a_named_part_that_holds_the_only_body(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["named-body-only"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert "Original body" not in sent.as_string()
+        assert sent.get_body(("plain",)).get_content() == "New body\r\n"
+
+    async def test_new_body_replaces_every_named_part_that_holds_a_body(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["named-text-and-html"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == ["text/plain"]
+        assert "Original HTML" not in sent.as_string()
+        assert sent.get_content().strip() == "New body"
+
+    async def test_new_body_replaces_a_named_body_beside_an_attached_email(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["named-body-with-attached-email"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "message/rfc822",
+            "text/plain",
+        ]
+        assert "Original body" not in sent.as_string()
+        assert "inner text" in sent.as_string()
+
+    async def test_new_body_keeps_an_attached_group_of_parts_whole(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["attached-multipart"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        bundle = next(part for part in sent.iter_attachments() if part.get_filename() == "bundle.eml")
+        assert "note inside the bundle" in bundle.as_string()
+
+    async def test_new_body_keeps_no_envelope_header_on_a_part(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["attachment-only"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        kept = next(part for part in sent.iter_attachments() if part.get_filename() == "a.pdf")
+        assert [name for name, _ in kept.items() if not name.lower().startswith("content-")] == []
+        assert "hidden@example.com" not in kept.as_string()
+        assert sent["Bcc"] == "hidden@example.com"
+
+    async def test_edit_keeps_a_long_mime_boundary_as_it_was_written(self, httpx_mock: HTTPXMock) -> None:
+        raw = _DRAFTS["long-boundary"]
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="New subject"), token=_TOKEN)
+
+        assert result.success is True
+        sent_raw = _put_message(httpx_mock)["raw"]
+        sent_bytes = base64.urlsafe_b64decode(sent_raw + "=" * (-len(sent_raw) % 4))
+        assert f'boundary="{_LONG_BOUNDARY}"'.encode() in sent_bytes
+        assert b"boundary*0*=" not in sent_bytes
+        sent = _parse_raw(sent_raw)
+        assert [part.get_content_type() for part in sent.walk()] == [
+            "multipart/mixed",
+            "text/plain",
+            "application/pdf",
+        ]
+        assert sent["Subject"] == "New subject"
+
+    async def test_edit_keeps_reply_draft_in_its_thread(self, httpx_mock: HTTPXMock) -> None:
+        raw = _mime(*_DRAFT_HEADERS, "In-Reply-To: <orig@example.com>", "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
+
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+
+        assert result.success is True
+        message = _put_message(httpx_mock)
+        assert message["threadId"] == "thread-003"
+        assert _parse_raw(message["raw"])["In-Reply-To"] == "<orig@example.com>"
+
+    @pytest.mark.parametrize(
+        ("headers", "params"),
+        [
+            ((), {"body": "New body"}),
+            (("In-Reply-To: <orig@example.com>",), {"subject": "New subject"}),
         ],
         ids=["standalone-draft", "reply-draft-with-new-subject"],
     )
     async def test_edit_sends_no_thread_id_when_the_draft_cannot_stay_in_its_thread(
-        self, httpx_mock: HTTPXMock, reply_headers: list[dict[str, str]], params: dict[str, str]
+        self, httpx_mock: HTTPXMock, headers: tuple[str, ...], params: dict[str, str]
     ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["headers"] += reply_headers
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        raw = _mime(*_DRAFT_HEADERS, *headers, "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
 
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", **params), token=_TOKEN)
 
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        assert "threadId" not in json.loads(put.content)["message"]
+        assert "threadId" not in _put_message(httpx_mock)
 
     async def test_edit_reads_header_names_in_any_case(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["headers"] = [
-            {"name": "to", "value": "bob@example.com"},
-            {"name": "subject", "value": "Draft Subject"},
-            {"name": "CC", "value": "carol@example.com"},
-            {"name": "in-reply-to", "value": "<orig@example.com>"},
-        ]
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+        raw = _mime("to: bob@example.com", "subject: Draft Subject", "in-reply-to: <orig@example.com>", "", "Body", "")
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(raw))
         httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
 
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="New body"), token=_TOKEN)
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", to="carol@example.com"), token=_TOKEN)
 
         assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        sent = email.message_from_bytes(base64.urlsafe_b64decode(json.loads(put.content)["message"]["raw"]))
-        assert sent["To"] == "bob@example.com"
-        assert sent["Subject"] == "Draft Subject"
-        assert sent["Cc"] == "carol@example.com"
-        assert sent["In-Reply-To"] == "<orig@example.com>"
+        message = _put_message(httpx_mock)
+        assert message["threadId"] == "thread-003"
+        assert _parse_raw(message["raw"]).get_all("To") == ["carol@example.com"]
 
     @pytest.mark.parametrize(
-        ("payload", "reason"),
-        [
-            (
-                {
-                    "mimeType": "multipart/alternative",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64(b"caf\xe9")}},
-                    ],
-                },
-                "could not be read",
-            ),
-            ({"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}}, "no plain-text content"),
-            (
-                {
-                    "mimeType": "multipart/mixed",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                        {"mimeType": "application/pdf", "filename": "file.pdf", "body": {"data": _b64("PDF")}},
-                    ],
-                },
-                "attachments or inline parts",
-            ),
-            (
-                {
-                    "mimeType": "multipart/related",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                        {"mimeType": "image/png", "body": {"attachmentId": "inline-image"}},
-                    ],
-                },
-                "attachments or inline parts",
-            ),
-            (
-                {
-                    "mimeType": "multipart/mixed",
-                    "parts": [
-                        {"mimeType": "text/plain", "body": {"data": _b64("Text")}},
-                        {
-                            "mimeType": "multipart/related",
-                            "parts": [
-                                {"mimeType": "image/png", "filename": "inline.png", "body": {}},
-                            ],
-                        },
-                    ],
-                },
-                "attachments or inline parts",
-            ),
-        ],
-        ids=["undecodable-multipart", "html-only", "attachment", "inline", "nested-inline"],
+        "message",
+        [{"id": "msg-004"}, {"id": "msg-004", "raw": "!!!invalid!!!"}, None],
+        ids=["missing-raw", "invalid-raw", "no-message"],
     )
-    async def test_subject_only_edit_refuses_unrecoverable_content(
-        self, httpx_mock: HTTPXMock, payload: dict, reason: str
-    ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-        assert result.success is False
-        assert reason in result.error
-        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
-
-    async def test_refused_edit_says_what_a_new_body_removes(self, httpx_mock: HTTPXMock) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {"mimeType": "text/html", "body": {"data": _b64("<p>HTML only</p>")}}
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-        assert result.error == (
-            "The existing draft has no plain-text content. Provide a new body to continue. The draft is then saved "
-            "as plain text, and its attachments, inline images, and HTML formatting are removed."
-        )
-
-    async def test_unexpected_error_while_reading_the_draft_is_not_a_refusal(
-        self, httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        def fail(payload: dict) -> str:
-            raise ValueError("unexpected")
-
-        monkeypatch.setattr("apron_tools.providers.google.gmail.tools._preservable_plain_body", fail)
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=_load_json("get_draft.json"))
-        with pytest.raises(ValueError, match="unexpected"):
-            await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-
-    @pytest.mark.parametrize(
-        "part",
-        [
-            {
-                "mimeType": "image/png",
-                "filename": "",
-                "headers": [
-                    {"name": "Content-Disposition", "value": "inline"},
-                    {"name": "Content-ID", "value": "<logo>"},
-                ],
-                "body": {"size": 8, "data": "iVBORw0KGgo="},
-            },
-            {
-                "mimeType": "text/plain",
-                "headers": [{"name": "content-disposition", "value": "INLINE; filename=note.txt"}],
-                "body": {"data": _b64("Inline note")},
-            },
-            {
-                "mimeType": "text/plain",
-                "headers": [{"name": "content-id", "value": "<note>"}],
-                "body": {"data": _b64("Referenced note")},
-            },
-            {
-                "mimeType": "application/pdf",
-                "headers": [{"name": "Content-Disposition", "value": "attachment"}],
-                "body": {},
-            },
-            {"mimeType": "image/png", "body": {"data": "iVBORw0KGgo="}},
-        ],
-        ids=["embedded-inline-image", "inline-text", "content-id", "attachment-disposition", "nontext-data"],
-    )
-    async def test_subject_only_edit_refuses_unnamed_parts(self, httpx_mock: HTTPXMock, part: dict) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = {
-            "mimeType": "multipart/related",
-            "parts": [{"mimeType": "text/plain", "body": {"data": _b64("Keep this body")}}, part],
-        }
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+    async def test_unreadable_draft_is_not_overwritten(self, httpx_mock: HTTPXMock, message: dict | None) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001",
-            json=_load_json("edit_draft.json"),
-            is_optional=True,
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json={"id": "draft-001", "message": message}
         )
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
-        assert result.success is False
-        assert "attachments or inline parts" in result.error
-        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {"mimeType": "text/html", "filename": "inline.html", "body": {"data": "!!!invalid!!!"}},
-            {
-                "mimeType": "image/png",
-                "headers": [{"name": "Content-ID", "value": "<logo>"}],
-                "body": {"data": "iVBORw0KGgo="},
-            },
-        ],
-        ids=["html-attachment", "embedded-inline-image"],
-    )
-    async def test_explicit_body_can_replace_html_and_attachments(self, httpx_mock: HTTPXMock, payload: dict) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"))
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", body="Replacement"), token=_TOKEN)
-        assert result.success is True
-        put = next(request for request in httpx_mock.get_requests() if request.method == "PUT")
-        raw = json.loads(put.content)["message"]["raw"]
-        assert email.message_from_bytes(base64.urlsafe_b64decode(raw)).get_payload() == "Replacement"
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64("MAIN BODY")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN BODY</p>")}},
-                        ],
-                    },
-                    {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("part A")}},
-                    {"mimeType": "text/plain", "body": {"data": _b64("part B")}},
-                ],
-            },
-        ],
-        ids=["nested-body-and-footer", "sibling-parts"],
-    )
-    async def test_subject_only_edit_refuses_multiple_plain_text_parts(
-        self, httpx_mock: HTTPXMock, payload: dict
-    ) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
-        httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"), is_optional=True
-        )
         result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
         assert result.success is False
-        assert "more than one plain-text part" in result.error
+        assert result.error == "The existing draft could not be read."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001?format=full",
-            json=_load_json("get_draft.json"),
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw",
+            json=_raw_draft(_DRAFTS["plain-text"]),
         )
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/draft-001",
@@ -1097,11 +2268,14 @@ class TestEditDraft:
         assert result.success is True
         assert result.id == "draft-001"
         assert result.message_id == "msg-005"
+        sent = _parse_raw(_put_message(httpx_mock)["raw"])
+        assert sent["Subject"] == "Updated Subject"
+        assert sent.get_content() == "Original body\r\n"
 
     async def test_encodes_draft_id_in_request_paths(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}?format=full",
-            json=_load_json("get_draft.json"),
+            url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}?format=raw",
+            json=_raw_draft(_DRAFTS["plain-text"]),
         )
         httpx_mock.add_response(
             url=f"{_GMAIL_BASE}/drafts/{_TRICKY_ID_ENC}",
@@ -1126,80 +2300,69 @@ class TestEditDraft:
         assert result.success is False
         assert "404" in result.error
 
-    async def test_subject_only_edit_does_not_clobber_undecodable_body(self, httpx_mock: HTTPXMock) -> None:
-        # Editing only the subject (params.body is None, the documented
-        # normal case) of a draft whose stored body cannot be decoded must
-        # not write a placeholder string over the real body, and must not
-        # report success.
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"]["body"] = {"size": 13, "data": "!!!invalid!!!"}
+    async def test_a_draft_response_that_is_not_json_is_reported(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", text="<html>not json</html>")
 
+        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The existing draft could not be read."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_an_address_outside_ascii_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001?format=full",
-            json=draft,
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
         )
 
         result = await gmail_edit_draft(
-            EditDraftParams(draft_id="draft-001", subject="Updated Subject Only"),
+            EditDraftParams(draft_id="draft-001", to="jos\u00e9@example.com"),
             token=_TOKEN,
         )
 
         assert result.success is False
-        assert result.error
+        assert result.error == "A recipient address must hold only ASCII characters."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
-        # No PUT was issued: the tool must bail out before writing anything,
-        # not merely report failure after already clobbering the draft.
-        requests = httpx_mock.get_requests()
-        assert len(requests) == 1
-        assert requests[0].method == "GET"
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {
-                        "mimeType": "multipart/alternative",
-                        "parts": [
-                            {"mimeType": "text/plain", "body": {"data": _b64(b"MAIN caf\xe9")}},
-                            {"mimeType": "text/html", "body": {"data": _b64("<p>MAIN</p>")}},
-                        ],
-                    },
-                    {"mimeType": "text/plain", "body": {"data": _b64("-- list footer")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/alternative",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("Keep this body")}},
-                    {"mimeType": "text/html", "body": {"data": _b64(b"<p>caf\xe9</p>")}},
-                ],
-            },
-            {
-                "mimeType": "multipart/mixed",
-                "parts": [
-                    {"mimeType": "text/plain", "body": {"data": _b64("Sibling text")}},
-                    {
-                        "mimeType": "multipart/related",
-                        "body": {"data": "!!!invalid!!!"},
-                        "parts": [{"mimeType": "text/plain", "body": {"data": _b64(b"caf\xe9")}}],
-                    },
-                ],
-            },
-        ],
-        ids=["undecodable-body-before-footer", "undecodable-html-alternative", "undecodable-nested-part"],
-    )
-    async def test_subject_only_edit_refuses_undecodable_parts(self, httpx_mock: HTTPXMock, payload: dict) -> None:
-        draft = _load_json("get_draft.json")
-        draft["message"]["payload"] = payload
-        httpx_mock.add_response(url=f"{_GMAIL_BASE}/drafts/draft-001?format=full", json=draft)
+    async def test_a_recipient_name_with_an_unquoted_comma_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/drafts/draft-001", json=_load_json("edit_draft.json"), is_optional=True
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
         )
-        result = await gmail_edit_draft(EditDraftParams(draft_id="draft-001", subject="Updated"), token=_TOKEN)
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", to="Smith, John <john@example.com>"),
+            token=_TOKEN,
+        )
+
         assert result.success is False
-        assert "could not be read" in result.error
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_body_that_cannot_be_written_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", body="lone surrogate: \ud800"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient, subject or body contains a character that cannot be written to an email."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_header_value_with_a_line_break_leaves_the_draft_alone(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/drafts/draft-001?format=raw", json=_raw_draft(_DRAFTS["plain-text"])
+        )
+
+        result = await gmail_edit_draft(
+            EditDraftParams(draft_id="draft-001", subject="one\ntwo: injected"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must hold a single line."
         assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_has_tool_definition(self) -> None:
@@ -1215,10 +2378,14 @@ class TestEditDraft:
 # ---------------------------------------------------------------------------
 
 
+# NOTE: A header line holds 78 characters, so a message ID of this length is the case that a writer encodes.
+_LONG_MESSAGE_ID = "<" + "a" * 80 + "@mail.example.com>"
+
+
 class TestReplyToEmail:
     async def test_success(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=_load_json("get_message_for_reply.json"),
         )
         httpx_mock.add_response(
@@ -1238,7 +2405,7 @@ class TestReplyToEmail:
 
     async def test_encodes_message_id_in_request_path(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(
-            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            url=f"{_GMAIL_BASE}/messages/{_TRICKY_ID_ENC}?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
             json=_load_json("get_message_for_reply.json"),
         )
         httpx_mock.add_response(
@@ -1253,6 +2420,21 @@ class TestReplyToEmail:
 
         assert result.success is True
 
+    async def test_reply_to_a_sender_with_a_non_ascii_name_keeps_the_address(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"][0]["value"] = "José Núñez <jose@example.com>"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks"), token=_TOKEN)
+
+        send = httpx_mock.get_requests()[-1]
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [(a.display_name, a.addr_spec) for a in sent["To"].addresses] == [("José Núñez", "jose@example.com")]
+
     async def test_fetch_error(self, httpx_mock: HTTPXMock) -> None:
         httpx_mock.add_response(status_code=404, text="Not Found")
 
@@ -1263,6 +2445,281 @@ class TestReplyToEmail:
 
         assert result.success is False
         assert "404" in result.error
+
+    async def test_reply_goes_to_the_reply_to_address(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "notifications@example.com"},
+            {"name": "Reply-To", "value": "thread@example.com"},
+            {"name": "Subject", "value": "Re: Ticket 7"},
+            {"name": "Message-ID", "value": "<ticket-7@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent.get_all("To") == ["thread@example.com"]
+
+    async def test_reply_keeps_a_folded_references_header(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "alice@example.com"},
+            {"name": "Subject", "value": "Long thread"},
+            {"name": "Message-ID", "value": "<third@example.com>"},
+            {"name": "References", "value": "<first@example.com>\r\n <second@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!"),
+            token=_TOKEN,
+        )
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent["References"].split() == [
+            "<first@example.com>",
+            "<second@example.com>",
+            "<third@example.com>",
+        ]
+
+    async def test_reply_writes_a_long_message_id_without_an_encoded_word(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "alice@example.com"},
+            {"name": "Subject", "value": "Long thread"},
+            {"name": "Message-ID", "value": _LONG_MESSAGE_ID},
+            {"name": "References", "value": "<first@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        raw = base64.urlsafe_b64decode(json.loads(send.content)["raw"])
+        assert raw.count(_LONG_MESSAGE_ID.encode()) == 2
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent["In-Reply-To"] == _LONG_MESSAGE_ID
+        assert sent["References"].split() == ["<first@example.com>", _LONG_MESSAGE_ID]
+
+    async def test_reply_keeps_every_message_id_of_a_long_thread(self, httpx_mock: HTTPXMock) -> None:
+        chain = [f"<message-{index}-{'x' * 50}@mail.example.com>" for index in range(5)]
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "alice@example.com"},
+            {"name": "Subject", "value": "Long thread"},
+            {"name": "Message-ID", "value": _LONG_MESSAGE_ID},
+            {"name": "References", "value": " ".join(chain)},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        raw = base64.urlsafe_b64decode(json.loads(send.content)["raw"])
+        assert all(message_id.encode() in raw for message_id in chain)
+        assert all(len(line) <= 998 for line in raw.split(b"\r\n"))
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert sent["References"].split() == [*chain, _LONG_MESSAGE_ID]
+
+    async def test_reply_reads_a_sender_whose_name_sits_in_a_comment(self, httpx_mock: HTTPXMock) -> None:
+        original = _load_json("get_message_for_reply.json")
+        original["payload"]["headers"] = [
+            {"name": "From", "value": "bob@example.com (Smith, Bob)"},
+            {"name": "Subject", "value": "Ticket 7"},
+            {"name": "Message-ID", "value": "<ticket-7@example.com>"},
+        ]
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=original,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["bob@example.com"]
+
+    async def test_a_sender_address_outside_ascii_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "Jos\u00e9 <jos\u00e9@example.com>"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The address of the original sender must hold only ASCII characters."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_recipient_name_with_an_unquoted_comma_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=_load_json("get_message_for_reply.json"),
+        )
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!", cc="Smith, John <john@example.com>"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient must read as an email address, and a name beside it must be in quotes."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    @pytest.mark.parametrize(
+        "sender",
+        ["Smith, John <john@example.com>", "Acme, Inc. <john@example.com>"],
+        ids=["a-person", "a-company"],
+    )
+    async def test_a_reply_to_a_sender_name_with_a_comma_goes_to_the_address(
+        self, httpx_mock: HTTPXMock, sender: str
+    ) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = sender
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
+    async def test_a_reply_to_a_sender_that_ends_with_a_comma_keeps_the_address(self, httpx_mock: HTTPXMock) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "john@example.com,"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
+    async def test_a_reply_keeps_one_recipient_from_a_sender_name_of_an_encoded_word(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "=?utf-8?Q?Doe=2C_John?= <john@example.com>"
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+        assert [address.display_name for address in sent["To"].addresses] == ["Doe, John"]
+
+    async def test_a_reply_falls_back_to_the_from_where_the_reply_to_holds_no_address(
+        self, httpx_mock: HTTPXMock
+    ) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = "John <john@example.com>"
+        message["payload"]["headers"].append({"name": "Reply-To", "value": "Marketing Team"})
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+        httpx_mock.add_response(url=f"{_GMAIL_BASE}/messages/send", json=_load_json("send_reply.json"))
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is True
+        send = next(request for request in httpx_mock.get_requests() if request.method == "POST")
+        sent = _parse_raw(json.loads(send.content)["raw"])
+        assert [address.addr_spec for address in sent["To"].addresses] == ["john@example.com"]
+
+    @pytest.mark.parametrize(
+        "sender",
+        ["Nobody, No Address", "<>", "@", "(comment only)"],
+        ids=["a-name-alone", "a-null-sender", "an-at-sign-alone", "a-comment-alone"],
+    )
+    async def test_a_reply_to_a_sender_that_holds_no_address_is_refused(
+        self, httpx_mock: HTTPXMock, sender: str
+    ) -> None:
+        message = _load_json("get_message_for_reply.json")
+        for header in message["payload"]["headers"]:
+            if header["name"] == "From":
+                header["value"] = sender
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=message,
+        )
+
+        result = await gmail_reply_to_email(ReplyToEmailParams(message_id="msg-001", body="Thanks!"), token=_TOKEN)
+
+        assert result.success is False
+        assert result.error == "The original message holds no sender address to reply to."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
+
+    async def test_a_header_value_with_a_line_break_is_refused(self, httpx_mock: HTTPXMock) -> None:
+        httpx_mock.add_response(
+            url=f"{_GMAIL_BASE}/messages/msg-001?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID&metadataHeaders=References",
+            json=_load_json("get_message_for_reply.json"),
+        )
+
+        result = await gmail_reply_to_email(
+            ReplyToEmailParams(message_id="msg-001", body="Thanks!", cc="one\ntwo: injected"),
+            token=_TOKEN,
+        )
+
+        assert result.success is False
+        assert result.error == "A recipient or subject must hold a single line."
+        assert [request.method for request in httpx_mock.get_requests()] == ["GET"]
 
     async def test_has_tool_definition(self) -> None:
         defn = gmail_reply_to_email._tool_definition
