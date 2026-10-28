@@ -26,6 +26,7 @@ from apron_tools.providers.google.docs.types import (
     ReplyToCommentParams,
     ReplyToCommentResult,
     RichLink,
+    Table,
     UpdateDocumentParams,
     UpdateDocumentResult,
     UpdateTableCellParams,
@@ -240,6 +241,32 @@ class TestParagraphElement:
         assert element.text_content == ""
 
 
+class TestTable:
+    def test_renders_a_row_per_line_with_cells_joined(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "a\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "b\n"}}]}}]},
+                        ]
+                    },
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "c\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "d\n"}}]}}]},
+                        ]
+                    },
+                ]
+            }
+        )
+        assert table.text_content == "a | b\nc | d\n"
+
+    def test_renders_empty_without_rows(self):
+        assert Table().text_content == ""
+
+
 # ---------------------------------------------------------------------------
 # ReadDocumentResult
 # ---------------------------------------------------------------------------
@@ -281,6 +308,12 @@ class TestReadDocumentResult:
 
         assert elements[1].person is not None
         assert elements[1].person.person_properties.email == "ada@example.com"
+
+    def test_text_content_renders_table_rows_and_nested_tables(self):
+        data = _load_json("read_document_table.json")
+        result = ReadDocumentResult.model_validate(data)
+
+        assert result.text_content == "Intro\nName | Role\nAda | Lead | Eng\nOutro\n"
 
     def test_str_output(self):
         data = _load_json("read_document.json")

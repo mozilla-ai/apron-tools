@@ -219,6 +219,55 @@ class Paragraph(BaseModel):
         return "".join(element.text_content for element in self.elements)
 
 
+class TableCell(BaseModel):
+    """A cell of a native table, holding its own structural elements."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    start_index: int = Field(default=0, alias="startIndex")
+    end_index: int = Field(default=0, alias="endIndex")
+    content: list[StructuralElement] = []
+
+    @property
+    def text_content(self) -> str:
+        """Render the cell's structural elements as plain text."""
+        return "".join(element.text_content for element in self.content)
+
+
+class TableRow(BaseModel):
+    """A row of a native table."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    start_index: int = Field(default=0, alias="startIndex")
+    end_index: int = Field(default=0, alias="endIndex")
+    table_cells: list[TableCell] = Field(default_factory=list, alias="tableCells")
+
+    @property
+    def text_content(self) -> str:
+        """Render the row as its cell text joined by `` | ``, each cell stripped."""
+        return " | ".join(cell.text_content.strip() for cell in self.table_cells)
+
+
+class Table(BaseModel):
+    """A native table within the document body or within a table cell."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    rows: int = 0
+    columns: int = 0
+    table_rows: list[TableRow] = Field(default_factory=list, alias="tableRows")
+
+    @property
+    def text_content(self) -> str:
+        """Render the table as one line per row.
+
+        Each row carries its own trailing newline, because a row's cell text
+        does not end in one the way a paragraph's text run content does.
+        """
+        return "".join(f"{row.text_content}\n" for row in self.table_rows)
+
+
 class StructuralElement(BaseModel):
     """A structural element in the document body content array."""
 
@@ -227,6 +276,7 @@ class StructuralElement(BaseModel):
     start_index: int = Field(default=0, alias="startIndex")
     end_index: int = Field(default=0, alias="endIndex")
     paragraph: Paragraph | None = None
+    table: Table | None = None
     section_break: dict[str, Any] | None = Field(default=None, alias="sectionBreak")
 
     @property
@@ -234,6 +284,8 @@ class StructuralElement(BaseModel):
         """Render this element as plain text, empty when it carries none."""
         if self.paragraph is not None:
             return self.paragraph.text_content
+        if self.table is not None:
+            return self.table.text_content
         return ""
 
 
@@ -336,6 +388,8 @@ class ReadDocumentResult(ToolResult):
         A smart chip renders inline as the chip's own text: a people chip as
         ``Name <email>``, a rich link chip as ``[title](uri)``, and a date chip
         as its display text.
+        A native table renders one row per line, with cells joined by `` | ``.
+        A table nested inside a cell renders in place.
 
         NOTE: Markdown link syntax for a rich link is a presentation choice made
         for a model reading the text, not an API shape.
