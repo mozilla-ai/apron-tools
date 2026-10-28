@@ -12,6 +12,7 @@
 - **list_documents.json:** Based on Drive files.list response with document mimeType filter.
 - **create_document.json:** Based on Docs documents.create response.
 - **read_document.json:** Based on Docs documents.get response with full body content.
+- **read_document_smart_chips.json:** Based on Docs documents.get response whose paragraphs hold ``person``, ``richLink`` and ``dateElement`` elements, including a people chip with an email and no name.
 - **update_document.json:** Based on Docs documents.batchUpdate response.
 - **copy_document.json:** Drive files.copy response.
 - **copy_document_meta.json:** Drive file metadata response for the original document.

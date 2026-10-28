@@ -1,0 +1,184 @@
+{
+  "documentId": "doc-002",
+  "title": "Project Kickoff",
+  "body": {
+    "content": [
+      {
+        "endIndex": 1,
+        "sectionBreak": {
+          "sectionStyle": {
+            "columnSeparatorStyle": "NONE",
+            "contentDirection": "LEFT_TO_RIGHT"
+          }
+        }
+      },
+      {
+        "startIndex": 1,
+        "endIndex": 10,
+        "paragraph": {
+          "elements": [
+            {
+              "startIndex": 1,
+              "endIndex": 8,
+              "textRun": {
+                "content": "Owner: ",
+                "textStyle": {}
+              }
+            },
+            {
+              "startIndex": 8,
+              "endIndex": 9,
+              "person": {
+                "personId": "kix.person001",
+                "textStyle": {},
+                "personProperties": {
+                  "name": "Ada Lovelace",
+                  "email": "ada@example.com"
+                }
+              }
+            },
+            {
+              "startIndex": 9,
+              "endIndex": 10,
+              "textRun": {
+                "content": "\n",
+                "textStyle": {}
+              }
+            }
+          ],
+          "paragraphStyle": {
+            "namedStyleType": "NORMAL_TEXT",
+            "direction": "LEFT_TO_RIGHT"
+          }
+        }
+      },
+      {
+        "startIndex": 10,
+        "endIndex": 18,
+        "paragraph": {
+          "elements": [
+            {
+              "startIndex": 10,
+              "endIndex": 16,
+              "textRun": {
+                "content": "Spec: ",
+                "textStyle": {}
+              }
+            },
+            {
+              "startIndex": 16,
+              "endIndex": 17,
+              "richLink": {
+                "richLinkId": "kix.richlink001",
+                "textStyle": {},
+                "richLinkProperties": {
+                  "title": "Kickoff Spec",
+                  "uri": "https://docs.google.com/document/d/spec-001/edit",
+                  "mimeType": "application/vnd.google-apps.document"
+                }
+              }
+            },
+            {
+              "startIndex": 17,
+              "endIndex": 18,
+              "textRun": {
+                "content": "\n",
+                "textStyle": {}
+              }
+            }
+          ],
+          "paragraphStyle": {
+            "namedStyleType": "NORMAL_TEXT",
+            "direction": "LEFT_TO_RIGHT"
+          }
+        }
+      },
+      {
+        "startIndex": 18,
+        "endIndex": 25,
+        "paragraph": {
+          "elements": [
+            {
+              "startIndex": 18,
+              "endIndex": 23,
+              "textRun": {
+                "content": "Due: ",
+                "textStyle": {}
+              }
+            },
+            {
+              "startIndex": 23,
+              "endIndex": 24,
+              "dateElement": {
+                "dateId": "kix.date001",
+                "textStyle": {},
+                "dateElementProperties": {
+                  "timestamp": "2026-03-03T00:00:00Z",
+                  "timeZoneId": "etc/UTC",
+                  "locale": "en-GB",
+                  "dateFormat": "DATE_FORMAT_LONG",
+                  "displayText": "3 March 2026"
+                }
+              }
+            },
+            {
+              "startIndex": 24,
+              "endIndex": 25,
+              "textRun": {
+                "content": "\n",
+                "textStyle": {}
+              }
+            }
+          ],
+          "paragraphStyle": {
+            "namedStyleType": "NORMAL_TEXT",
+            "direction": "LEFT_TO_RIGHT"
+          }
+        }
+      },
+      {
+        "startIndex": 25,
+        "endIndex": 36,
+        "paragraph": {
+          "elements": [
+            {
+              "startIndex": 25,
+              "endIndex": 34,
+              "textRun": {
+                "content": "Contact: ",
+                "textStyle": {}
+              }
+            },
+            {
+              "startIndex": 34,
+              "endIndex": 35,
+              "person": {
+                "personId": "kix.person002",
+                "textStyle": {},
+                "personProperties": {
+                  "email": "grace@example.com"
+                }
+              }
+            },
+            {
+              "startIndex": 35,
+              "endIndex": 36,
+              "textRun": {
+                "content": "\n",
+                "textStyle": {}
+              }
+            }
+          ],
+          "paragraphStyle": {
+            "namedStyleType": "NORMAL_TEXT",
+            "direction": "LEFT_TO_RIGHT"
+          }
+        }
+      }
+    ]
+  },
+  "revisionId": "revision-002",
+  "documentStyle": {},
+  "namedStyles": {},
+  "suggestionsViewMode": "SUGGESTIONS_INLINE"
+}
