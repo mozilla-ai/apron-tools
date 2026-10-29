@@ -263,6 +263,74 @@ class TestTable:
         )
         assert table.text_content == "a | b\nc | d\n"
 
+    def test_collapses_a_multi_paragraph_cell_onto_one_line(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {
+                                "content": [
+                                    {"paragraph": {"elements": [{"textRun": {"content": "First\n"}}]}},
+                                    {"paragraph": {"elements": [{"textRun": {"content": "Second\n"}}]}},
+                                ]
+                            },
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "B\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "First Second | B\n"
+
+    def test_collapses_a_multi_row_nested_table_onto_one_line(self):
+        nested = {
+            "table": {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "a\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "b\n"}}]}}]},
+                        ]
+                    },
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "c\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "d\n"}}]}}]},
+                        ]
+                    },
+                ]
+            }
+        }
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "Ada\n"}}]}}]},
+                            {"content": [nested]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "Ada | a | b c | d\n"
+
+    def test_renders_empty_for_a_cell_holding_only_an_empty_paragraph(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "B\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == " | B\n"
+
     def test_renders_empty_without_rows(self):
         assert Table().text_content == ""
 

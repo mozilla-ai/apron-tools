@@ -245,8 +245,13 @@ class TableRow(BaseModel):
 
     @property
     def text_content(self) -> str:
-        """Render the row as its cell text joined by `` | ``, each cell stripped."""
-        return " | ".join(cell.text_content.strip() for cell in self.table_cells)
+        """Render the row as its cell text joined by `` | ``.
+
+        A cell's own line breaks collapse to single spaces, so a row holding a
+        multi-paragraph cell or a multi-row nested table stays on one line.
+        """
+        cells = (" ".join(cell.text_content.split()) for cell in self.table_cells)
+        return " | ".join(cells)
 
 
 class Table(BaseModel):
@@ -393,6 +398,8 @@ class ReadDocumentResult(ToolResult):
 
         NOTE: Markdown link syntax for a rich link is a presentation choice made
         for a model reading the text, not an API shape.
+        The syntax is not escaped, so a title holding ``[`` or ``]``, or a URI
+        holding ``)``, yields a malformed link.
         ``ParagraphElement`` carries the chip values unrendered, so the choice is
         worth re-reviewing if a caller needs another form.
         """
