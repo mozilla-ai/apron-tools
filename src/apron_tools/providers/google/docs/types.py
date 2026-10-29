@@ -86,14 +86,115 @@ class TextRun(BaseModel):
     text_style: dict[str, Any] = Field(default_factory=dict, alias="textStyle")
 
 
+class PersonProperties(BaseModel):
+    """The name and email a people chip carries."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: str = ""
+    email: str = ""
+
+
+class Person(BaseModel):
+    """A people chip within a paragraph."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    person_id: str = Field(default="", alias="personId")
+    person_properties: PersonProperties = Field(default_factory=PersonProperties, alias="personProperties")
+
+    @property
+    def text_content(self) -> str:
+        """Render the chip as ``Name <email>``, or as whichever value is present."""
+        name = self.person_properties.name
+        email = self.person_properties.email
+        if name and email:
+            return f"{name} <{email}>"
+        return name or email
+
+
+class RichLinkProperties(BaseModel):
+    """The title, URI and MIME type a rich link chip carries."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    title: str = ""
+    uri: str = ""
+    mime_type: str = Field(default="", alias="mimeType")
+
+
+class RichLink(BaseModel):
+    """A rich link chip within a paragraph, pointing at a Drive file, a calendar event or a bookmark."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    rich_link_id: str = Field(default="", alias="richLinkId")
+    rich_link_properties: RichLinkProperties = Field(default_factory=RichLinkProperties, alias="richLinkProperties")
+
+    @property
+    def text_content(self) -> str:
+        """Render the chip as ``[title](uri)``, or as whichever value is present."""
+        title = self.rich_link_properties.title
+        uri = self.rich_link_properties.uri
+        if title and uri:
+            return f"[{title}]({uri})"
+        return title or uri
+
+
+class DateElementProperties(BaseModel):
+    """The display text and timestamp a date chip carries."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    display_text: str = Field(default="", alias="displayText")
+    timestamp: str = ""
+
+
+class DateElement(BaseModel):
+    """A date chip within a paragraph."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    date_id: str = Field(default="", alias="dateId")
+    date_element_properties: DateElementProperties = Field(
+        default_factory=DateElementProperties, alias="dateElementProperties"
+    )
+
+    @property
+    def text_content(self) -> str:
+        """Render the chip as its display text, falling back to the timestamp."""
+        return self.date_element_properties.display_text or self.date_element_properties.timestamp
+
+
 class ParagraphElement(BaseModel):
-    """An element within a paragraph."""
+    """An element within a paragraph.
+
+    The API sets at most one of the content fields on any given element.
+    Element types this model does not name, such as an equation or a page
+    break, are dropped and render as empty text.
+    """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     start_index: int = Field(default=0, alias="startIndex")
     end_index: int = Field(default=0, alias="endIndex")
     text_run: TextRun | None = Field(default=None, alias="textRun")
+    person: Person | None = None
+    rich_link: RichLink | None = Field(default=None, alias="richLink")
+    date_element: DateElement | None = Field(default=None, alias="dateElement")
+
+    @property
+    def text_content(self) -> str:
+        """Render this element as plain text, empty when it carries none."""
+        if self.text_run is not None:
+            return self.text_run.content
+        if self.person is not None:
+            return self.person.text_content
+        if self.rich_link is not None:
+            return self.rich_link.text_content
+        if self.date_element is not None:
+            return self.date_element.text_content
+        return ""
 
 
 class ParagraphStyle(BaseModel):
@@ -112,6 +213,65 @@ class Paragraph(BaseModel):
     elements: list[ParagraphElement] = []
     paragraph_style: ParagraphStyle = Field(default_factory=ParagraphStyle, alias="paragraphStyle")
 
+    @property
+    def text_content(self) -> str:
+        """Render the paragraph's elements as plain text."""
+        return "".join(element.text_content for element in self.elements)
+
+
+class TableCell(BaseModel):
+    """A cell of a native table, holding its own structural elements."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    start_index: int = Field(default=0, alias="startIndex")
+    end_index: int = Field(default=0, alias="endIndex")
+    content: list[StructuralElement] = []
+
+    @property
+    def text_content(self) -> str:
+        """Render the cell's structural elements as plain text."""
+        return "".join(element.text_content for element in self.content)
+
+
+class TableRow(BaseModel):
+    """A row of a native table."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    start_index: int = Field(default=0, alias="startIndex")
+    end_index: int = Field(default=0, alias="endIndex")
+    table_cells: list[TableCell] = Field(default_factory=list, alias="tableCells")
+
+    @property
+    def text_content(self) -> str:
+        """Render the row as its cell text joined by `` | ``.
+
+        A cell's own line breaks collapse to single spaces, so a row holding a
+        multi-paragraph cell or a multi-row nested table stays on one line.
+        """
+        cells = (" ".join(cell.text_content.split()) for cell in self.table_cells)
+        return " | ".join(cells)
+
+
+class Table(BaseModel):
+    """A native table within the document body or within a table cell."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    rows: int = 0
+    columns: int = 0
+    table_rows: list[TableRow] = Field(default_factory=list, alias="tableRows")
+
+    @property
+    def text_content(self) -> str:
+        """Render the table as one line per row.
+
+        Each row carries its own trailing newline, because a row's cell text
+        does not end in one the way a paragraph's text run content does.
+        """
+        return "".join(f"{row.text_content}\n" for row in self.table_rows)
+
 
 class StructuralElement(BaseModel):
     """A structural element in the document body content array."""
@@ -121,7 +281,17 @@ class StructuralElement(BaseModel):
     start_index: int = Field(default=0, alias="startIndex")
     end_index: int = Field(default=0, alias="endIndex")
     paragraph: Paragraph | None = None
+    table: Table | None = None
     section_break: dict[str, Any] | None = Field(default=None, alias="sectionBreak")
+
+    @property
+    def text_content(self) -> str:
+        """Render this element as plain text, empty when it carries none."""
+        if self.paragraph is not None:
+            return self.paragraph.text_content
+        if self.table is not None:
+            return self.table.text_content
+        return ""
 
 
 class Body(BaseModel):
@@ -217,14 +387,23 @@ class ReadDocumentResult(ToolResult):
 
     @property
     def text_content(self) -> str:
-        """Extract plain text from the document body."""
-        parts: list[str] = []
-        for element in self.body.content:
-            if element.paragraph is not None:
-                for pe in element.paragraph.elements:
-                    if pe.text_run is not None:
-                        parts.append(pe.text_run.content)
-        return "".join(parts)
+        """Render the document body as plain text.
+
+        Paragraph text keeps the newlines the API puts in its text run content.
+        A smart chip renders inline as the chip's own text: a people chip as
+        ``Name <email>``, a rich link chip as ``[title](uri)``, and a date chip
+        as its display text.
+        A native table renders one row per line, with cells joined by `` | ``.
+        A table nested inside a cell renders in place.
+
+        NOTE: Markdown link syntax for a rich link is a presentation choice made
+        for a model reading the text, not an API shape.
+        The syntax is not escaped, so a title holding ``[`` or ``]``, or a URI
+        holding ``)``, yields a malformed link.
+        ``ParagraphElement`` carries the chip values unrendered, so the choice is
+        worth re-reviewing if a caller needs another form.
+        """
+        return "".join(element.text_content for element in self.body.content)
 
     def __str__(self) -> str:
         """Return an LLM-readable summary of the document."""
