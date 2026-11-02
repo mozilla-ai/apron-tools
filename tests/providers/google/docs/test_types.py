@@ -13,15 +13,21 @@ from apron_tools.providers.google.docs.types import (
     CreateCommentResult,
     CreateDocumentParams,
     CreateDocumentResult,
+    DateElement,
     DocumentFile,
+    Dropdown,
     ListDocumentsParams,
     ListDocumentsResult,
+    ParagraphElement,
+    Person,
     ReadCommentsParams,
     ReadCommentsResult,
     ReadDocumentParams,
     ReadDocumentResult,
     ReplyToCommentParams,
     ReplyToCommentResult,
+    RichLink,
+    Table,
     UpdateDocumentParams,
     UpdateDocumentResult,
     UpdateTableCellParams,
@@ -171,6 +177,211 @@ class TestCreateDocumentResult:
 
 
 # ---------------------------------------------------------------------------
+# Smart chip paragraph elements
+# ---------------------------------------------------------------------------
+
+
+class TestPerson:
+    def test_renders_name_and_email(self):
+        chip = Person.model_validate({"personProperties": {"name": "Ada Lovelace", "email": "ada@example.com"}})
+        assert chip.text_content == "Ada Lovelace <ada@example.com>"
+
+    def test_renders_email_alone_without_a_name(self):
+        chip = Person.model_validate({"personProperties": {"email": "ada@example.com"}})
+        assert chip.text_content == "ada@example.com"
+
+    def test_renders_name_alone_without_an_email(self):
+        chip = Person.model_validate({"personProperties": {"name": "Ada Lovelace"}})
+        assert chip.text_content == "Ada Lovelace"
+
+    def test_renders_empty_without_either_value(self):
+        assert Person().text_content == ""
+
+
+class TestRichLink:
+    def test_renders_a_markdown_link(self):
+        chip = RichLink.model_validate(
+            {"richLinkProperties": {"title": "Kickoff Spec", "uri": "https://example.com/spec"}}
+        )
+        assert chip.text_content == "[Kickoff Spec](https://example.com/spec)"
+
+    def test_renders_title_alone_without_a_uri(self):
+        chip = RichLink.model_validate({"richLinkProperties": {"title": "Kickoff Spec"}})
+        assert chip.text_content == "Kickoff Spec"
+
+    def test_renders_uri_alone_without_a_title(self):
+        chip = RichLink.model_validate({"richLinkProperties": {"uri": "https://example.com/spec"}})
+        assert chip.text_content == "https://example.com/spec"
+
+    def test_renders_empty_without_either_value(self):
+        assert RichLink().text_content == ""
+
+
+class TestDateElement:
+    def test_prefers_display_text(self):
+        chip = DateElement.model_validate(
+            {"dateElementProperties": {"displayText": "3 March 2026", "timestamp": "2026-03-03T00:00:00Z"}}
+        )
+        assert chip.text_content == "3 March 2026"
+
+    def test_falls_back_to_the_timestamp_without_display_text(self):
+        chip = DateElement.model_validate({"dateElementProperties": {"timestamp": "2026-03-03T00:00:00Z"}})
+        assert chip.text_content == "2026-03-03T00:00:00Z"
+
+    def test_renders_empty_without_either_value(self):
+        assert DateElement().text_content == ""
+
+
+class TestDropdown:
+    def test_renders_the_display_value(self):
+        chip = Dropdown.model_validate(
+            {"dropdownProperties": {"displayValue": "In Progress", "selectedOptionId": "opt-2"}}
+        )
+        assert chip.text_content == "In Progress"
+
+    def test_renders_empty_without_a_display_value(self):
+        assert Dropdown().text_content == ""
+
+
+class TestParagraphElement:
+    def test_renders_text_run_content(self):
+        element = ParagraphElement.model_validate({"textRun": {"content": "Owner: "}})
+        assert element.text_content == "Owner: "
+
+    def test_renders_a_dropdown_chip(self):
+        element = ParagraphElement.model_validate({"dropdown": {"dropdownProperties": {"displayValue": "Done"}}})
+        assert element.text_content == "Done"
+
+    def test_renders_empty_for_an_unmodeled_element(self):
+        element = ParagraphElement.model_validate({"horizontalRule": {}})
+        assert element.text_content == ""
+
+
+class TestTable:
+    def test_renders_a_row_per_line_with_cells_joined(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "a\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "b\n"}}]}}]},
+                        ]
+                    },
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "c\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "d\n"}}]}}]},
+                        ]
+                    },
+                ]
+            }
+        )
+        assert table.text_content == "a | b\nc | d\n"
+
+    def test_collapses_a_multi_paragraph_cell_onto_one_line(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {
+                                "content": [
+                                    {"paragraph": {"elements": [{"textRun": {"content": "First\n"}}]}},
+                                    {"paragraph": {"elements": [{"textRun": {"content": "Second\n"}}]}},
+                                ]
+                            },
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "B\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "First Second | B\n"
+
+    def test_collapses_a_multi_row_nested_table_onto_one_line(self):
+        nested = {
+            "table": {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "a\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "b\n"}}]}}]},
+                        ]
+                    },
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "c\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "d\n"}}]}}]},
+                        ]
+                    },
+                ]
+            }
+        }
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "Ada\n"}}]}}]},
+                            {"content": [nested]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "Ada | a | b c | d\n"
+
+    def test_renders_empty_for_a_cell_holding_only_an_empty_paragraph(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "B\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == " | B\n"
+
+    def test_keeps_whitespace_within_a_line_as_the_api_sent_it(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "A\tB  C\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "D\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "A\tB  C | D\n"
+
+    def test_trims_a_cell_line_at_its_edges(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "  Ada  \n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "Lead\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "Ada | Lead\n"
+
+    def test_renders_empty_without_rows(self):
+        assert Table().text_content == ""
+
+
+# ---------------------------------------------------------------------------
 # ReadDocumentResult
 # ---------------------------------------------------------------------------
 
@@ -192,6 +403,32 @@ class TestReadDocumentResult:
 
         assert "Meeting Notes" in text
         assert "Discussion points for today." in text
+
+    def test_text_content_renders_smart_chips(self):
+        data = _load_json("read_document_smart_chips.json")
+        result = ReadDocumentResult.model_validate(data)
+
+        assert result.text_content == (
+            "Owner: Ada Lovelace <ada@example.com>\n"
+            "Spec: [Kickoff Spec](https://docs.google.com/document/d/spec-001/edit)\n"
+            "Due: 3 March 2026\n"
+            "Contact: grace@example.com\n"
+            "Status: In Progress\n"
+        )
+
+    def test_smart_chip_values_are_available_unrendered(self):
+        data = _load_json("read_document_smart_chips.json")
+        result = ReadDocumentResult.model_validate(data)
+        elements = result.body.content[1].paragraph.elements
+
+        assert elements[1].person is not None
+        assert elements[1].person.person_properties.email == "ada@example.com"
+
+    def test_text_content_renders_table_rows_and_nested_tables(self):
+        data = _load_json("read_document_table.json")
+        result = ReadDocumentResult.model_validate(data)
+
+        assert result.text_content == "Intro\nName | Role\nAda | Lead | Eng\nOutro\n"
 
     def test_str_output(self):
         data = _load_json("read_document.json")
