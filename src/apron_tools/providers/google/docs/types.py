@@ -89,7 +89,7 @@ class TextRun(BaseModel):
 class PersonProperties(BaseModel):
     """The name and email a people chip carries."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     name: str = ""
     email: str = ""
@@ -170,8 +170,7 @@ class ParagraphElement(BaseModel):
     """An element within a paragraph.
 
     The API sets at most one of the content fields on any given element.
-    Element types this model does not name, such as an equation or a page
-    break, are dropped and render as empty text.
+    An element type this model does not name renders as empty text.
     """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -390,18 +389,16 @@ class ReadDocumentResult(ToolResult):
         """Render the document body as plain text.
 
         Paragraph text keeps the newlines the API puts in its text run content.
-        A smart chip renders inline as the chip's own text: a people chip as
-        ``Name <email>``, a rich link chip as ``[title](uri)``, and a date chip
-        as its display text.
-        A native table renders one row per line, with cells joined by `` | ``.
-        A table nested inside a cell renders in place.
+        A smart chip and a native table each render inline, in the form their
+        own model defines.
 
-        NOTE: Markdown link syntax for a rich link is a presentation choice made
-        for a model reading the text, not an API shape.
-        The syntax is not escaped, so a title holding ``[`` or ``]``, or a URI
-        holding ``)``, yields a malformed link.
-        ``ParagraphElement`` carries the chip values unrendered, so the choice is
-        worth re-reviewing if a caller needs another form.
+        NOTE: A rich link chip renders as unescaped Markdown link syntax.
+        That is a presentation choice for a model reading the text rather than
+        an API shape, and a title holding ``[`` or ``]``, or a URI holding
+        ``)``, yields a malformed link.
+        The choice is worth re-reviewing if a caller needs the title and the
+        URI separately, since ``ParagraphElement`` carries the chip values
+        unrendered.
         """
         return "".join(element.text_content for element in self.body.content)
 
