@@ -218,6 +218,12 @@ class Paragraph(BaseModel):
         return "".join(element.text_content for element in self.elements)
 
 
+def _single_line(text: str) -> str:
+    """Fold a block of text onto one line, dropping blank lines."""
+    lines = (line.strip() for line in text.splitlines())
+    return " ".join(line for line in lines if line)
+
+
 class TableCell(BaseModel):
     """A cell of a native table, holding its own structural elements."""
 
@@ -246,11 +252,15 @@ class TableRow(BaseModel):
     def text_content(self) -> str:
         """Render the row as its cell text joined by `` | ``.
 
-        A cell's own line breaks collapse to single spaces, so a row holding a
-        multi-paragraph cell or a multi-row nested table stays on one line.
+        A cell's own line breaks become single spaces, so a row stays on one
+        line whether the cell holds several paragraphs or a nested table.
+        Whitespace within a line is left as the API sent it.
+
+        NOTE: Folding a nested table's line breaks folds its row boundaries
+        into the same `` | `` run, so its rows and columns are not recoverable
+        from the rendered text.
         """
-        cells = (" ".join(cell.text_content.split()) for cell in self.table_cells)
-        return " | ".join(cells)
+        return " | ".join(_single_line(cell.text_content) for cell in self.table_cells)
 
 
 class Table(BaseModel):
@@ -389,8 +399,10 @@ class ReadDocumentResult(ToolResult):
         """Render the document body as plain text.
 
         Paragraph text keeps the newlines the API puts in its text run content.
-        A smart chip and a native table each render inline, in the form their
-        own model defines.
+        A smart chip renders inline, in the form its own model defines.
+        A table at the top level renders one row per line.
+        A table nested in a cell has its row breaks folded into the containing
+        row, so its rows and columns are not recoverable from the result.
 
         NOTE: A rich link chip renders as unescaped Markdown link syntax.
         That is a presentation choice for a model reading the text rather than

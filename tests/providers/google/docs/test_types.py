@@ -331,6 +331,21 @@ class TestTable:
         )
         assert table.text_content == " | B\n"
 
+    def test_keeps_whitespace_within_a_line_as_the_api_sent_it(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "A\tB  C\n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "D\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "A\tB  C | D\n"
+
     def test_renders_empty_without_rows(self):
         assert Table().text_content == ""
 
