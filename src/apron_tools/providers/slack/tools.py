@@ -172,17 +172,51 @@ def _validate_user_token(token: str) -> str | None:
     return None
 
 
+def _retry_after_seconds(exc: SlackApiError) -> int | None:
+    """Return the wait in whole seconds Slack asked for, or None when it asked for no usable wait.
+
+    NOTE: The header name's case varies by HTTP client.
+    Retry-After also admits an HTTP date, and only a count of seconds in ASCII digits is read,
+    so anything else is reported as no wait rather than guessed at.
+    """
+    headers = getattr(exc.response, "headers", None) or {}
+    for name, value in headers.items():
+        if name.lower() != "retry-after":
+            continue
+        raw = str(value).strip()
+        if not raw.isascii() or not raw.isdigit():
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+    return None
+
+
 def _format_slack_error(verb: str, subject: str | None, exc: SlackApiError) -> str:
     """Format a Slack API error for return to the agent.
 
     For known non-permissions errors (channel/user/message/file not found,
     not in channel, malformed args), append an explicit disclaimer plus a
     pointer at ``slack_explore_workspace`` so the agent does not loop into
-    ``request_app_connection``. For everything else, fall back to the bare
+    ``request_app_connection``. A rate-limited call reports the wait Slack
+    asked for, because the bare code says nothing about when to retry and
+    reads like a scope failure. For everything else, fall back to the bare
     error code so genuine 401/403/scope errors still flow through the
     existing missing-scope path.
     """
     error_code = exc.response.get("error", str(exc))
+    if error_code == "ratelimited":
+        seconds = _retry_after_seconds(exc)
+        if seconds is None:
+            wait_clause = "Retry after a short wait. "
+        else:
+            wait_clause = f"Wait {seconds} second{'' if seconds == 1 else 's'}, then retry. "
+        return (
+            f"Failed to {verb}: {error_code} (Slack is rate limiting this app). "
+            + wait_clause
+            + "This is NOT a permissions error — do not call request_app_connection."
+        )
     if error_code in _SLACK_NON_PERMISSION_ERRORS:
         target = f"{subject} " if subject else ""
         return (
