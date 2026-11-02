@@ -442,10 +442,14 @@ class ReadDocumentResult(ToolResult):
         A table nested in a cell has its row breaks folded into the containing
         row, so its rows and columns are not recoverable from the result.
 
-        NOTE: A rich link chip renders as unescaped Markdown link syntax.
-        That is a presentation choice for a model reading the text rather than
-        an API shape, and a title holding ``[`` or ``]``, or a URI holding
-        ``)``, yields a malformed link.
+        NOTE: A rich link chip renders as Markdown link syntax.
+        That is a presentation choice for a model reading the text, not an API
+        shape.
+        The title and the URI are emitted verbatim, so the result is not
+        guaranteed to be valid CommonMark.
+        A title holding ``[`` or ``]`` makes it invalid, as does a URI holding
+        a space or an unbalanced parenthesis.
+        A balanced pair of parentheses in a URI is valid.
         The choice is worth re-reviewing if a caller needs the title and the
         URI separately, since ``ParagraphElement`` carries the chip values
         unrendered.
