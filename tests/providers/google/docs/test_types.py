@@ -15,6 +15,7 @@ from apron_tools.providers.google.docs.types import (
     CreateDocumentResult,
     DateElement,
     DocumentFile,
+    Dropdown,
     ListDocumentsParams,
     ListDocumentsResult,
     ParagraphElement,
@@ -231,10 +232,25 @@ class TestDateElement:
         assert DateElement().text_content == ""
 
 
+class TestDropdown:
+    def test_renders_the_display_value(self):
+        chip = Dropdown.model_validate(
+            {"dropdownProperties": {"displayValue": "In Progress", "selectedOptionId": "opt-2"}}
+        )
+        assert chip.text_content == "In Progress"
+
+    def test_renders_empty_without_a_display_value(self):
+        assert Dropdown().text_content == ""
+
+
 class TestParagraphElement:
     def test_renders_text_run_content(self):
         element = ParagraphElement.model_validate({"textRun": {"content": "Owner: "}})
         assert element.text_content == "Owner: "
+
+    def test_renders_a_dropdown_chip(self):
+        element = ParagraphElement.model_validate({"dropdown": {"dropdownProperties": {"displayValue": "Done"}}})
+        assert element.text_content == "Done"
 
     def test_renders_empty_for_an_unmodeled_element(self):
         element = ParagraphElement.model_validate({"horizontalRule": {}})
@@ -382,6 +398,7 @@ class TestReadDocumentResult:
             "Spec: [Kickoff Spec](https://docs.google.com/document/d/spec-001/edit)\n"
             "Due: 3 March 2026\n"
             "Contact: grace@example.com\n"
+            "Status: In Progress\n"
         )
 
     def test_smart_chip_values_are_available_unrendered(self):

@@ -166,6 +166,30 @@ class DateElement(BaseModel):
         return self.date_element_properties.display_text or self.date_element_properties.timestamp
 
 
+class DropdownProperties(BaseModel):
+    """The selection a dropdown chip carries."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    dropdown_definition_id: str = Field(default="", alias="dropdownDefinitionId")
+    selected_option_id: str = Field(default="", alias="selectedOptionId")
+    display_value: str = Field(default="", alias="displayValue")
+
+
+class Dropdown(BaseModel):
+    """A dropdown chip within a paragraph."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    dropdown_id: str = Field(default="", alias="dropdownId")
+    dropdown_properties: DropdownProperties = Field(default_factory=DropdownProperties, alias="dropdownProperties")
+
+    @property
+    def text_content(self) -> str:
+        """Render the chip as the display value of the selected option."""
+        return self.dropdown_properties.display_value
+
+
 class ParagraphElement(BaseModel):
     """An element within a paragraph.
 
@@ -181,6 +205,7 @@ class ParagraphElement(BaseModel):
     person: Person | None = None
     rich_link: RichLink | None = Field(default=None, alias="richLink")
     date_element: DateElement | None = Field(default=None, alias="dateElement")
+    dropdown: Dropdown | None = None
 
     @property
     def text_content(self) -> str:
@@ -193,6 +218,8 @@ class ParagraphElement(BaseModel):
             return self.rich_link.text_content
         if self.date_element is not None:
             return self.date_element.text_content
+        if self.dropdown is not None:
+            return self.dropdown.text_content
         return ""
 
 
