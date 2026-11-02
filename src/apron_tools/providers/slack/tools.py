@@ -172,7 +172,7 @@ def _validate_user_token(token: str) -> str | None:
     return None
 
 
-def _format_slack_error(verb: str, subject: str | None, error_code: str) -> str:
+def _format_slack_error(verb: str, subject: str | None, exc: SlackApiError) -> str:
     """Format a Slack API error for return to the agent.
 
     For known non-permissions errors (channel/user/message/file not found,
@@ -182,6 +182,7 @@ def _format_slack_error(verb: str, subject: str | None, error_code: str) -> str:
     error code so genuine 401/403/scope errors still flow through the
     existing missing-scope path.
     """
+    error_code = exc.response.get("error", str(exc))
     if error_code in _SLACK_NON_PERMISSION_ERRORS:
         target = f"{subject} " if subject else ""
         return (
@@ -492,10 +493,9 @@ async def slack_list_my_conversations(
         ]
         return ListMyConversationsResult(success=True, conversations=conversations)
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return ListMyConversationsResult(
             success=False,
-            error=_format_slack_error("list conversations", None, code),
+            error=_format_slack_error("list conversations", None, exc),
         )
 
 
@@ -526,10 +526,9 @@ async def slack_send_channel_message(
             message=resp.get("message"),
         )
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return SendChannelMessageResult(
             success=False,
-            error=_format_slack_error("send message", f"channel {params.channel_id}", code),
+            error=_format_slack_error("send message", f"channel {params.channel_id}", exc),
         )
 
 
@@ -574,10 +573,9 @@ async def slack_send_channel_message_with_file(
 
         resp = await client.files_upload_v2(**kwargs)
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return SendChannelMessageWithFileResult(
             success=False,
-            error=_format_slack_error("upload file", f"channel {params.channel_id}", code),
+            error=_format_slack_error("upload file", f"channel {params.channel_id}", exc),
         )
 
     uploaded = {}
@@ -620,10 +618,9 @@ async def slack_send_user_message(
             message=resp.get("message"),
         )
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return SendUserMessageResult(
             success=False,
-            error=_format_slack_error("send message", f"user {params.user_id}", code),
+            error=_format_slack_error("send message", f"user {params.user_id}", exc),
         )
 
 
@@ -680,10 +677,9 @@ async def slack_read_channel_messages(
             user_map=user_map,
         )
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return ReadChannelMessagesResult(
             success=False,
-            error=_format_slack_error("read messages", f"channel {params.channel_id}", code),
+            error=_format_slack_error("read messages", f"channel {params.channel_id}", exc),
         )
 
 
@@ -724,10 +720,9 @@ async def slack_get_channel_info(
             purpose=ch.get("purpose", {}).get("value", ""),
         )
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return GetChannelInfoResult(
             success=False,
-            error=_format_slack_error("get channel info", f"channel {params.channel_id}", code),
+            error=_format_slack_error("get channel info", f"channel {params.channel_id}", exc),
         )
 
 
@@ -781,10 +776,9 @@ async def slack_read_thread(
 
         return ReadThreadResult(success=True, messages=messages, user_map=user_map)
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return ReadThreadResult(
             success=False,
-            error=_format_slack_error("read thread", f"channel {params.channel_id}", code),
+            error=_format_slack_error("read thread", f"channel {params.channel_id}", exc),
         )
 
 
@@ -812,10 +806,9 @@ async def slack_join_channel(
             channel_name=ch.get("name", params.channel_id),
         )
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return JoinChannelResult(
             success=False,
-            error=_format_slack_error("join channel", f"channel {params.channel_id}", code),
+            error=_format_slack_error("join channel", f"channel {params.channel_id}", exc),
         )
 
 
@@ -846,10 +839,9 @@ async def slack_edit_message(
             ts=resp.get("ts", ""),
         )
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return EditMessageResult(
             success=False,
-            error=_format_slack_error("edit message", f"channel {params.channel_id}", code),
+            error=_format_slack_error("edit message", f"channel {params.channel_id}", exc),
         )
 
 
@@ -878,10 +870,9 @@ async def slack_get_permalink(
             permalink=resp.get("permalink", ""),
         )
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return GetPermalinkResult(
             success=False,
-            error=_format_slack_error("get permalink", f"channel {params.channel_id}", code),
+            error=_format_slack_error("get permalink", f"channel {params.channel_id}", exc),
         )
 
 
@@ -915,10 +906,9 @@ async def slack_get_file_info(
         )
         return GetFileInfoResult(success=True, file=slack_file)
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return GetFileInfoResult(
             success=False,
-            error=_format_slack_error("get file info", f"file {params.file_id}", code),
+            error=_format_slack_error("get file info", f"file {params.file_id}", exc),
         )
 
 
@@ -1048,11 +1038,10 @@ async def slack_get_reactions(
 
         return GetReactionsResult(success=True, reactions=reactions, item_type=item_type)
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         subject = f"channel {params.channel_id}" if params.channel_id else None
         return GetReactionsResult(
             success=False,
-            error=_format_slack_error("get reactions", subject, code),
+            error=_format_slack_error("get reactions", subject, exc),
         )
 
 
@@ -1091,12 +1080,11 @@ async def slack_add_reactions(
             )
             items.append(AddReactionItem(timestamp=ts, success=True))
         except SlackApiError as exc:
-            code = exc.response.get("error", str(exc))
             items.append(
                 AddReactionItem(
                     timestamp=ts,
                     success=False,
-                    error=_format_slack_error("add reaction", f"channel {params.channel_id}", code),
+                    error=_format_slack_error("add reaction", f"channel {params.channel_id}", exc),
                 )
             )
 
@@ -1166,10 +1154,9 @@ async def slack_search_messages(
         matches = [_parse_search_match(match) for match in raw_matches]
         return SearchMessagesResult(success=True, matches=matches)
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return SearchMessagesResult(
             success=False,
-            error=_format_slack_error("search messages", None, code),
+            error=_format_slack_error("search messages", None, exc),
         )
 
 
@@ -1216,10 +1203,9 @@ async def slack_list_saved_items(
         items = [_parse_saved_item(item) for item in raw_items]
         return ListSavedItemsResult(success=True, items=items)
     except SlackApiError as exc:
-        code = exc.response.get("error", str(exc))
         return ListSavedItemsResult(
             success=False,
-            error=_format_slack_error("list saved items", None, code),
+            error=_format_slack_error("list saved items", None, exc),
         )
 
 

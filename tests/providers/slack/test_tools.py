@@ -1879,7 +1879,7 @@ class TestFormatSlackError:
     def test_non_permission_codes_get_disclaimer(self, error_code: str) -> None:
         """Known non-permissions error codes must carry the explicit
         disclaimer so the agent stops looping into request_app_connection."""
-        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", error_code)
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", _slack_api_error(error_code))
         assert error_code in result
         assert "NOT a permissions error" in result
         assert "slack_explore_workspace" in result
@@ -1891,7 +1891,7 @@ class TestFormatSlackError:
     def test_genuine_permission_codes_pass_through(self, error_code: str) -> None:
         """Real auth/scope errors must not get the disclaimer — they still
         need to flow through the missing-scopes recovery path."""
-        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", error_code)
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", _slack_api_error(error_code))
         assert error_code in result
         assert "NOT a permissions error" not in result
 
