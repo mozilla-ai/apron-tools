@@ -87,7 +87,11 @@ class TextRun(BaseModel):
 
 
 class PersonProperties(BaseModel):
-    """The name and email a people chip carries."""
+    """The name and email a people chip carries.
+
+    The API always sends the email. It sends the name only when the chip
+    displays the name instead of the email address.
+    """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -105,7 +109,11 @@ class Person(BaseModel):
 
     @property
     def text_content(self) -> str:
-        """Render the chip as ``Name <email>``, or as whichever value is present."""
+        """Render the chip as ``Name <email>``, or as whichever value is present.
+
+        NOTE: A named chip renders both values, so the text carries the email
+        address even where the document displays the name alone.
+        """
         name = self.person_properties.name
         email = self.person_properties.email
         if name and email:
@@ -246,7 +254,7 @@ class Paragraph(BaseModel):
 
 
 def _single_line(text: str) -> str:
-    """Fold a block of text onto one line, dropping blank lines."""
+    """Fold a block of text onto one line, trimming each line and dropping blank ones."""
     lines = (line.strip() for line in text.splitlines())
     return " ".join(line for line in lines if line)
 
@@ -281,11 +289,14 @@ class TableRow(BaseModel):
 
         A cell's own line breaks become single spaces, so a row stays on one
         line whether the cell holds several paragraphs or a nested table.
-        Whitespace within a line is left as the API sent it.
+        Whitespace inside a line survives, while a line's leading and trailing
+        whitespace is trimmed.
 
-        NOTE: Folding a nested table's line breaks folds its row boundaries
-        into the same `` | `` run, so its rows and columns are not recoverable
-        from the rendered text.
+        NOTE: The `` | `` separator is not escaped, so a rendered row can be
+        ambiguous.
+        A cell holding `` | `` reads as two cells.
+        A nested table's row boundaries fold into the same run, so its rows and
+        columns are not recoverable from the rendered text.
         """
         return " | ".join(_single_line(cell.text_content) for cell in self.table_cells)
 

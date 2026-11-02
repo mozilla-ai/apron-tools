@@ -362,6 +362,21 @@ class TestTable:
         )
         assert table.text_content == "A\tB  C | D\n"
 
+    def test_trims_a_cell_line_at_its_edges(self):
+        table = Table.model_validate(
+            {
+                "tableRows": [
+                    {
+                        "tableCells": [
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "  Ada  \n"}}]}}]},
+                            {"content": [{"paragraph": {"elements": [{"textRun": {"content": "Lead\n"}}]}}]},
+                        ]
+                    }
+                ]
+            }
+        )
+        assert table.text_content == "Ada | Lead\n"
+
     def test_renders_empty_without_rows(self):
         assert Table().text_content == ""
 
