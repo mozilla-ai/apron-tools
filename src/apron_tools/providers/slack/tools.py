@@ -204,8 +204,15 @@ def _format_slack_error(verb: str, subject: str | None, exc: SlackApiError) -> s
     reads like a scope failure. For everything else, fall back to the bare
     error code so genuine 401/403/scope errors still flow through the
     existing missing-scope path.
+
+    NOTE: The response body is never surfaced, because it can carry fields
+    unrelated to the failure.
     """
-    error_code = exc.response.get("error", str(exc))
+    error_code = exc.response.get("error")
+    if not error_code:
+        status = getattr(exc.response, "status_code", None)
+        with_status = f" with HTTP {status}" if status else ""
+        return f"Failed to {verb}: Slack refused the call{with_status} and named no error code."
     if error_code == "ratelimited":
         seconds = _retry_after_seconds(exc)
         if seconds is None:

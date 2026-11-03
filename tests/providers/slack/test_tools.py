@@ -2011,6 +2011,34 @@ class TestRateLimitError:
         assert "Wait 42 seconds" in result.error
 
 
+class TestSlackErrorWithoutCode:
+    """Slack can refuse a call without naming an error code."""
+
+    def test_the_response_body_is_not_surfaced(self) -> None:
+        """The body can hold fields unrelated to the failure, which the caller has no use for."""
+        exc = SlackApiError(
+            message="The request to the Slack API failed.",
+            response=_mock_response(
+                {"ok": False, "warning": "missing_charset", "team": "T0PRIVATETEAM"},
+                status_code=503,
+            ),
+        )
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "missing_charset" not in result
+        assert "T0PRIVATETEAM" not in result
+        assert "named no error code" in result
+        assert "503" in result
+
+    def test_an_absent_status_still_reads_as_a_sentence(self) -> None:
+        exc = SlackApiError(message="failed", response={"ok": False})
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert result == "Failed to read messages: Slack refused the call and named no error code."
+
+
 class TestChannelIdBoundaryRejection:
     """Tools that take a channel_id reject names without hitting the API."""
 
