@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -84,22 +85,32 @@ def _load_json(filename: str) -> dict:
     return json.loads((TESTDATA_DIR / filename).read_text())
 
 
-def _mock_response(data: dict) -> AsyncSlackResponse:
-    """Build a mock AsyncSlackResponse from a dict."""
+def _mock_response(
+    data: dict | str,
+    *,
+    headers: dict | None = None,
+    status_code: int = 200,
+) -> AsyncSlackResponse:
+    """Build a mock AsyncSlackResponse from a body Slack can answer with."""
     return AsyncSlackResponse(
         client=None,
         http_verb="POST",
         api_url="https://slack.com/api/test",
         req_args={},
         data=data,
-        headers={},
-        status_code=200,
+        headers=headers or {},
+        status_code=status_code,
     )
 
 
-def _slack_api_error(error: str) -> SlackApiError:
+def _slack_api_error(
+    error: str,
+    *,
+    headers: dict | None = None,
+    status_code: int = 200,
+) -> SlackApiError:
     """Build a SlackApiError with the given error string."""
-    resp = _mock_response({"ok": False, "error": error})
+    resp = _mock_response({"ok": False, "error": error}, headers=headers, status_code=status_code)
     return SlackApiError(message=error, response=resp)
 
 
@@ -1879,7 +1890,7 @@ class TestFormatSlackError:
     def test_non_permission_codes_get_disclaimer(self, error_code: str) -> None:
         """Known non-permissions error codes must carry the explicit
         disclaimer so the agent stops looping into request_app_connection."""
-        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", error_code)
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", _slack_api_error(error_code))
         assert error_code in result
         assert "NOT a permissions error" in result
         assert "slack_explore_workspace" in result
@@ -1891,9 +1902,241 @@ class TestFormatSlackError:
     def test_genuine_permission_codes_pass_through(self, error_code: str) -> None:
         """Real auth/scope errors must not get the disclaimer — they still
         need to flow through the missing-scopes recovery path."""
-        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", error_code)
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", _slack_api_error(error_code))
         assert error_code in result
         assert "NOT a permissions error" not in result
+
+
+class TestRateLimitError:
+    """A rate-limited call must carry Slack's wait and must not read as a scope failure."""
+
+    def test_wait_comes_from_the_retry_after_header(self) -> None:
+        exc = _slack_api_error("ratelimited", headers={"Retry-After": "30"}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", exc)
+
+        assert "ratelimited" in result
+        assert "Wait 30 seconds" in result
+        assert "NOT a permissions error" in result
+
+    def test_header_name_case_is_ignored(self) -> None:
+        """The header name's case varies by HTTP client, so an exact lookup loses the wait."""
+        exc = _slack_api_error("ratelimited", headers={"retry-after": "12"}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "Wait 12 seconds" in result
+
+    def test_a_one_second_wait_reads_as_singular(self) -> None:
+        exc = _slack_api_error("ratelimited", headers={"Retry-After": "1"}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "Wait 1 second," in result
+
+    def test_an_absent_header_still_reports_a_transient_failure(self) -> None:
+        exc = _slack_api_error("ratelimited", status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Retry after a short wait" in result
+        assert "NOT a permissions error" in result
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "Wed, 21 Oct 2026 07:28:00 GMT",
+            "",
+            "soon",
+            "-5",
+            "1_000",
+            "\u0663\u0660",
+            "30\ninjected: yes",
+        ],
+    )
+    def test_an_unusable_header_invents_no_number(self, value: str) -> None:
+        """Retry-After admits a count of seconds in ASCII digits and nothing else.
+
+        Python's int() is looser than the header is: it reads "1_000" as 1000 and
+        reads non-ASCII digits, either of which would state a wait Slack never asked for.
+        """
+        exc = _slack_api_error("ratelimited", headers={"Retry-After": value}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "Retry after a short wait" in result
+        assert "Wait" not in result
+
+    def test_a_digit_string_too_long_to_convert_does_not_raise(self) -> None:
+        """CPython refuses to convert an integer string past 4300 digits, and the tool must not raise."""
+        exc = _slack_api_error("ratelimited", headers={"Retry-After": "9" * 4301}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "Retry after a short wait" in result
+
+    def test_a_response_without_headers_does_not_raise(self) -> None:
+        """A SlackApiError can carry a plain mapping, which holds no headers to read."""
+        exc = SlackApiError(message="ratelimited", response={"ok": False, "error": "ratelimited"})
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Retry after a short wait" in result
+        assert "Wait" not in result
+
+    def test_an_immediate_retry_is_not_reported_as_a_wait(self) -> None:
+        """Retry-After admits zero, and "Wait 0 seconds" invites an agent to pause for nothing."""
+        exc = _slack_api_error("ratelimited", headers={"Retry-After": "0"}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "Retry now" in result
+        assert "0 second" not in result
+
+    def test_http_429_is_rate_limiting_even_with_no_error_code(self) -> None:
+        """A rate limit applied ahead of Slack carries no Slack body, and the wait must survive it."""
+        exc = SlackApiError(
+            message="The request to the Slack API failed.",
+            response=_mock_response({}, headers={"Retry-After": "17"}, status_code=429),
+        )
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Wait 17 seconds" in result
+        assert "NOT a permissions error" in result
+        assert "named no error code" not in result
+
+    def test_a_rate_limit_applied_ahead_of_slack_keeps_its_wait(self) -> None:
+        """A gateway refusing the call answers with no Slack body, and its wait must still arrive."""
+
+        class _RawHttpResponse:
+            """Stands in for the HTTP client's own response object, which has no Slack shape."""
+
+            status = 429
+            headers = {"Retry-After": "17"}
+
+        exc = SlackApiError(message="failed", response=cast(Any, _RawHttpResponse()))
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Wait 17 seconds" in result
+        assert "NOT a permissions error" in result
+
+    def test_headers_that_are_not_a_mapping_report_no_wait(self) -> None:
+        """A formatter that raises leaves the caller with no error at all, so an odd shape reports no wait."""
+
+        class _RawHttpResponse:
+            """Stands in for the HTTP client's own response object, which has no Slack shape."""
+
+            status = 429
+            headers = [("Retry-After", "17")]
+
+        exc = SlackApiError(message="failed", response=cast(Any, _RawHttpResponse()))
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Retry after a short wait" in result
+
+    def test_http_429_without_a_wait_still_reads_as_rate_limiting(self) -> None:
+        exc = SlackApiError(
+            message="The request to the Slack API failed.",
+            response=_mock_response({}, status_code=429),
+        )
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Retry after a short wait" in result
+        assert "NOT a permissions error" in result
+
+    def test_the_id_lookup_hint_is_withheld(self) -> None:
+        """Verifying channel IDs does nothing for a rate limit, so that advice must not appear."""
+        exc = _slack_api_error("ratelimited", headers={"Retry-After": "30"}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", "channel C01234ABCD", exc)
+
+        assert "slack_explore_workspace" not in result
+
+    @patch("apron_tools.providers.slack.tools.AsyncWebClient")
+    async def test_a_tool_surfaces_the_wait(self, mock_cls: AsyncMock) -> None:
+        client = AsyncMock()
+        mock_cls.return_value = client
+        client.conversations_history.side_effect = _slack_api_error(
+            "ratelimited",
+            headers={"Retry-After": "42"},
+            status_code=429,
+        )
+
+        result = await slack_read_channel_messages(
+            ReadChannelMessagesParams(channel_id="C01234ABCD"),
+            token=_TOKEN,
+            base_url=_BASE_URL,
+        )
+
+        assert result.success is False
+        assert "Wait 42 seconds" in result.error
+
+
+class TestSlackErrorWithoutCode:
+    """Slack can refuse a call without naming an error code."""
+
+    def test_the_response_body_is_not_surfaced(self) -> None:
+        """The body can hold fields unrelated to the failure, which the caller has no use for."""
+        exc = SlackApiError(
+            message="The request to the Slack API failed.",
+            response=_mock_response(
+                {"ok": False, "warning": "missing_charset", "team": "T0PRIVATETEAM"},
+                status_code=503,
+            ),
+        )
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "missing_charset" not in result
+        assert "T0PRIVATETEAM" not in result
+        assert "named no error code" in result
+        assert "503" in result
+
+    def test_an_absent_status_still_reads_as_a_sentence(self) -> None:
+        exc = SlackApiError(message="failed", response={"ok": False})
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert result == "Failed to read messages: Slack refused the call and named no error code."
+
+    def test_a_text_body_names_no_error_code(self) -> None:
+        """An upload endpoint answers in plain text, so the body holds no error code to read."""
+        exc = SlackApiError(message="failed", response=_mock_response("upload failed", status_code=500))
+
+        result = slack_tools._format_slack_error("upload the file", None, exc)
+
+        assert result == "Failed to upload the file: Slack refused the call with HTTP 500 and named no error code."
+
+    def test_a_response_that_is_not_a_slack_response_names_no_error_code(self) -> None:
+        """An unreadable body is reported with the raw HTTP response, which holds no error code."""
+
+        class _RawHttpResponse:
+            """Stands in for the HTTP client's own response object, which has no Slack shape."""
+
+            status = 502
+
+        exc = SlackApiError(message="failed", response=cast(Any, _RawHttpResponse()))
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert result == "Failed to read messages: Slack refused the call with HTTP 502 and named no error code."
+
+    def test_an_absent_response_names_no_error_code(self) -> None:
+        exc = SlackApiError(message="failed", response=cast(Any, None))
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert result == "Failed to read messages: Slack refused the call and named no error code."
 
 
 class TestChannelIdBoundaryRejection:
