@@ -2026,6 +2026,22 @@ class TestRateLimitError:
         assert "Wait 17 seconds" in result
         assert "NOT a permissions error" in result
 
+    def test_headers_that_are_not_a_mapping_report_no_wait(self) -> None:
+        """A formatter that raises leaves the caller with no error at all, so an odd shape reports no wait."""
+
+        class _RawHttpResponse:
+            """Stands in for the HTTP client's own response object, which has no Slack shape."""
+
+            status = 429
+            headers = [("Retry-After", "17")]
+
+        exc = SlackApiError(message="failed", response=cast(Any, _RawHttpResponse()))
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Retry after a short wait" in result
+
     def test_http_429_without_a_wait_still_reads_as_rate_limiting(self) -> None:
         exc = SlackApiError(
             message="The request to the Slack API failed.",

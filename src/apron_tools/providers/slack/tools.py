@@ -211,7 +211,9 @@ def _retry_after_seconds(exc: SlackApiError) -> int | None:
     Reading a date would weigh the sender's clock against this one, and a skew between them
     would state a wait nobody asked for.
     """
-    headers = getattr(getattr(exc, "response", None), "headers", None) or {}
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    if not isinstance(headers, Mapping):
+        return None
     for name, value in headers.items():
         if name.lower() != "retry-after":
             continue
