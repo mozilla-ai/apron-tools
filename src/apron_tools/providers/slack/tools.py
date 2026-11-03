@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import re
+from collections.abc import Mapping
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -172,14 +173,45 @@ def _validate_user_token(token: str) -> str | None:
     return None
 
 
+def _slack_error_code(exc: SlackApiError) -> str | None:
+    """Return the error code Slack named for a refused call, or None when it named none.
+
+    NOTE: A refused call does not always answer with a mapping, and an unreadable answer is
+    reported with the raw HTTP response, so a body that cannot hold a code names none
+    rather than raising.
+    """
+    response = getattr(exc, "response", None)
+    body = getattr(response, "data", response)
+    if not isinstance(body, Mapping):
+        return None
+    code = body.get("error")
+    return code if isinstance(code, str) and code else None
+
+
+def _http_status(exc: SlackApiError) -> int | None:
+    """Return the HTTP status a refused call came back with, or None when it carries none.
+
+    NOTE: The status belongs to the response object, so a body arriving as a mapping carries none.
+    The attribute's name differs between the Slack response and the raw HTTP response that an
+    unreadable answer is reported with, so both names are read.
+    """
+    response = getattr(exc, "response", None)
+    for name in ("status_code", "status"):
+        status = getattr(response, name, None)
+        if isinstance(status, int):
+            return status
+    return None
+
+
 def _retry_after_seconds(exc: SlackApiError) -> int | None:
     """Return the wait in whole seconds Slack asked for, or None when it asked for no usable wait.
 
     NOTE: The header name's case varies by HTTP client.
-    Retry-After also admits an HTTP date, and only a count of seconds in ASCII digits is read,
-    so anything else is reported as no wait rather than guessed at.
+    Only a count of seconds in ASCII digits is read, so an HTTP date reports no wait.
+    Reading a date would weigh the sender's clock against this one, and a skew between them
+    would state a wait nobody asked for.
     """
-    headers = getattr(exc.response, "headers", None) or {}
+    headers = getattr(getattr(exc, "response", None), "headers", None) or {}
     for name, value in headers.items():
         if name.lower() != "retry-after":
             continue
@@ -208,22 +240,25 @@ def _format_slack_error(verb: str, subject: str | None, exc: SlackApiError) -> s
     NOTE: The response body is never surfaced, because it can carry fields
     unrelated to the failure.
     """
-    error_code = exc.response.get("error")
-    if not error_code:
-        status = getattr(exc.response, "status_code", None)
-        with_status = f" with HTTP {status}" if status else ""
-        return f"Failed to {verb}: Slack refused the call{with_status} and named no error code."
-    if error_code == "ratelimited":
+    error_code = _slack_error_code(exc)
+    status = _http_status(exc)
+    if error_code == "ratelimited" or (not error_code and status == 429):
+        code_clause = f" ({error_code})" if error_code else ""
         seconds = _retry_after_seconds(exc)
         if seconds is None:
-            wait_clause = "Retry after a short wait. "
+            wait_clause = "Retry after a short wait."
+        elif seconds == 0:
+            wait_clause = "Retry now."
         else:
-            wait_clause = f"Wait {seconds} second{'' if seconds == 1 else 's'}, then retry. "
+            wait_clause = f"Wait {seconds} second{'' if seconds == 1 else 's'}, then retry."
         return (
-            f"Failed to {verb}: {error_code} (Slack is rate limiting this app). "
-            + wait_clause
-            + "This is NOT a permissions error — do not call request_app_connection."
+            f"Failed to {verb}: Slack is rate limiting this app{code_clause}. "
+            f"{wait_clause} "
+            "This is NOT a permissions error — do not call request_app_connection."
         )
+    if not error_code:
+        with_status = f" with HTTP {status}" if status else ""
+        return f"Failed to {verb}: Slack refused the call{with_status} and named no error code."
     if error_code in _SLACK_NON_PERMISSION_ERRORS:
         target = f"{subject} " if subject else ""
         return (

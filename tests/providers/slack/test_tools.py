@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -85,12 +86,12 @@ def _load_json(filename: str) -> dict:
 
 
 def _mock_response(
-    data: dict,
+    data: dict | str,
     *,
     headers: dict | None = None,
     status_code: int = 200,
 ) -> AsyncSlackResponse:
-    """Build a mock AsyncSlackResponse from a dict."""
+    """Build a mock AsyncSlackResponse from a body Slack can answer with."""
     return AsyncSlackResponse(
         client=None,
         http_verb="POST",
@@ -1982,6 +1983,60 @@ class TestRateLimitError:
         result = slack_tools._format_slack_error("read messages", None, exc)
 
         assert "rate limiting" in result
+        assert "Retry after a short wait" in result
+        assert "Wait" not in result
+
+    def test_an_immediate_retry_is_not_reported_as_a_wait(self) -> None:
+        """Retry-After admits zero, and "Wait 0 seconds" invites an agent to pause for nothing."""
+        exc = _slack_api_error("ratelimited", headers={"Retry-After": "0"}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "Retry now" in result
+        assert "0 second" not in result
+
+    def test_http_429_is_rate_limiting_even_with_no_error_code(self) -> None:
+        """A rate limit applied ahead of Slack carries no Slack body, and the wait must survive it."""
+        exc = SlackApiError(
+            message="The request to the Slack API failed.",
+            response=_mock_response({}, headers={"Retry-After": "17"}, status_code=429),
+        )
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Wait 17 seconds" in result
+        assert "NOT a permissions error" in result
+        assert "named no error code" not in result
+
+    def test_a_rate_limit_applied_ahead_of_slack_keeps_its_wait(self) -> None:
+        """A gateway refusing the call answers with no Slack body, and its wait must still arrive."""
+
+        class _RawHttpResponse:
+            """Stands in for the HTTP client's own response object, which has no Slack shape."""
+
+            status = 429
+            headers = {"Retry-After": "17"}
+
+        exc = SlackApiError(message="failed", response=cast(Any, _RawHttpResponse()))
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Wait 17 seconds" in result
+        assert "NOT a permissions error" in result
+
+    def test_http_429_without_a_wait_still_reads_as_rate_limiting(self) -> None:
+        exc = SlackApiError(
+            message="The request to the Slack API failed.",
+            response=_mock_response({}, status_code=429),
+        )
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "Retry after a short wait" in result
+        assert "NOT a permissions error" in result
 
     def test_the_id_lookup_hint_is_withheld(self) -> None:
         """Verifying channel IDs does nothing for a rate limit, so that advice must not appear."""
@@ -2033,6 +2088,35 @@ class TestSlackErrorWithoutCode:
 
     def test_an_absent_status_still_reads_as_a_sentence(self) -> None:
         exc = SlackApiError(message="failed", response={"ok": False})
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert result == "Failed to read messages: Slack refused the call and named no error code."
+
+    def test_a_text_body_names_no_error_code(self) -> None:
+        """An upload endpoint answers in plain text, so the body holds no error code to read."""
+        exc = SlackApiError(message="failed", response=_mock_response("upload failed", status_code=500))
+
+        result = slack_tools._format_slack_error("upload the file", None, exc)
+
+        assert result == "Failed to upload the file: Slack refused the call with HTTP 500 and named no error code."
+
+    def test_a_response_that_is_not_a_slack_response_names_no_error_code(self) -> None:
+        """An unreadable body is reported with the raw HTTP response, which holds no error code."""
+
+        class _RawHttpResponse:
+            """Stands in for the HTTP client's own response object, which has no Slack shape."""
+
+            status = 502
+
+        exc = SlackApiError(message="failed", response=cast(Any, _RawHttpResponse()))
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert result == "Failed to read messages: Slack refused the call with HTTP 502 and named no error code."
+
+    def test_an_absent_response_names_no_error_code(self) -> None:
+        exc = SlackApiError(message="failed", response=cast(Any, None))
 
         result = slack_tools._format_slack_error("read messages", None, exc)
 
