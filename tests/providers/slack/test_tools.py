@@ -2009,6 +2009,17 @@ class TestRateLimitError:
         assert "NOT a permissions error" in result
         assert "named no error code" not in result
 
+    def test_http_429_is_rate_limiting_even_under_another_error_code(self) -> None:
+        """A rate limit applied ahead of Slack can name a code of its own, and the status still decides."""
+        exc = _slack_api_error("too_many_requests", headers={"Retry-After": "9"}, status_code=429)
+
+        result = slack_tools._format_slack_error("read messages", None, exc)
+
+        assert "rate limiting" in result
+        assert "(too_many_requests)" in result
+        assert "Wait 9 seconds" in result
+        assert "NOT a permissions error" in result
+
     def test_a_rate_limit_applied_ahead_of_slack_keeps_its_wait(self) -> None:
         """A gateway refusing the call answers with no Slack body, and its wait must still arrive."""
 

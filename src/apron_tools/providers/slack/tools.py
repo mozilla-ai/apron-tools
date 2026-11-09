@@ -244,7 +244,7 @@ def _format_slack_error(verb: str, subject: str | None, exc: SlackApiError) -> s
     """
     error_code = _slack_error_code(exc)
     status = _http_status(exc)
-    if error_code == "ratelimited" or (not error_code and status == 429):
+    if error_code == "ratelimited" or status == 429:
         code_clause = f" ({error_code})" if error_code else ""
         seconds = _retry_after_seconds(exc)
         if seconds is None:
